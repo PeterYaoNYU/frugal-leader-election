@@ -4,6 +4,7 @@
 #include <sstream>
 #include <cstring>
 
+// this constructor should probably be removed
 Node::Node(int port, const std::string& peers)
     : loop(ev_default_loop(0)),
       port(port),
@@ -34,7 +35,8 @@ Node::Node(const ProcessConfig& config, int replicaId)
       port(config.port),
       rng(std::random_device{}()),
       dist(config.timeoutLowerBound, config.timeoutUpperBound),
-      sock_fd(-1)
+      sock_fd(-1),
+      runtime_seconds(config.runtimeSeconds)
 {
     election_timer.data = this;
     heartbeat_timer.data = this;
@@ -50,6 +52,7 @@ Node::Node(const ProcessConfig& config, int replicaId)
 
     // init the self_ip by the replicaId
     self_ip = config.peerIPs[replicaId];
+    runtime_seconds = config.runtimeSeconds;
 }
 
 
@@ -88,8 +91,20 @@ void Node::run() {
     // Start election timeout
     start_election_timeout();
 
+    ev_timer_init(&shutdown_timer, shutdown_cb, runtime_seconds, 0);
+    shutdown_timer.data = this;
+    ev_timer_start(loop, &shutdown_timer);
+
     // Start the event loop
     ev_run(loop, 0);
+}
+
+
+void Node::shutdown_cb(EV_P_ ev_timer* w, int revents) {
+    Node* self = static_cast<Node*>(w->data);
+    LOG(INFO) << "Runtime exceeded (" << self->runtime_seconds << " seconds). Shutting down node.";
+    // Stop the event loop
+    ev_break(EV_A_ EVBREAK_ALL);
 }
 
 void Node::start_election_timeout() {

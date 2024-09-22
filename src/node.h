@@ -26,6 +26,10 @@ private:
 
     std::string self_ip;
 
+    // the total amount of time the process should run
+    int runtime_seconds;
+    ev_timer shutdown_timer;
+
     int port;
     std::vector<std::pair<std::string, int>> peer_addresses;
     std::mt19937 rng;
@@ -35,6 +39,8 @@ private:
     void reset_election_timeout();
     static void election_timeout_cb(EV_P_ ev_timer* w, int revents);
     static void heartbeat_cb(EV_P_ ev_timer* w, int revents);
+
+    static void shutdown_cb(EV_P_ ev_timer* w, int revents);
 
     static void recv_cb(EV_P_ ev_io* w, int revents);
 
