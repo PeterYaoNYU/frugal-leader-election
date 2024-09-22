@@ -45,3 +45,10 @@ new_git_repository(
     build_file = "//third_party/libev:BUILD.bazel",
     remote = "https://github.com/enki/libev.git",
 )
+
+git_repository(
+    name = "com_github_jbeder_yaml_cpp",
+    commit = "fcbb8193b94921e058be7b563aea053531e5b2d9",  # 19-Aug-2023
+    remote = "https://github.com/jbeder/yaml-cpp.git",
+    shallow_since = "1692473776 -0400",
+)

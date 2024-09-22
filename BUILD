@@ -4,7 +4,8 @@ cc_library(
         "src/node.cpp",
     ],
     hdrs = [
-        "src/node.h",
+        "src/node.h",   
+        "src/process_config.h"
     ],
     includes = [
         "src",  # Include the "src" directory so node.h can be found.
@@ -12,6 +13,7 @@ cc_library(
     deps = [
         "@com_github_google_glog//:glog",
         "@com_github_enki_libev//:libev",
+        "@com_github_jbeder_yaml_cpp//:yaml-cpp",
     ],
     visibility = ["//visibility:public"],  # Make this library available to other rules.
     copts = ["-std=c++17"], 

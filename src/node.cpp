@@ -29,6 +29,30 @@ Node::Node(int port, const std::string& peers)
     }
 }
 
+Node::Node(const ProcessConfig& config, int replicaId)
+    : loop(ev_default_loop(0)),
+      port(config.port),
+      rng(std::random_device{}()),
+      dist(config.timeoutLowerBound, config.timeoutUpperBound),
+      sock_fd(-1)
+{
+    election_timer.data = this;
+    heartbeat_timer.data = this;
+    recv_watcher.data = this;
+
+    std::vector<std::string> peerIPs = config.peerIPs;
+    int port_for_service = config.port;
+
+    // Parse peer addresses from config.peerIPs
+    for (const auto& peer : peerIPs) {
+        peer_addresses.emplace_back(peer, port_for_service);
+    }
+
+    // init the self_ip by the replicaId
+    self_ip = config.peerIPs[replicaId];
+}
+
+
 void Node::run() {
     // Setup UDP socket
     LOG(INFO) << "Start running node on port " << port;
@@ -44,7 +68,14 @@ void Node::run() {
     sockaddr_in addr{};
     addr.sin_family = AF_INET;
     addr.sin_port = htons(port);
-    addr.sin_addr.s_addr = INADDR_ANY;
+    // we cannot use INADDR_ANY here, because we need to know the ip address of the current node
+    // addr.sin_addr.s_addr = INADDR_ANY;
+
+    // bind to the ip address of the current node
+    // Convert self_ip (string) to in_addr
+    if (inet_pton(AF_INET, self_ip.c_str(), &addr.sin_addr) <= 0) {
+        LOG(FATAL) << "Invalid IP address: " << self_ip;
+    }
 
     if (bind(sock_fd, (sockaddr*)&addr, sizeof(addr)) < 0) {
         LOG(FATAL) << "Failed to bind socket to port " << port;

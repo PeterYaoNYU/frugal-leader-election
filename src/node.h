@@ -10,10 +10,11 @@
 #include <vector>
 #include <random>
 #include <unordered_map>
-
+#include "process_config.h"
 class Node {
 public:
     Node(int port, const std::string& peers);
+    Node(const ProcessConfig& config, int replicaId);
     void run();
 
 private:
@@ -22,6 +23,8 @@ private:
     ev_timer heartbeat_timer;
     ev_io recv_watcher;
     int sock_fd;
+
+    std::string self_ip;
 
     int port;
     std::vector<std::pair<std::string, int>> peer_addresses;

@@ -6,6 +6,8 @@ import os
 import signal
 import sys
 from pathlib import Path
+import yaml
+import threading
 
 # Define the ports and peers
 PORTS = [5000, 5001, 5002, 5003]
@@ -21,31 +23,33 @@ def start(c):
     Logs are stored in the logs/ directory.
     """
     global processes
-
+    
+    config_path = "../configs/local.yaml"
+    
     # Ensure the binary exists
     binary_path = "../bazel-bin/leader_election"
     if not os.path.isfile(binary_path):
         print(f"Binary not found at {binary_path}. Please build it using Bazel.")
         sys.exit(1)
+        
+    with open(config_path, "r") as f:
+        config = yaml.safe_load(f)
+        
+    replica_ips = config["replica"]["ips"]
+    n_replicas = len(replica_ips)   
+    print("num replicas: ", n_replicas)
     
     # Create logs directory if it doesn't exist
     logs_dir = Path("logs")
     logs_dir.mkdir(exist_ok=True)
     
-    # Define peers for each node
-    nodes = []
-    for port in PORTS:
-        peers = [f"{IP}:{p}" for p in PORTS if p != port]
-        nodes.append((port, peers))
+    for replica_id in range(n_replicas):
+        log_file = logs_dir / f"node_{replica_id}.log"
+        cmd = [binary_path, f"--config={config_path}", f"--replicaId={replica_id}"]
+        
+        print(f"Starting replica {replica_id} with command: {' '.join(cmd)}")
     
-    # Start each node
-    for port, peers in nodes:
-        peer_list = ",".join(peers)
-        log_file = logs_dir / f"node_{port}.log"
-        cmd = [binary_path, str(port), peer_list]
-        
-        print(f"Starting node on port {port} with peers: {peer_list}")
-        
+        log_file = logs_dir / f"node_{replica_id}.log"
         # Open the log file
         with open(log_file, "w") as logf:
             # Start the process
@@ -55,9 +59,8 @@ def start(c):
                 stderr=subprocess.STDOUT,
                 preexec_fn=os.setsid  # To allow killing the whole process group
             )
-            processes[port] = process
-            print(f"Node on port {port} started with PID {process.pid}, logging to {log_file}")
-    
+            processes[replica_id] = process
+            print(f"Replica {replica_id} started with PID {process.pid}, logging to {log_file}")
     print("All nodes have been started.")
     print("Check the 'logs/' directory for individual node logs.")
 
