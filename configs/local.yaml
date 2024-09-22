@@ -1,0 +1,11 @@
+replica:
+  ips: 
+  - "127.0.0.1"
+  - "127.0.0.2"
+  - "127.0.0.3"
+  - "127.0.0.4"
+  runtimeSeconds: 30
+  timeoutLowerBound: 150
+  timeoutUpperBound: 300
+  failureLeader: false
+  port: 7777
