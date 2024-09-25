@@ -52,3 +52,11 @@ git_repository(
     remote = "https://github.com/jbeder/yaml-cpp.git",
     shallow_since = "1692473776 -0400",
 )
+
+# Google protobuf.
+git_repository(
+    name = "com_google_protobuf",
+    commit = "21027a27c4c2ec1000859ccbcfff46d83b16e1ed",  # 21-Apr-2022, v3.20.1
+    remote = "https://github.com/protocolbuffers/protobuf",
+    shallow_since = "1650589240 +0000",
+)

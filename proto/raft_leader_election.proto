@@ -1,0 +1,34 @@
+syntax = "proto3";
+
+package raft.leader_election;
+
+message RequestVote {
+  int32 term = 1;
+  string candidate_id = 2; // IP:port of the candidate
+}
+
+message VoteResponse {
+  int32 term = 1;
+  bool vote_granted = 2;
+}
+
+message AppendEntries {
+  int32 term = 1;
+  string leader_id = 2; // IP:port of the leader
+}
+
+message AppendEntriesResponse {
+  int32 term = 1;
+  bool success = 2;
+}
+
+message MessageWrapper {
+  enum MessageType {
+    REQUEST_VOTE = 0;
+    VOTE_RESPONSE = 1;
+    APPEND_ENTRIES = 2;
+    APPEND_ENTRIES_RESPONSE = 3;
+  }
+  MessageType type = 1;
+  bytes payload = 2;
+}

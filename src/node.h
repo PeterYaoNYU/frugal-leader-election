@@ -11,6 +11,7 @@
 #include <random>
 #include <unordered_map>
 #include "process_config.h"
+#include "proto/raft_leader_election.pb.h"
 class Node {
 public:
     Node(int port, const std::string& peers);
@@ -34,6 +35,14 @@ private:
     std::vector<std::pair<std::string, int>> peer_addresses;
     std::mt19937 rng;
     std::uniform_int_distribution<std::mt19937::result_type> dist;
+
+
+    bool failure_leader = false;
+
+    std::string current_leader_ip;
+    int current_leader_port;
+    int view_number = 0;
+    enum Role {FOLLOWER, CANDIDATE, LEADER} role;    
 
     void start_election_timeout();
     void reset_election_timeout();

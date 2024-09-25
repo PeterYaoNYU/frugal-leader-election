@@ -36,12 +36,17 @@ Node::Node(const ProcessConfig& config, int replicaId)
       rng(std::random_device{}()),
       dist(config.timeoutLowerBound, config.timeoutUpperBound),
       sock_fd(-1),
-      runtime_seconds(config.runtimeSeconds)
+      runtime_seconds(config.runtimeSeconds),
+      failure_leader(config.failureLeader)
 {
     election_timer.data = this;
     heartbeat_timer.data = this;
     recv_watcher.data = this;
 
+    current_leader_ip = "";
+    current_leader_port = -1;
+    role = Role::FOLLOWER;
+    
     std::vector<std::string> peerIPs = config.peerIPs;
     int port_for_service = config.port;
 
@@ -121,7 +126,14 @@ void Node::reset_election_timeout() {
 
 void Node::election_timeout_cb(EV_P_ ev_timer* w, int revents) {
     Node* self = static_cast<Node*>(w->data);
-    LOG(INFO) << "Election timeout occurred. Starting leader election.";
+
+    self->view_number++;
+    self->role = Role::CANDIDATE;
+    self->current_leader_ip = "";  
+    self->current_leader_port = -1;
+
+
+    LOG(INFO) << "Election timeout occurred. Starting leader election. View number: " << self->view_number; 
     self->become_leader();
 }
 
@@ -153,7 +165,7 @@ void Node::become_leader() {
     LOG(INFO) << "Became leader. Starting to send heartbeats.";
 
     // Initialize heartbeat timer
-    ev_timer_init(&heartbeat_timer, heartbeat_cb, 0.0, 0.05); // 50 ms interval
+    ev_timer_init(&heartbeat_timer, heartbeat_cb, 0.0, 0.075); // 75 ms interval
     ev_timer_start(loop, &heartbeat_timer);
 }
 
