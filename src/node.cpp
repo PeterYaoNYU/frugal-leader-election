@@ -316,7 +316,8 @@ void Node::handle_vote_response(const raft::leader_election::VoteResponse& respo
     // if the response has a bigger term number, indicating that out term has already expired. 
     // revert back to the follower. 
     if (response.term() > current_term) {
-        LOG(INFO) << "received vote response with a bigger term number: " << response.term() <<  " Reverting back to follower.";
+        LOG(INFO) << "[" << get_current_time() << "] Received vote response with a bigger term number: " << response.term() 
+                  << ". Reverting back to follower.";
         current_term = response.term();
         role = Role::FOLLOWER;
         voted_for = "";
@@ -332,7 +333,7 @@ void Node::handle_vote_response(const raft::leader_election::VoteResponse& respo
         LOG(INFO) << "Received vote from: " << sender 
                   << " | Votes received: " << votes_received 
                   << " out of " << peer_addresses.size();
-                  
+
         // if bigger than f+1 in a 2f+1 setting
         if (votes_received >= peer_addresses.size() / 2 + 1) {
             LOG(INFO) << "Received enough votes to become leader. Term: " << current_term << ". Votes received: " << votes_received << " out of " << peer_addresses.size();
@@ -354,8 +355,7 @@ void Node::become_leader() {
     // stop the election timeout
     ev_timer_stop(loop, &election_timer);
 
-    LOG(INFO) << "Became leader. Starting to send heartbeats. Elected Term: " << current_term;
-    
+    LOG(INFO) << "[" << get_current_time() << "] Became leader. Starting to send heartbeats. Elected Term: " << current_term;
 
     // Initialize heartbeat timer
     ev_timer_init(&heartbeat_timer, heartbeat_cb, 0.0, 0.075); // 75 ms interval
@@ -369,22 +369,8 @@ void Node::send_heartbeat() {
         return;
     }
 
-    if (failure_leader) {
-        LOG(INFO) << "Leader will simulate failure after " << max_heartbeats << " heartbeats.";
-    }
 
-    if (failure_leader && heartbeat_count >= max_heartbeats && role == Role::LEADER) {
-        // Schedule failure within the heartbeat interval (75 ms)
-        double random_delay = ((rand() % 75) + 1) / 1000.0; // Random delay between 1ms and 75ms
-        ev_timer_init(&failure_timer, failure_cb, random_delay, 0);
-        failure_timer.data = this;
-        ev_timer_start(loop, &failure_timer);
 
-        LOG(INFO) << "Leader will simulate failure after " << random_delay << " seconds.";
-        return;
-    } else {
-        LOG(INFO) << "Leader continues this round...";
-    }
 
     raft::leader_election::AppendEntries append_entries;
     append_entries.set_term(current_term);
@@ -407,13 +393,28 @@ void Node::send_heartbeat() {
                                (sockaddr*)&peer_addr, sizeof(peer_addr));
         if (nsend == -1) {
             LOG(ERROR) << "Failed to send heartbeat to " << ip << ":" << peer_port;
-        } else {
+    } else {
             LOG(INFO) << "Sent heartbeat to " << ip << ":" << peer_port;
         }
     }
 
     heartbeat_count++;
     LOG(INFO) << "[LEADER] Sent heartbeat " << heartbeat_count << " for term " << current_term;
+
+    if (failure_leader) {
+        LOG(INFO) << "Leader will simulate failure after " << max_heartbeats << " heartbeats.";
+    }
+
+
+    if (failure_leader && heartbeat_count >= max_heartbeats && role == Role::LEADER) {
+        // Schedule failure within the heartbeat interval (75 ms)
+        double random_delay = ((rand() % 75) + 1) / 1000.0; // Random delay between 1ms and 75ms
+        ev_timer_init(&failure_timer, failure_cb, random_delay, 0);
+        failure_timer.data = this;
+        ev_timer_start(loop, &failure_timer);
+
+        LOG(INFO) << "Leader will simulate failure after " << random_delay << " seconds.";
+    }
 }
 
 void Node::failure_cb(EV_P_ ev_timer* w, int revents) {
@@ -423,7 +424,7 @@ void Node::failure_cb(EV_P_ ev_timer* w, int revents) {
     ev_timer_stop(self->loop, &self->heartbeat_timer);
 
     // Optionally, log the simulated failure
-    LOG(INFO) << "Leader has stopped sending heartbeats to simulate failure.";
+    LOG(INFO) << "[" << get_current_time() << "] Leader has stopped for term: "<< self->current_term ;
 
     // Continue participating in other activities (e.g., receiving messages)
 }

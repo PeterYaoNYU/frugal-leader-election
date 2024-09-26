@@ -15,6 +15,7 @@ cc_library(
         "@com_github_enki_libev//:libev",
         "@com_github_jbeder_yaml_cpp//:yaml-cpp",
         "//proto:raft_leader_election_cc_proto",
+        "//lib:utils",  
     ],
     visibility = ["//visibility:public"],  # Make this library available to other rules.
     copts = ["-std=c++17"], 

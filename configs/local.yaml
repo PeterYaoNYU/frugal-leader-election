@@ -5,7 +5,7 @@ replica:
   - "127.0.0.3"
   - "127.0.0.4"
   - "127.0.0.5"
-  runtimeSeconds: 30
+  runtimeSeconds: 150
   timeoutLowerBound: 150
   timeoutUpperBound: 300
   failureLeader: true

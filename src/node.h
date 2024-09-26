@@ -12,6 +12,7 @@
 #include <unordered_map>
 #include "process_config.h"
 #include "proto/raft_leader_election.pb.h"
+#include "lib/utils.h"
 class Node {
 public:
     Node(int port, const std::string& peers);
