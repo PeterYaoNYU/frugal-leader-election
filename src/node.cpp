@@ -39,7 +39,9 @@ Node::Node(const ProcessConfig& config, int replicaId)
       dist(config.timeoutLowerBound, config.timeoutUpperBound),
       sock_fd(-1),
       runtime_seconds(config.runtimeSeconds),
-      failure_leader(config.failureLeader)
+      failure_leader(config.failureLeader),
+      max_heartbeats(config.maxHeartbeats),
+      heartbeat_count(0)
 {
     election_timer.data = this;
     heartbeat_timer.data = this;
@@ -85,7 +87,7 @@ void Node::run() {
     addr.sin_family = AF_INET;
     addr.sin_port = htons(port);
     // we cannot use INADDR_ANY here, because we need to know the ip address of the current node
-    // addr.sin_addr.s_addr = INADDR_ANY;
+    addr.sin_addr.s_addr = INADDR_ANY;
 
     // bind to the ip address of the current node
     // Convert self_ip (string) to in_addr
@@ -140,7 +142,7 @@ void Node::election_timeout_cb(EV_P_ ev_timer* w, int revents) {
     self->current_leader_ip = "";  
     self->current_leader_port = -1;
     self->voted_for = self->self_ip + ":" + std::to_string(self->port);
-    self->votes_received = 1; // Vote for self
+    self->votes_received = 0; // Vote for self later when it receives its own message
 
 
     LOG(INFO) << "Election timeout occurred. Starting leader election and voting for myself. View number: " << self->current_term; 
@@ -179,6 +181,7 @@ void Node::send_request_vote() {
 }
 
 void Node::heartbeat_cb(EV_P_ ev_timer* w, int revents) {
+    LOG(INFO) << "Heartbeat callback";
     Node* self = static_cast<Node*>(w->data);
     self->send_heartbeat();
 }
@@ -217,7 +220,7 @@ void Node::recv_cb(EV_P_ ev_io* w, int revents) {
                     LOG(ERROR) << "Failed to parse vote response.";
                     return;
                 }
-                self->handle_vote_response(response);
+                self->handle_vote_response(response, sender_addr);
                 break;
             }
             case raft::leader_election::MessageWrapper::APPEND_ENTRIES: {
@@ -253,6 +256,9 @@ void Node::handle_request_vote(const raft::leader_election::RequestVote& request
 
     if (received_term > current_term) {
         current_term = received_term;
+        if (role == Role::LEADER) {
+            ev_timer_stop(loop, &heartbeat_timer);
+        }
         role = Role::FOLLOWER;
         voted_for = ""; 
     }
@@ -268,10 +274,8 @@ void Node::handle_request_vote(const raft::leader_election::RequestVote& request
     raft::leader_election::VoteResponse response;
     response.set_term(current_term);
     response.set_vote_granted(vote_granted);
-
-    send_vote_response(response, send_addr);
-
     LOG(INFO) << "Received request vote from " << candidate_id <<  " for term: " << received_term  << ". Vote granted: " << vote_granted;
+    send_vote_response(response, send_addr);
 }
 
 void Node::send_vote_response(const raft::leader_election::VoteResponse& response, const sockaddr_in& recepient_addr) {
@@ -291,7 +295,20 @@ void Node::send_vote_response(const raft::leader_election::VoteResponse& respons
     }
 }
 
-void Node::handle_vote_response(const raft::leader_election::VoteResponse& response) {
+// Utility function to convert sockaddr_in to string
+std::string sockaddr_to_string(const sockaddr_in& addr) {
+    char ip_str[INET_ADDRSTRLEN];
+    memset(ip_str, 0, INET_ADDRSTRLEN);
+
+    if (inet_ntop(AF_INET, &(addr.sin_addr), ip_str, INET_ADDRSTRLEN) == nullptr) {
+        return "Invalid IP";
+    }
+
+    int port = ntohs(addr.sin_port);
+    return std::string(ip_str) + ":" + std::to_string(port);
+}
+
+void Node::handle_vote_response(const raft::leader_election::VoteResponse& response, const sockaddr_in& sender_addr) {
     if (role != Role::CANDIDATE) {
         return;
     }
@@ -299,6 +316,7 @@ void Node::handle_vote_response(const raft::leader_election::VoteResponse& respo
     // if the response has a bigger term number, indicating that out term has already expired. 
     // revert back to the follower. 
     if (response.term() > current_term) {
+        LOG(INFO) << "received vote response with a bigger term number: " << response.term() <<  " Reverting back to follower.";
         current_term = response.term();
         role = Role::FOLLOWER;
         voted_for = "";
@@ -308,9 +326,17 @@ void Node::handle_vote_response(const raft::leader_election::VoteResponse& respo
     if (response.vote_granted()) {
         votes_received++;
 
+        // Convert the sender's address to a readable string
+        std::string sender = sockaddr_to_string(sender_addr);
+
+        LOG(INFO) << "Received vote from: " << sender 
+                  << " | Votes received: " << votes_received 
+                  << " out of " << peer_addresses.size();
+                  
         // if bigger than f+1 in a 2f+1 setting
         if (votes_received >= peer_addresses.size() / 2 + 1) {
-            role = Role::LEADER;
+            LOG(INFO) << "Received enough votes to become leader. Term: " << current_term << ". Votes received: " << votes_received << " out of " << peer_addresses.size();
+            // role = Role::LEADER;
             become_leader();
         }
     }
@@ -320,6 +346,10 @@ void Node::become_leader() {
     role = Role::LEADER;
     current_leader_ip = self_ip;
     current_leader_port = port;
+
+    // reset the amount of heartbeats sent
+    heartbeat_count = 0;
+    votes_received = 0;
 
     // stop the election timeout
     ev_timer_stop(loop, &election_timer);
@@ -334,6 +364,28 @@ void Node::become_leader() {
 }
 
 void Node::send_heartbeat() {
+    if (role != Role::LEADER) {
+        LOG(INFO) << "Not a leader. Cannot send heartbeat.";
+        return;
+    }
+
+    if (failure_leader) {
+        LOG(INFO) << "Leader will simulate failure after " << max_heartbeats << " heartbeats.";
+    }
+
+    if (failure_leader && heartbeat_count >= max_heartbeats && role == Role::LEADER) {
+        // Schedule failure within the heartbeat interval (75 ms)
+        double random_delay = ((rand() % 75) + 1) / 1000.0; // Random delay between 1ms and 75ms
+        ev_timer_init(&failure_timer, failure_cb, random_delay, 0);
+        failure_timer.data = this;
+        ev_timer_start(loop, &failure_timer);
+
+        LOG(INFO) << "Leader will simulate failure after " << random_delay << " seconds.";
+        return;
+    } else {
+        LOG(INFO) << "Leader continues this round...";
+    }
+
     raft::leader_election::AppendEntries append_entries;
     append_entries.set_term(current_term);
     append_entries.set_leader_id(self_ip + ":" + std::to_string(port));
@@ -359,6 +411,21 @@ void Node::send_heartbeat() {
             LOG(INFO) << "Sent heartbeat to " << ip << ":" << peer_port;
         }
     }
+
+    heartbeat_count++;
+    LOG(INFO) << "[LEADER] Sent heartbeat " << heartbeat_count << " for term " << current_term;
+}
+
+void Node::failure_cb(EV_P_ ev_timer* w, int revents) {
+    Node* self = static_cast<Node*>(w->data);
+
+    // Stop the heartbeat timer to simulate failure
+    ev_timer_stop(self->loop, &self->heartbeat_timer);
+
+    // Optionally, log the simulated failure
+    LOG(INFO) << "Leader has stopped sending heartbeats to simulate failure.";
+
+    // Continue participating in other activities (e.g., receiving messages)
 }
 
 void Node::handle_append_entries(const raft::leader_election::AppendEntries& append_entries, const sockaddr_in& sender_addr) {
@@ -371,6 +438,11 @@ void Node::handle_append_entries(const raft::leader_election::AppendEntries& app
         response.set_success(false);
 
         send_append_entries_response(response, sender_addr);
+        return;
+    }
+
+    if (sender_addr.sin_addr.s_addr == inet_addr(self_ip.c_str())) {
+        // Ignore messages from self
         return;
     }
 

@@ -31,6 +31,7 @@ struct ProcessConfig {
     // when this is set, the leader fails automatically
     // useful for testing purposes
     bool failureLeader;
+    int maxHeartbeats;
 
 
 
@@ -88,6 +89,7 @@ struct ProcessConfig {
             timeoutLowerBound = parseField<int>(replicaNode, "timeoutLowerBound");
             timeoutUpperBound = parseField<int>(replicaNode, "timeoutUpperBound");
             failureLeader = parseField<bool>(replicaNode, "failureLeader");
+            maxHeartbeats = parseField<int>(replicaNode, "maxHeartbeats");
 
         } catch (const ConfigParseException &e) {
             throw ConfigParseException("Error parsing replica " + std::string(e.what()));

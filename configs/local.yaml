@@ -4,8 +4,11 @@ replica:
   - "127.0.0.2"
   - "127.0.0.3"
   - "127.0.0.4"
+  - "127.0.0.5"
   runtimeSeconds: 30
   timeoutLowerBound: 150
   timeoutUpperBound: 300
-  failureLeader: false
-  port: 7777
+  failureLeader: true
+  # if the failureLeader is true, after maxHeartbeats number of heartbeats, the leader will fail
+  maxHeartbeats: 30
+  port: 7779
