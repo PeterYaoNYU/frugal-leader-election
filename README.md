@@ -16,3 +16,8 @@ To stop the processes from running,
 ```bash
 killall leader*
 ```
+
+the command for the ebpf compilation is
+```python
+sudo python3 loader.py
+```
