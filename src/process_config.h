@@ -32,6 +32,8 @@ struct ProcessConfig {
     // useful for testing purposes
     bool failureLeader;
     int maxHeartbeats;
+    int delayLowerBound;
+    int delayUpperBound;
 
     // simulation
     bool useSimulatedLinks;
@@ -93,6 +95,9 @@ struct ProcessConfig {
             timeoutUpperBound = parseField<int>(replicaNode, "timeoutUpperBound");
             failureLeader = parseField<bool>(replicaNode, "failureLeader");
             maxHeartbeats = parseField<int>(replicaNode, "maxHeartbeats");
+            useSimulatedLinks = parseField<bool>(replicaNode, "useSimulatedLinks");
+            delayLowerBound = parseField<int>(replicaNode, "delayLowerBound");
+            delayUpperBound = parseField<int>(replicaNode, "delayUpperBound");
 
         } catch (const ConfigParseException &e) {
             throw ConfigParseException("Error parsing replica " + std::string(e.what()));

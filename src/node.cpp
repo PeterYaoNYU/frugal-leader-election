@@ -27,9 +27,9 @@ Node::Node(const ProcessConfig& config, int replicaId)
       votes_received(0),                           // 20
       max_heartbeats(0),                           // 21 (set later if needed)
       heartbeat_count(0),                          // 22
-      use_simulated_links(false),                  // 23 (set later if needed)
+      use_simulated_links(config.useSimulatedLinks),                  // 23 (set later if needed)
       loss_dist(0.0, 1.0),                         // 24
-      delay_dist(10.0, 50.0),                     // 25
+      delay_dist(config.delayLowerBound, config.delayUpperBound),                     // 25
       role(Role::FOLLOWER)                         // 26
 {
     election_timer.data = this;
