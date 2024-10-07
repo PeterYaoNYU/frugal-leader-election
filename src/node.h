@@ -60,6 +60,8 @@ private:
     std::uniform_real_distribution<double> delay_dist;
     enum Role {FOLLOWER, CANDIDATE, LEADER} role;    
 
+    double link_loss_rate;
+
     void start_election_timeout();
     void reset_election_timeout();
     static void election_timeout_cb(EV_P_ ev_timer* w, int revents);

@@ -30,7 +30,8 @@ Node::Node(const ProcessConfig& config, int replicaId)
       use_simulated_links(config.useSimulatedLinks),                  // 23 (set later if needed)
       loss_dist(0.0, 1.0),                         // 24
       delay_dist(config.delayLowerBound, config.delayUpperBound),                     // 25
-      role(Role::FOLLOWER)                         // 26
+      role(Role::FOLLOWER),                         // 26
+      link_loss_rate(config.linkLossRate)          // 27
 {
     election_timer.data = this;
     heartbeat_timer.data = this;
@@ -60,7 +61,7 @@ Node::Node(const ProcessConfig& config, int replicaId)
 }
 
 void Node::send_with_delay_and_loss(const std::string& message, const sockaddr_in& recipient_addr) {
-    if (loss_dist(rng) < 0.00) { // Simulate 5% packet loss by default
+    if (loss_dist(rng) < link_loss_rate) { // Simulate 5% packet loss by default
         LOG(INFO) << "Simulated packet loss to " << inet_ntoa(recipient_addr.sin_addr)
                   << ":" << ntohs(recipient_addr.sin_port);
         return;
