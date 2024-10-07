@@ -3,16 +3,20 @@ import sys
 import threading
 import time
 
+# Store active socket connections
+active_sockets = []
+
 def start_tcp_connection(target_ip, target_port):
     try:
         # Create a TCP socket
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         s.connect((target_ip, target_port))
+        active_sockets.append(s)
         print(f"Connected to {target_ip}:{target_port}")
-        # Sending a simple message to the target node
-        s.sendall(b"Hello from node!")
-        # Close the socket
-        s.close()
+        while True:
+            # Sending a simple message to the target node
+            s.sendall(b"Hello from node!")
+            time.sleep(1)  # Wait for 1 second before sending the next message
     except Exception as e:
         print(f"Failed to connect to {target_ip}:{target_port} - {e}")
 
@@ -26,12 +30,22 @@ def listen_for_connections(listen_ip, listen_port):
         while True:
             conn, addr = server_socket.accept()
             print(f"Accepted connection from {addr}")
-            data = conn.recv(1024)
-            if data:
-                print(f"Received message: {data.decode()}")
-            conn.close()
+            active_sockets.append(conn)
+            while True:
+                data = conn.recv(1024)
+                if data:
+                    print(f"Received message: {data.decode()}")
     except Exception as e:
         print(f"Failed to listen on {listen_ip}:{listen_port} - {e}")
+
+def close_all_connections():
+    print("Closing all active connections...")
+    for s in active_sockets:
+        try:
+            s.close()
+            print(f"Closed connection: {s}")
+        except Exception as e:
+            print(f"Failed to close connection: {s} - {e}")
 
 def main(node_id, central_port):
     node_ip_format = "10.0.{}.2"
@@ -50,7 +64,7 @@ def main(node_id, central_port):
     print(f"Waiting {wait_time} seconds for the listen thread to start...")
     time.sleep(wait_time)
 
-    # Start 10 TCP connections to each of the other nodes
+    # Start continuous TCP connections to each of the other nodes
     threads = []
     for target_id in range(1, 6):
         if target_id == node_id:
@@ -63,12 +77,17 @@ def main(node_id, central_port):
             threads.append(thread)
             time.sleep(0.1)  # Small delay to avoid overwhelming the target
 
-    # Wait for all threads to finish
-    for thread in threads:
-        thread.join()
+    try:
+        # Wait for all threads to finish (they run indefinitely)
+        for thread in threads:
+            thread.join()
 
-    # Wait for the listen thread to finish (it runs indefinitely)
-    listen_thread.join()
+        # Wait for the listen thread to finish (it runs indefinitely)
+        listen_thread.join()
+    except KeyboardInterrupt:
+        # Handle keyboard interrupt to close all connections gracefully
+        close_all_connections()
+        sys.exit(0)
 
 if __name__ == "__main__":
     if len(sys.argv) != 3:
