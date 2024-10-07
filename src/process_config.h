@@ -33,6 +33,9 @@ struct ProcessConfig {
     bool failureLeader;
     int maxHeartbeats;
 
+    // simulation
+    bool useSimulatedLinks;
+
 
 
     template <class T> T parseField(const YAML::Node &parent, const std::string &key)

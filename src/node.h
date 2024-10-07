@@ -15,11 +15,14 @@
 #include "lib/utils.h"
 class Node {
 public:
-    Node(int port, const std::string& peers);
+    // Node(int port, const std::string& peers);
     Node(const ProcessConfig& config, int replicaId);
     void run();
 
 private:
+    void send_with_delay_and_loss(const std::string& message, const sockaddr_in& recipient_addr);
+    static void delay_cb(EV_P_ ev_timer* w, int revents);
+
     struct ev_loop* loop;
     ev_timer election_timer;
     ev_timer heartbeat_timer;
@@ -49,6 +52,12 @@ private:
     int votes_received; // Number of votes received in current term
     int max_heartbeats; // Number of heartbeats to send before stopping, if the leader will fail in experiments
     int heartbeat_count; // Number of heartbeats sent so far (for the leader only_)
+
+    // network simulation
+    bool use_simulated_links;
+    // for now, we use uniform distribution, to be changed later to poisson. 
+    std::uniform_real_distribution<double> loss_dist;
+    std::uniform_real_distribution<double> delay_dist;
     enum Role {FOLLOWER, CANDIDATE, LEADER} role;    
 
     void start_election_timeout();
@@ -74,6 +83,14 @@ private:
 
     void become_leader();
     void send_heartbeat();
+};
+
+
+
+struct DelayData {
+    Node* self;
+    std::string message;
+    sockaddr_in recipient_addr;
 };
 
 #endif // NODE_H

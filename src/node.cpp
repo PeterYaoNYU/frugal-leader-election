@@ -4,44 +4,33 @@
 #include <sstream>
 #include <cstring>
 
-// this constructor should probably be removed
-Node::Node(int port, const std::string& peers)
-    : loop(ev_default_loop(0)),
-      port(port),
-      rng(std::random_device{}()),
-      dist(150, 300), // Election timeout between 150-300 ms
-      sock_fd(-1)
-{
-    election_timer.data = this;
-    heartbeat_timer.data = this;
-    recv_watcher.data = this;
-
-    // Parse peer addresses
-    std::stringstream ss(peers);
-    std::string peer;
-    while (std::getline(ss, peer, ',')) {
-        auto pos = peer.find(':');
-        if (pos != std::string::npos) {
-            std::string ip = peer.substr(0, pos);
-            int peer_port = std::stoi(peer.substr(pos + 1));
-            LOG(INFO) << "Peer: " << ip << ":" << peer_port;
-            peer_addresses.emplace_back(ip, peer_port);
-        }
-    }
-
-    LOG(INFO) << "Peer addresses size is: " << peer_addresses.size();
-}
-
 Node::Node(const ProcessConfig& config, int replicaId)
-    : loop(ev_default_loop(0)),
-      port(config.port),
-      rng(std::random_device{}()),
-      dist(config.timeoutLowerBound, config.timeoutUpperBound),
-      sock_fd(-1),
-      runtime_seconds(config.runtimeSeconds),
-      failure_leader(config.failureLeader),
-      max_heartbeats(config.maxHeartbeats),
-      heartbeat_count(0)
+    : loop(ev_default_loop(0)),                    // 1
+      election_timer(),                            // 2
+      heartbeat_timer(),                           // 3
+      failure_timer(),                             // 4
+      recv_watcher(),                              // 5
+      sock_fd(-1),                                 // 6
+      self_ip(""),                                 // 7 (set later if needed)
+      runtime_seconds(0),                          // 8 (set later if needed)
+      shutdown_timer(),                            // 9
+      port(config.port),                                  // 10
+      peer_addresses(),                            // 11 (initialized in the body)
+      rng(std::random_device{}()),                 // 12
+      dist(150, 300),                              // 13
+      failure_leader(false),                       // 14
+      current_leader_ip(""),                       // 15
+      current_leader_port(-1),                     // 16
+      view_number(0),                              // 17
+      current_term(0),                             // 18
+      voted_for(""),                               // 19
+      votes_received(0),                           // 20
+      max_heartbeats(0),                           // 21 (set later if needed)
+      heartbeat_count(0),                          // 22
+      use_simulated_links(false),                  // 23 (set later if needed)
+      loss_dist(0.0, 1.0),                         // 24
+      delay_dist(10.0, 50.0),                     // 25
+      role(Role::FOLLOWER)                         // 26
 {
     election_timer.data = this;
     heartbeat_timer.data = this;
@@ -69,6 +58,51 @@ Node::Node(const ProcessConfig& config, int replicaId)
     self_ip = config.peerIPs[replicaId];
     runtime_seconds = config.runtimeSeconds;
 }
+
+void Node::send_with_delay_and_loss(const std::string& message, const sockaddr_in& recipient_addr) {
+    if (loss_dist(rng) < 0.00) { // Simulate 5% packet loss by default
+        LOG(INFO) << "Simulated packet loss to " << inet_ntoa(recipient_addr.sin_addr)
+                  << ":" << ntohs(recipient_addr.sin_port);
+        return;
+    }
+
+    double delay_ms = delay_dist(rng);
+    LOG(INFO) << "Simulating delay of " << delay_ms << "ms for message to "
+              << inet_ntoa(recipient_addr.sin_addr) << ":" << ntohs(recipient_addr.sin_port);
+
+    ev_timer* delay_timer = new ev_timer;
+
+    // Create DelayData instance
+    DelayData* data = new DelayData{this, message, recipient_addr};
+    delay_timer->data = data;
+
+    ev_timer_init(delay_timer, delay_cb, delay_ms / 1000.0, 0);
+    ev_timer_start(loop, delay_timer);
+}
+
+
+void Node::delay_cb(EV_P_ ev_timer* w, int revents) {
+    // Retrieve DelayData
+    DelayData* data = static_cast<DelayData*>(w->data);
+    Node* self = data->self;
+    std::string message = data->message;
+    sockaddr_in recipient_addr = data->recipient_addr;
+    delete data;
+
+    ssize_t nsend = sendto(self->sock_fd, message.c_str(), message.size(), 0,
+                           (sockaddr*)&recipient_addr, sizeof(recipient_addr));
+    if (nsend == -1) {
+        LOG(ERROR) << "Failed to send delayed message to "
+                   << inet_ntoa(recipient_addr.sin_addr) << ":" << ntohs(recipient_addr.sin_port);
+    } else {
+        LOG(INFO) << "Sent delayed message to "
+                  << inet_ntoa(recipient_addr.sin_addr) << ":" << ntohs(recipient_addr.sin_port);
+    }
+
+    ev_timer_stop(self->loop, w);
+    delete w;
+}
+
 
 
 void Node::run() {
@@ -137,16 +171,15 @@ void Node::reset_election_timeout() {
 void Node::election_timeout_cb(EV_P_ ev_timer* w, int revents) {
     Node* self = static_cast<Node*>(w->data);
 
+    LOG(INFO) << "Election timeout occurred. Starting leader election and voting for myself. View number: " << self->current_term; 
+    LOG(INFO) << "The dead leader is " << self->current_leader_ip << ":" << self->current_leader_port;
+
     self->current_term++;
     self->role = Role::CANDIDATE;
     self->current_leader_ip = "";  
     self->current_leader_port = -1;
     self->voted_for = self->self_ip + ":" + std::to_string(self->port);
     self->votes_received = 0; // Vote for self later when it receives its own message
-
-
-    LOG(INFO) << "Election timeout occurred. Starting leader election and voting for myself. View number: " << self->current_term; 
-    // self->become_leader();
 
     self->start_election_timeout();
     self->send_request_vote();
@@ -366,11 +399,18 @@ void Node::become_leader() {
 void Node::send_heartbeat() {
     if (role != Role::LEADER) {
         LOG(INFO) << "Not a leader. Cannot send heartbeat.";
+        if (role==Role::FOLLOWER) {
+            LOG(INFO) << "Current leader is: " << current_leader_ip << ":" << current_leader_port;
+            LOG(INFO) << "Current term is: " << current_term;
+            LOG(INFO) << "I Am a follower";
+        }
+        if (role==Role::CANDIDATE) {
+            LOG(INFO) << "Current leader is: " << current_leader_ip << ":" << current_leader_port;
+            LOG(INFO) << "Current term is: " << current_term;
+            LOG(INFO) << "I Am a candidate";
+        }
         return;
     }
-
-
-
 
     raft::leader_election::AppendEntries append_entries;
     append_entries.set_term(current_term);
@@ -389,12 +429,16 @@ void Node::send_heartbeat() {
         peer_addr.sin_port = htons(peer_port);
         inet_pton(AF_INET, ip.c_str(), &peer_addr.sin_addr);
 
-        ssize_t nsend = sendto(sock_fd, serialized_message.c_str(), serialized_message.size(), 0,
-                               (sockaddr*)&peer_addr, sizeof(peer_addr));
-        if (nsend == -1) {
-            LOG(ERROR) << "Failed to send heartbeat to " << ip << ":" << peer_port;
-    } else {
-            LOG(INFO) << "Sent heartbeat to " << ip << ":" << peer_port;
+        if (use_simulated_links) {
+            send_with_delay_and_loss(serialized_message, peer_addr);
+        } else {
+            ssize_t nsend = sendto(sock_fd, serialized_message.c_str(), serialized_message.size(), 0,
+                                   (sockaddr*)&peer_addr, sizeof(peer_addr));
+            if (nsend == -1) {
+                LOG(ERROR) << "Failed to send heartbeat to " << ip << ":" << peer_port;
+            } else {
+                LOG(INFO) << "Sent heartbeat to " << ip << ":" << peer_port;
+            }
         }
     }
 
@@ -442,6 +486,11 @@ void Node::handle_append_entries(const raft::leader_election::AppendEntries& app
         return;
     }
 
+    if (received_term > current_term && ev_is_active(&heartbeat_timer)) {
+        LOG(INFO) << "Got a heartbeat from another leader with bigger term";
+        ev_timer_stop(loop, &heartbeat_timer);
+    }
+
     if (sender_addr.sin_addr.s_addr == inet_addr(self_ip.c_str())) {
         // Ignore messages from self
         return;
@@ -449,7 +498,7 @@ void Node::handle_append_entries(const raft::leader_election::AppendEntries& app
 
     // If term is newer or equal, update current_term and leader info
     current_term = received_term;
-    role = FOLLOWER;
+    role = Role::FOLLOWER;
     current_leader_ip = leader_id.substr(0, leader_id.find(':'));
     current_leader_port = std::stoi(leader_id.substr(leader_id.find(':') + 1));
     voted_for = ""; // Reset voted_for in the new term
