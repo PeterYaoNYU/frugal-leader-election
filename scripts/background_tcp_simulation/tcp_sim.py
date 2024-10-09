@@ -7,20 +7,46 @@ import time
 active_sockets = []
 active_sockets_lock = threading.Lock()
 
-def start_tcp_connection(target_ip, target_port):
-    try:
-        # Create a TCP socket
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        s.connect((target_ip, target_port))
-        with active_sockets_lock:
-            active_sockets.append(s)
-        print(f"Connected to {target_ip}:{target_port}")
-        while True:
-            # Sending a simple message to the target node
-            s.sendall(b"Hello from node!")
-            time.sleep(1)  # Wait for 1 second before sending the next message
-    except Exception as e:
-        print(f"Failed to connect to {target_ip}:{target_port} - {e}")
+def start_tcp_connection(target_ip, target_port, duration=600):
+    start_time = time.time()
+    while time.time() - start_time < duration:
+        try:
+            # Create a TCP socket
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            
+            # Enable TCP Keep-Alive
+            s.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
+            
+            # Platform-specific settings
+            if sys.platform.startswith('linux'):
+                s.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 60)
+                s.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, 10)
+                s.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 5)
+            elif sys.platform == 'darwin':  # macOS
+                s.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPALIVE, 60)
+            
+            s.connect((target_ip, target_port))
+            with active_sockets_lock:
+                active_sockets.append(s)
+            print(f"Connected to {target_ip}:{target_port}")
+            
+            while time.time() - start_time < duration:
+                try:
+                    s.sendall(b"Hello from node!")
+                except Exception as e:
+                    print(f"Error sending data to {target_ip}:{target_port} - {e}")
+                    break
+                time.sleep(1)  # Wait for 1 second before sending the next message
+        except Exception as e:
+            print(f"Failed to connect to {target_ip}:{target_port} - {e}")
+        finally:
+            with active_sockets_lock:
+                if s in active_sockets:
+                    active_sockets.remove(s)
+            s.close()
+            print(f"Connection to {target_ip}:{target_port} closed. Reconnecting in 5 seconds...")
+            time.sleep(5)  # Wait before attempting to reconnect
+
         
 def handle_client_connection(conn, addr):
     try:
