@@ -3,12 +3,12 @@ import threading
 
 # Define node connection details
 nodes = [
-    # {"host": "c220g5-111207.wisc.cloudlab.us", "port": 29210},
-    {"host": "c220g5-111207.wisc.cloudlab.us", "port": 29211},
-    {"host": "c220g5-111207.wisc.cloudlab.us", "port": 29212},
-    {"host": "c220g5-111207.wisc.cloudlab.us", "port": 29213},
-    {"host": "c220g5-111207.wisc.cloudlab.us", "port": 29214},
-    {"host": "c220g5-111207.wisc.cloudlab.us", "port": 29215},
+    # {"host": "ssh PeterYao@c220g2-011121.wisc.cloudlab.us", "port": 29210},
+    {"host": "c220g2-011121.wisc.cloudlab.us", "port": 25611},
+    {"host": "c220g2-011121.wisc.cloudlab.us", "port": 25612},
+    {"host": "c220g2-011121.wisc.cloudlab.us", "port": 25613},
+    {"host": "c220g2-011121.wisc.cloudlab.us", "port": 25614},
+    {"host": "c220g2-011121.wisc.cloudlab.us", "port": 25615},
 ]
 
 # SSH username

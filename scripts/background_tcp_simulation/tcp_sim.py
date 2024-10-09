@@ -5,13 +5,15 @@ import time
 
 # Store active socket connections
 active_sockets = []
+active_sockets_lock = threading.Lock()
 
 def start_tcp_connection(target_ip, target_port):
     try:
         # Create a TCP socket
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         s.connect((target_ip, target_port))
-        active_sockets.append(s)
+        with active_sockets_lock:
+            active_sockets.append(s)
         print(f"Connected to {target_ip}:{target_port}")
         while True:
             # Sending a simple message to the target node
@@ -19,33 +21,54 @@ def start_tcp_connection(target_ip, target_port):
             time.sleep(1)  # Wait for 1 second before sending the next message
     except Exception as e:
         print(f"Failed to connect to {target_ip}:{target_port} - {e}")
+        
+def handle_client_connection(conn, addr):
+    try:
+        while True:
+            data = conn.recv(1024)
+            if data:
+                print(f"Received message from {addr}: {data.decode()}")
+            else:
+                # No data means the client has closed the connection
+                print(f"Connection closed by {addr}")
+                break
+    except Exception as e:
+        print(f"Error handling client {addr}: {e}")
+    finally:
+        conn.close()
+        with active_sockets_lock:
+            if conn in active_sockets:
+                active_sockets.remove(conn)
+
+
 
 def listen_for_connections(listen_ip, listen_port):
     try:
         # Create a TCP socket to listen for incoming connections
         server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         server_socket.bind((listen_ip, listen_port))
-        server_socket.listen(5)
+        server_socket.listen(10)
         print(f"Listening on {listen_ip}:{listen_port}")
         while True:
             conn, addr = server_socket.accept()
             print(f"Accepted connection from {addr}")
-            active_sockets.append(conn)
-            while True:
-                data = conn.recv(1024)
-                if data:
-                    print(f"Received message: {data.decode()}")
+            with active_sockets_lock:
+                active_sockets.append(conn)
+            # Start a new thread to handle the incoming connection
+            threading.Thread(target=handle_client_connection, args=(conn, addr)).start()
     except Exception as e:
         print(f"Failed to listen on {listen_ip}:{listen_port} - {e}")
 
 def close_all_connections():
     print("Closing all active connections...")
-    for s in active_sockets:
-        try:
-            s.close()
-            print(f"Closed connection: {s}")
-        except Exception as e:
-            print(f"Failed to close connection: {s} - {e}")
+    with active_sockets_lock:
+        for s in active_sockets:
+            try:
+                s.close()
+                print(f"Closed connection: {s}")
+            except Exception as e:
+                print(f"Failed to close connection: {s} - {e}")
+        active_sockets.clear()
 
 def main(node_id, central_port):
     node_ip_format = "10.0.{}.2"
@@ -60,7 +83,7 @@ def main(node_id, central_port):
     listen_thread = threading.Thread(target=listen_for_connections, args=(listen_ip, central_port))
     listen_thread.start()
     
-    wait_time = 5
+    wait_time = 10
     print(f"Waiting {wait_time} seconds for the listen thread to start...")
     time.sleep(wait_time)
 
@@ -71,7 +94,7 @@ def main(node_id, central_port):
             continue  # Skip connecting to itself
 
         target_ip = node_ip_format.format(target_id)
-        for i in range(10):  # Start 10 TCP connections to the target node
+        for i in range(1):  # Start 10 TCP connections to the target node
             thread = threading.Thread(target=start_tcp_connection, args=(target_ip, central_port))
             thread.start()
             threads.append(thread)
