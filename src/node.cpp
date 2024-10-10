@@ -57,7 +57,7 @@ Node::Node(const ProcessConfig& config, int replicaId)
 
 
     // init the self_ip by the replicaId
-    self_ip = config.peerIPs[replicaId];
+    self_ip = config.peerIPs[replicaId-1];
     runtime_seconds = config.runtimeSeconds;
 }
 
