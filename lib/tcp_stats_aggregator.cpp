@@ -6,6 +6,7 @@
 #include <thread>
 #include <sstream>
 #include <regex>
+#include <cstdlib>
 
 struct TcpConnectionStats {
     uint32_t totalRtt;   // Total RTT in microseconds
@@ -52,20 +53,46 @@ void readTcpStats() {
         iss >> sl >> localAddress >> remAddress >> state >> txQueue >> rxQueue >> tr >> tm_when >> retrnsmt >> uid >> timeout >> inode;
 
         // Extract source and destination IP addresses
-        std::string src_ip = localAddress.substr(0, localAddress.find(':'));
-        std::string dst_ip = remAddress.substr(0, remAddress.find(':'));
+        std::string src_ip = std::to_string((std::stoul(localAddress.substr(0, 2), nullptr, 16))) + "." +
+                             std::to_string((std::stoul(localAddress.substr(2, 2), nullptr, 16))) + "." +
+                             std::to_string((std::stoul(localAddress.substr(4, 2), nullptr, 16))) + "." +
+                             std::to_string((std::stoul(localAddress.substr(6, 2), nullptr, 16)));
+
+        std::string dst_ip = std::to_string((std::stoul(remAddress.substr(0, 2), nullptr, 16))) + "." +
+                             std::to_string((std::stoul(remAddress.substr(2, 2), nullptr, 16))) + "." +
+                             std::to_string((std::stoul(remAddress.substr(4, 2), nullptr, 16))) + "." +
+                             std::to_string((std::stoul(remAddress.substr(6, 2), nullptr, 16)));
 
         // Apply the filter to keep only entries with destination or origin of 10.0.*.2
-        if (!std::regex_match(src_ip, filterRegex) && !std::regex_match(dst_ip, filterRegex)) {
+        // if (!std::regex_match(src_ip, std::regex("^10\.0\..*\.2$")) && !std::regex_match(dst_ip, std::regex("^10\.0\..*\.2$"))) {
+        //     continue;
+        // }
+
+        // Use `ss` command to get SRTT for the socket
+        std::string command = "ss -ti src " + src_ip + " dst " + dst_ip;
+        FILE* pipe = popen(command.c_str(), "r");
+        if (!pipe) {
+            std::cerr << "Failed to run ss command" << std::endl;
             continue;
         }
 
-        // For simplicity, using retransmissions as RTT value (inaccurate, but for demonstration)
-        uint32_t rtt = retrnsmt;
+        char buffer[256];
+        uint32_t srtt = 0;
+        while (fgets(buffer, sizeof(buffer), pipe) != nullptr) {
+            std::string output(buffer);
+            std::size_t pos = output.find("rtt:");
+            if (pos != std::string::npos) {
+                std::istringstream rttStream(output.substr(pos + 4));
+                rttStream >> srtt;
+                break;
+            }
+        }
+        pclose(pipe);
+
         uint32_t retransmissions = retrnsmt;
 
-        aggregateTcpStats(originStats, src_ip, rtt, retransmissions);
-        aggregateTcpStats(destStats, dst_ip, rtt, retransmissions);
+        aggregateTcpStats(originStats, src_ip, srtt, retransmissions);
+        aggregateTcpStats(destStats, dst_ip, srtt, retransmissions);
     }
     
     // Print aggregated stats
