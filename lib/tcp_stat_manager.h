@@ -10,6 +10,8 @@
 #include <regex>
 #include <mutex>
 
+#include <glog/logging.h>
+
 struct TcpConnectionStats {
     uint32_t totalRtt;   // Total RTT in microseconds
     uint32_t retransmissions;

@@ -39,10 +39,9 @@ void TcpStatManager::printStats() {
     std::lock_guard<std::mutex> lock(statsMutex);
     std::cout << "TCP Statistics (by Connection Pair):\n";
     for (const auto& [connection, stats] : connectionStats) {
-        std::cout << "Connection: " << connection.first << " -> " << connection.second
+        LOG(INFO) << "Connection: " << connection.first << " -> " << connection.second
                   << ", Average RTT: " << stats.averageRtt() 
-                  << ", Average Retransmissions: " << stats.averageRetransmissions() 
-                  << "\n";
+                  << ", Average Retransmissions: " << stats.averageRetransmissions();
     }
 }
 

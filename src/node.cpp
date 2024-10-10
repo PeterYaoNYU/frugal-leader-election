@@ -31,7 +31,8 @@ Node::Node(const ProcessConfig& config, int replicaId)
       loss_dist(0.0, 1.0),                         // 24
       delay_dist(config.delayLowerBound, config.delayUpperBound),                     // 25
       role(Role::FOLLOWER),                         // 26
-      link_loss_rate(config.linkLossRate)          // 27
+      link_loss_rate(config.linkLossRate),          // 27
+      tcp_stat_manager()
 {
     election_timer.data = this;
     heartbeat_timer.data = this;
@@ -114,6 +115,9 @@ void Node::run() {
         LOG(FATAL) << "Failed to create socket.";
     }
 
+    // start the tcp stat manager
+    tcp_stat_manager.startMonitoring();
+
     // Set socket to non-blocking
     fcntl(sock_fd, F_SETFL, O_NONBLOCK);
 
@@ -153,6 +157,9 @@ void Node::run() {
 void Node::shutdown_cb(EV_P_ ev_timer* w, int revents) {
     Node* self = static_cast<Node*>(w->data);
     LOG(INFO) << "Runtime exceeded (" << self->runtime_seconds << " seconds). Shutting down node.";
+
+    self->tcp_stat_manager.stopMonitoring();
+
     // Stop the event loop
     ev_break(EV_A_ EVBREAK_ALL);
 }
