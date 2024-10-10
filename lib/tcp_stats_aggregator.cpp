@@ -21,10 +21,12 @@ struct TcpConnectionStats {
     }
 };
 
-void aggregateTcpStats(std::map<std::string, TcpConnectionStats>& statsMap, const std::string& key, uint32_t rtt, uint32_t retransmissions) {
+void aggregateTcpStats(std::map<std::pair<std::string, std::string>, TcpConnectionStats>& statsMap, const std::string& src_ip, const std::string& dst_ip, uint32_t rtt, uint32_t retransmissions) {
+    std::pair<std::string, std::string> key = {src_ip, dst_ip};
     if (statsMap.find(key) == statsMap.end()) {
         statsMap[key] = {rtt, retransmissions, 1};
     } else {
+        // std::cout << "Aggregating stats for connection: " << key.first << " -> " << key.second << "\n";
         statsMap[key].totalRtt += rtt;
         statsMap[key].retransmissions += retransmissions;
         statsMap[key].count++;
@@ -41,7 +43,7 @@ void readTcpStats() {
     std::string line;
     std::getline(tcpFile, line); // Skip the header line
 
-    std::map<std::string, TcpConnectionStats> originStats, destStats;
+    std::map<std::pair<std::string, std::string>, TcpConnectionStats> connectionStats;
 
     std::regex filterRegex("^0A0000[0-9A-F]{2}$"); // Matches IPs of the form 10.0.*.2 in hex
 
@@ -52,21 +54,21 @@ void readTcpStats() {
 
         iss >> sl >> localAddress >> remAddress >> state >> txQueue >> rxQueue >> tr >> tm_when >> retrnsmt >> uid >> timeout >> inode;
 
-        // Extract source and destination IP addresses
-        std::string src_ip = std::to_string((std::stoul(localAddress.substr(0, 2), nullptr, 16))) + "." +
-                             std::to_string((std::stoul(localAddress.substr(2, 2), nullptr, 16))) + "." +
+        // Extract source and destination IP addresses considering endianess
+        std::string src_ip = std::to_string((std::stoul(localAddress.substr(6, 2), nullptr, 16))) + "." +
                              std::to_string((std::stoul(localAddress.substr(4, 2), nullptr, 16))) + "." +
-                             std::to_string((std::stoul(localAddress.substr(6, 2), nullptr, 16)));
+                             std::to_string((std::stoul(localAddress.substr(2, 2), nullptr, 16))) + "." +
+                             std::to_string((std::stoul(localAddress.substr(0, 2), nullptr, 16)));
 
-        std::string dst_ip = std::to_string((std::stoul(remAddress.substr(0, 2), nullptr, 16))) + "." +
-                             std::to_string((std::stoul(remAddress.substr(2, 2), nullptr, 16))) + "." +
+        std::string dst_ip = std::to_string((std::stoul(remAddress.substr(6, 2), nullptr, 16))) + "." +
                              std::to_string((std::stoul(remAddress.substr(4, 2), nullptr, 16))) + "." +
-                             std::to_string((std::stoul(remAddress.substr(6, 2), nullptr, 16)));
+                             std::to_string((std::stoul(remAddress.substr(2, 2), nullptr, 16))) + "." +
+                             std::to_string((std::stoul(remAddress.substr(0, 2), nullptr, 16)));
 
         // Apply the filter to keep only entries with destination or origin of 10.0.*.2
-        // if (!std::regex_match(src_ip, std::regex("^10\.0\..*\.2$")) && !std::regex_match(dst_ip, std::regex("^10\.0\..*\.2$"))) {
-        //     continue;
-        // }
+        if (!std::regex_match(src_ip, std::regex("^10\.0\..*\.2$")) && !std::regex_match(dst_ip, std::regex("^10\.0\..*\.2$"))) {
+            continue;
+        }
 
         // Use `ss` command to get SRTT for the socket
         std::string command = "ss -ti src " + src_ip + " dst " + dst_ip;
@@ -91,22 +93,14 @@ void readTcpStats() {
 
         uint32_t retransmissions = retrnsmt;
 
-        aggregateTcpStats(originStats, src_ip, srtt, retransmissions);
-        aggregateTcpStats(destStats, dst_ip, srtt, retransmissions);
+        // Aggregate stats based on source and destination pair
+        aggregateTcpStats(connectionStats, src_ip, dst_ip, srtt, retransmissions);
     }
     
     // Print aggregated stats
-    std::cout << "TCP Statistics (by Origin):\n";
-    for (const auto& [origin, stats] : originStats) {
-        std::cout << "Origin IP: " << origin 
-                  << ", Average RTT: " << stats.averageRtt() 
-                  << ", Average Retransmissions: " << stats.averageRetransmissions() 
-                  << "\n";
-    }
-
-    std::cout << "TCP Statistics (by Destination):\n";
-    for (const auto& [dest, stats] : destStats) {
-        std::cout << "Destination IP: " << dest 
+    std::cout << "TCP Statistics (by Connection Pair):\n";
+    for (const auto& [connection, stats] : connectionStats) {
+        std::cout << "Connection: " << connection.first << " -> " << connection.second
                   << ", Average RTT: " << stats.averageRtt() 
                   << ", Average Retransmissions: " << stats.averageRetransmissions() 
                   << "\n";
