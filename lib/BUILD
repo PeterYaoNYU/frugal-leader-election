@@ -7,3 +7,13 @@ cc_library(
     ],
     visibility = ["//visibility:public"],
 )
+
+cc_library(
+    name = "tcp_sock_stat",
+    srcs = ["tcp_sock_stat.cpp"],
+    hdrs = [],
+    deps = [
+        "@com_github_google_glog//:glog",
+    ],
+    visibility = ["//visibility:public"],
+)
