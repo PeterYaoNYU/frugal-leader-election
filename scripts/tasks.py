@@ -36,6 +36,7 @@ def start_remote(c):
     Logs are stored in the logs/ directory of each respective node.
     """
     config_path = "../configs/remote.yaml"
+    remote_config_path = "frugal-leader-election/configs/remote.yaml"
 
     # Ensure the binary path is defined
     binary_path = "frugal-leader-election/bazel-bin/leader_election"
@@ -55,7 +56,7 @@ def start_remote(c):
             # Establish connection to the remote node
             conn = Connection(host=replica_ip, user=username, port=node["port"])
             # Start the process on the remote node
-            cmd = f"{binary_path} --config={config_path} --replicaId={replica_id} > ~/logs/node_{replica_id}.log 2>&1 &"
+            cmd = f"{binary_path} --config={remote_config_path} --replicaId={replica_id} > ~/logs/node_{replica_id}.log 2>&1 &"
             conn.run(cmd, pty=True)
 
             print(f"Replica {replica_id} started on {replica_ip}, logging to ~/logs/node_{replica_id}.log")

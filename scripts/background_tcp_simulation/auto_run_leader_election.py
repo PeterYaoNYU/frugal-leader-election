@@ -39,7 +39,7 @@ def build_install_bazel(conn):
     
     
     
-def execute_on_node(node, id, build_bazel=False, build_invoke=False):
+def execute_on_node(node, id, build_bazel=False, build_invoke=False, build_fabric=False):
     try:
         # Establish SSH connection
         conn = Connection(host=node["host"], user=username, port=node["port"])
@@ -51,6 +51,10 @@ def execute_on_node(node, id, build_bazel=False, build_invoke=False):
         if build_invoke:
             conn.run("sudo apt install python3-invoke -y", warn=True)
             
+        if build_fabric:
+            conn.run("sudo apt install python3-pip -y", warn=True)
+            conn.run("pip install fabric", warn=True)
+            
         
         # conn.run(f"rm -rf frugal-leader-election", hide=True)
         
@@ -61,7 +65,7 @@ def execute_on_node(node, id, build_bazel=False, build_invoke=False):
         conn.run(f"cd frugal-leader-election && git pull && bazel build //:leader_election")
         
         # Run the target Python script without waiting for it to finish
-        conn.run(f"cd frugal-leader-election/scripts && invoke start-remote", warn=True)
+        # conn.run(f"cd frugal-leader-election/scripts && invoke start-remote", warn=True)
         
         print(f"Script executed on {node['host']}:{node['port']}")
     except Exception as e:

@@ -11,7 +11,7 @@ replica:
   failureLeader: true
   # if the failureLeader is true, after maxHeartbeats number of heartbeats, the leader will fail
   maxHeartbeats: 30
-  port: 7776
+  port: 7912
   delayLowerBound: 10
   delayUpperBound: 250
   useSimulatedLinks: true
