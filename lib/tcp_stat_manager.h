@@ -29,14 +29,15 @@ public:
     void stopMonitoring();
     void printStats();
 
+    std::map<std::pair<std::string, std::string>, TcpConnectionStats> connectionStats;
+    std::mutex statsMutex;
+
 private:
     void readTcpStats();
     void aggregateTcpStats(const std::string& src_ip, const std::string& dst_ip, uint32_t rtt, uint32_t retransmissions);
 
-    std::map<std::pair<std::string, std::string>, TcpConnectionStats> connectionStats;
     std::thread monitoringThread;
     bool running;
-    std::mutex statsMutex;
 };
 
 #endif // TCP_STAT_MANAGER_H
