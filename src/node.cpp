@@ -135,7 +135,7 @@ void Node::run() {
     }
 
     if (bind(sock_fd, (sockaddr*)&addr, sizeof(addr)) < 0) {
-        LOG(FATAL) << "Failed to bind socket to port " << port;
+        LOG(FATAL) << "Failed to bind socket to port " << port << " and IP " << addr.sin_addr.s_addr;
     }
 
     // Initialize receive watcher
