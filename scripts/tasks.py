@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 import yaml
 import threading
+from fabric import Connection
 
 # Define the ports and peers
 PORTS = [5000, 5001, 5002, 5003]
@@ -15,6 +16,55 @@ IP = "127.0.0.1"
 
 # Dictionary to store process PIDs
 processes = {}
+
+# Define node connection details
+nodes = [
+    {"host": "c220g2-011121.wisc.cloudlab.us", "port": 25611},
+    {"host": "c220g2-011121.wisc.cloudlab.us", "port": 25612},
+    {"host": "c220g2-011121.wisc.cloudlab.us", "port": 25613},
+    {"host": "c220g2-011121.wisc.cloudlab.us", "port": 25614},
+    {"host": "c220g2-011121.wisc.cloudlab.us", "port": 25615},
+]
+
+# SSH username
+username = "PeterYao"
+
+@task
+def start_remote(c):
+    """
+    Starts instances of the leader_election binary on remote nodes as specified in the config file.
+    Logs are stored in the logs/ directory of each respective node.
+    """
+    config_path = "../configs/remote.yaml"
+
+    # Ensure the binary path is defined
+    binary_path = "frugal-leader-election/bazel-bin/leader_election"
+
+    with open(config_path, "r") as f:
+        config = yaml.safe_load(f)
+
+    replica_ips = config["replica"]["ips"]
+    n_replicas = len(replica_ips)
+    print("Number of replicas: ", n_replicas)
+
+    for replica_id, node in enumerate(nodes):
+        replica_ip = node["host"]
+        print(f"Starting replica {replica_id} on remote node {replica_ip}")
+
+        try:
+            # Establish connection to the remote node
+            conn = Connection(host=replica_ip, user=username, port=node["port"])
+            # Start the process on the remote node
+            cmd = f"{binary_path} --config={config_path} --replicaId={replica_id} > ~/logs/node_{replica_id}.log 2>&1 &"
+            conn.run(cmd, pty=True)
+
+            print(f"Replica {replica_id} started on {replica_ip}, logging to ~/logs/node_{replica_id}.log")
+        except Exception as e:
+            print(f"Failed to start replica {replica_id} on {replica_ip}: {e}")
+            continue
+
+    print("All remote nodes have been started.")
+    print("Logs are available in the 'logs/' directory on each respective node.")
 
 @task
 def start(c):

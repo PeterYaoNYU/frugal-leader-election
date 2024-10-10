@@ -166,6 +166,23 @@ void Node::shutdown_cb(EV_P_ ev_timer* w, int revents) {
 
 void Node::start_election_timeout() {
     double timeout = dist(rng) / 1000.0; // Convert ms to seconds
+
+    // Check if there is an existing TCP connection with the leader or peers
+    {
+        std::lock_guard<std::mutex> lock(tcp_stat_manager.statsMutex);
+        for (const auto& [connection, stats] : tcp_stat_manager.connectionStats) {
+            if ((connection.first == self_ip && connection.second == current_leader_ip) ||
+                (connection.second == self_ip && connection.first == current_leader_ip)) {
+                double avgRttSec = stats.averageRtt() / 1000000.0; // Convert microseconds to seconds
+                if (avgRttSec > 0.0) {
+                    timeout = 2 * avgRttSec;
+                    LOG(INFO) << "Using average RTT from TCP connection as election timeout: " << timeout << " seconds";
+                }
+                break;
+            }
+        }
+    }
+
     ev_timer_init(&election_timer, election_timeout_cb, timeout, 0);
     ev_timer_start(loop, &election_timer);
     LOG(INFO) << "Election timeout started: " << timeout << " seconds";
