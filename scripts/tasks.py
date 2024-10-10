@@ -36,10 +36,10 @@ def start_remote(c):
     Logs are stored in the logs/ directory of each respective node.
     """
     config_path = "../configs/remote.yaml"
-    remote_config_path = "frugal-leader-election/configs/remote.yaml"
+    remote_config_path = "configs/remote.yaml"
 
     # Ensure the binary path is defined
-    binary_path = "frugal-leader-election/bazel-bin/leader_election"
+    binary_path = "bazel-bin/leader_election"
 
     with open(config_path, "r") as f:
         config = yaml.safe_load(f)
@@ -50,18 +50,22 @@ def start_remote(c):
 
     for replica_id, node in enumerate(nodes):
         replica_ip = node["host"]
-        print(f"Starting replica {replica_id} on remote node {replica_ip}")
+        replica_port = node["port"]
+        print(f"Starting replica {replica_id} on remote node {replica_ip} with port {replica_port}")
 
         try:
             # Establish connection to the remote node
             conn = Connection(host=replica_ip, user=username, port=node["port"])
+            
+            conn.sudo("killall leader_election", warn=True)
             # Start the process on the remote node
-            cmd = f"{binary_path} --config={remote_config_path} --replicaId={replica_id} > ~/logs/node_{replica_id}.log 2>&1 &"
+            cmd = f"cd frugal-leader-election && {binary_path} --config={remote_config_path} --replicaId={replica_id+1} > scripts/logs/node_{replica_id+1}.log 2>&1 &"
+            print(cmd)
             conn.run(cmd, pty=True)
 
-            print(f"Replica {replica_id} started on {replica_ip}, logging to ~/logs/node_{replica_id}.log")
+            print(f"Replica {replica_id+1} started on {replica_ip}, logging to ~/logs/node_{replica_id+1}.log")
         except Exception as e:
-            print(f"Failed to start replica {replica_id} on {replica_ip}: {e}")
+            print(f"Failed to start replica {replica_id+1} on {replica_ip}: {e}")
             continue
 
     print("All remote nodes have been started.")
