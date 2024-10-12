@@ -39,6 +39,8 @@ std::pair<double, double> TcpConnectionStats::rttConfidenceInterval(double confi
     // For large sample sizes, use Z-score
     double z = getZScore(confidenceLevel);
     double marginOfError = z * stddev / std::sqrt(rttSamples.size());
+
+    LOG(INFO) << "Calculating the confidence interval: Mean: " << mean << ", Variance: " << variance << ", StdDev: " << stddev << ", Margin of Error: " << marginOfError;
     return {mean - marginOfError, mean + marginOfError};
 }
 
@@ -142,6 +144,7 @@ void TcpStatManager::readTcpStats() {
             if (std::regex_search(output, match, std::regex("rtt:([0-9]+(?:\\.[0-9]+)?)/([0-9]+(?:\\.[0-9]+)?)"))) {
                 rtt = std::stod(match[1]);
                 rttVar = std::stod(match[2]);
+                LOG(INFO) << "RTT: " << rtt << " ms, RTT Variance: " << rttVar << " ms";
                 break;
             }
         }
