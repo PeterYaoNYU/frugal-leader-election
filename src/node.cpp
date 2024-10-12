@@ -181,9 +181,9 @@ void Node::start_election_timeout() {
 //                    timeout = 2 * avgRttSec;
 //                    get the 95 confidence interval and use the upperbound for the timeout
                     auto [lowerbound, upperbound] = stats.rttConfidenceInterval(0.95);
-                    LOG(INFO) << "Using 95% CI upperbound for RTT as election timueout: " << upperbound * 1000 << " MilliSeconds";
-                    timeout = 1.5 * upperbound;
-                    LOG(INFO) << "Using average RTT from TCP connection as election timeout: " << timeout * 1000 << " MilliSeconds";
+                    LOG(INFO) << "Using 95% CI upperbound for RTT as election timueout: " << upperbound<< " MilliSeconds";
+                    timeout = 1.5 * upperbound/1000;
+                    LOG(INFO) << "Using average RTT from TCP connection as election timeout: " << timeout << " MilliSeconds";
                 }
                 break;
             }
