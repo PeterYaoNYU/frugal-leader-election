@@ -48,21 +48,6 @@ def start_remote(c):
     n_replicas = len(replica_ips)
     print("Number of replicas: ", n_replicas)
     
-    # group = ThreadingGroup(*[node for node in nodes])
-    
-    # def start_replica(conn, replica_id):
-    #     try:
-    #         conn.sudo("killall leader_election", warn=True)
-    #         conn.run("rm -f frugal-leader-election/scripts/logs/*", warn=True)
-
-    #         # Start the process on the remote node in the background
-    #         cmd = f"cd frugal-leader-election && nohup {binary_path} --config={remote_config_path} --replicaId={replica_id + 1} > scripts/logs/node_{replica_id + 1}.log 2>&1 &"
-    #         print(cmd)
-    #         conn.run(cmd, pty=False)
-    #         print(f"Replica {replica_id + 1} started on {conn.host}, logging to ~/logs/node_{replica_id + 1}.log")
-    #     except Exception as e:
-    #         print(f"Failed to start replica {replica_id + 1} on {conn.host}: {e}")
-    
     for replica_id, node in enumerate(nodes):
         replica_ip = node["host"]
         replica_port = node["port"]
@@ -72,6 +57,7 @@ def start_remote(c):
         conn = Connection(host=replica_ip, user=username, port=node["port"])
         
         # conn.sudo("killall leader_election", warn=True)
+        conn.run("mkdir -p frugal-leader-election/scripts/logs", warn=True)
         conn.run("rm -f frugal-leader-election/scripts/logs/*", warn=True)
 
     for replica_id, node in enumerate(nodes):
