@@ -4,6 +4,45 @@
 #include <cstdlib>
 #include <chrono>
 
+double TcpConnectionStats::meanRtt() const {
+    if (rttSamples.empty()) return 0.0;
+    double sum = std::accumulate(rttSamples.begin(), rttSamples.end(), 0.0);
+    return sum / rttSamples.size();
+}
+
+
+double TcpConnectionStats::rttVariance() const {
+    if (rttSamples.size() < 2) return 0.0;
+    double mean = meanRtt();
+    double accum = 0.0;
+    for (double rtt : rttSamples) {
+        accum += (rtt - mean) * (rtt - mean);
+    }
+    return accum / (rttSamples.size() - 1);
+}
+
+double getZScore(double confidenceLevel) {
+    if (confidenceLevel == 0.90) return 1.645;
+    if (confidenceLevel == 0.95) return 1.96;
+    if (confidenceLevel == 0.99) return 2.576;
+    // Default to 95% confidence
+    return 1.96;
+}
+
+
+std::pair<double, double> TcpConnectionStats::rttConfidenceInterval(double confidenceLevel) const {
+    if (rttSamples.size() < 2) return {meanRtt(), meanRtt()};
+    double mean = meanRtt();
+    double variance = rttVariance();
+    double stddev = std::sqrt(variance);
+    // For large sample sizes, use Z-score
+    double z = getZScore(confidenceLevel);
+    double marginOfError = z * stddev / std::sqrt(rttSamples.size());
+    return {mean - marginOfError, mean + marginOfError};
+}
+
+
+
 TcpStatManager::TcpStatManager() : running(false) {}
 
 TcpStatManager::~TcpStatManager() {
@@ -23,7 +62,9 @@ void TcpStatManager::startMonitoring() {
     monitoringThread = std::thread([this]() {
         while (running) {
             readTcpStats();
-            std::this_thread::sleep_for(std::chrono::seconds(1));
+            // std::this_thread::sleep_for(std::chrono::seconds(1));
+            // change the frequency of the monitoring
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
         }
     });
 }
@@ -39,9 +80,11 @@ void TcpStatManager::printStats() {
     std::lock_guard<std::mutex> lock(statsMutex);
     std::cout << "TCP Statistics (by Connection Pair):\n";
     for (const auto& [connection, stats] : connectionStats) {
+        auto [lowerBound, upperBound] = stats.rttConfidenceInterval(0.95);
         LOG(INFO) << "Connection: " << connection.first << " -> " << connection.second
-                  << ", Average RTT: " << stats.averageRtt() 
-                  << ", Average Retransmissions: " << stats.averageRetransmissions();
+                  << ", Mean RTT: " << stats.meanRtt() << " ms"
+                  << ", RTT 95% Confidence Interval: [" << lowerBound << ", " << upperBound << "] ms"
+                  << ", Retransmissions: " << stats.retransmissions;
     }
 }
 
@@ -88,14 +131,16 @@ void TcpStatManager::readTcpStats() {
             continue;
         }
 
-        char buffer[256];
-        uint32_t srtt = 0;
+        char buffer[512];
+        double rtt = 0.0;
+        double rttVar = 0.0;
         while (fgets(buffer, sizeof(buffer), pipe) != nullptr) {
             std::string output(buffer);
-            std::size_t pos = output.find("rtt:");
-            if (pos != std::string::npos) {
-                std::istringstream rttStream(output.substr(pos + 4));
-                rttStream >> srtt;
+            std::smatch match;
+            // Match RTT and variance (e.g., rtt:100/50)
+            if (std::regex_search(output, match, std::regex("rtt:([0-9]+(?:\\.[0-9]+)?)/([0-9]+(?:\\.[0-9]+)?)"))) {
+                rtt = std::stod(match[1]);
+                rttVar = std::stod(match[2]);
                 break;
             }
         }
@@ -109,12 +154,21 @@ void TcpStatManager::readTcpStats() {
 }
 
 void TcpStatManager::aggregateTcpStats(const std::string& src_ip, const std::string& dst_ip, uint32_t rtt, uint32_t retransmissions) {
-    std::pair<std::string, std::string> key = {src_ip, dst_ip};
+    auto key = std::make_pair(src_ip, dst_ip);
+    
     if (connectionStats.find(key) == connectionStats.end()) {
-        connectionStats[key] = {rtt, retransmissions, 1};
+        TcpConnectionStats stats;
+        stats.rttSamples = {rtt};
+        stats.retransmissions = retransmissions;
+        stats.count = 1;
+        connectionStats[key] = stats;
     } else {
-        connectionStats[key].totalRtt += rtt;
-        connectionStats[key].retransmissions += retransmissions;
-        connectionStats[key].count++;
+        TcpConnectionStats& stats = connectionStats[key];
+        if (stats.rttSamples.size() >= MAX_SAMPLES) {
+            stats.rttSamples.erase(stats.rttSamples.begin());
+        }
+        stats.rttSamples.push_back(rtt);
+        stats.retransmissions += retransmissions;
+        stats.count++;
     }
 }

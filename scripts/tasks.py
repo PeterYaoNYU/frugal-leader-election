@@ -56,7 +56,7 @@ def start_remote(c):
             # Establish connection to the remote node
         conn = Connection(host=replica_ip, user=username, port=node["port"])
         
-        # conn.sudo("killall leader_election", warn=True)
+        conn.sudo("killall leader_election", warn=True)
         conn.run("mkdir -p frugal-leader-election/scripts/logs", warn=True)
         conn.run("rm -f frugal-leader-election/scripts/logs/*", warn=True)
 
