@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 import yaml
 import threading
-from fabric import Connection
+from fabric import Connection, ThreadingGroup
 
 # Define the ports and peers
 PORTS = [5000, 5001, 5002, 5003]
@@ -47,23 +47,47 @@ def start_remote(c):
     replica_ips = config["replica"]["ips"]
     n_replicas = len(replica_ips)
     print("Number of replicas: ", n_replicas)
+    
+    # group = ThreadingGroup(*[node for node in nodes])
+    
+    # def start_replica(conn, replica_id):
+    #     try:
+    #         conn.sudo("killall leader_election", warn=True)
+    #         conn.run("rm -f frugal-leader-election/scripts/logs/*", warn=True)
+
+    #         # Start the process on the remote node in the background
+    #         cmd = f"cd frugal-leader-election && nohup {binary_path} --config={remote_config_path} --replicaId={replica_id + 1} > scripts/logs/node_{replica_id + 1}.log 2>&1 &"
+    #         print(cmd)
+    #         conn.run(cmd, pty=False)
+    #         print(f"Replica {replica_id + 1} started on {conn.host}, logging to ~/logs/node_{replica_id + 1}.log")
+    #     except Exception as e:
+    #         print(f"Failed to start replica {replica_id + 1} on {conn.host}: {e}")
+    
+    for replica_id, node in enumerate(nodes):
+        replica_ip = node["host"]
+        replica_port = node["port"]
+        print(f"clearing away logs and running processes replica {replica_id} on remote node {replica_ip} with port {replica_port}")
+
+            # Establish connection to the remote node
+        conn = Connection(host=replica_ip, user=username, port=node["port"])
+        
+        # conn.sudo("killall leader_election", warn=True)
+        conn.run("rm -f frugal-leader-election/scripts/logs/*", warn=True)
 
     for replica_id, node in enumerate(nodes):
         replica_ip = node["host"]
         replica_port = node["port"]
-        print(f"Starting replica {replica_id} on remote node {replica_ip} with port {replica_port}")
+        print(f"Starting replica {replica_id+1} on remote node {replica_ip} with port {replica_port}")
 
         try:
-            # Establish connection to the remote node
+            
             conn = Connection(host=replica_ip, user=username, port=node["port"])
             
-            conn.sudo("killall leader_election", warn=True)
-            # Start the process on the remote node
-            cmd = f"cd frugal-leader-election && {binary_path} --config={remote_config_path} --replicaId={replica_id+1} > scripts/logs/node_{replica_id+1}.log 2>&1 &"
+            cmd = f"cd frugal-leader-election && nohup {binary_path} --config={remote_config_path} --replicaId={replica_id + 1} > scripts/logs/node_{replica_id + 1}.log 2>&1 &"
             print(cmd)
-            conn.run(cmd, pty=True)
+            conn.run(cmd, pty=False, asynchronous=True)
 
-            print(f"Replica {replica_id+1} started on {replica_ip}, logging to ~/logs/node_{replica_id+1}.log")
+            print(f"Replica {replica_id+1} started on {replica_ip}, logging to ./logs/node_{replica_id+1}.log")
         except Exception as e:
             print(f"Failed to start replica {replica_id+1} on {replica_ip}: {e}")
             continue
