@@ -176,7 +176,7 @@ void Node::start_election_timeout() {
         for (const auto& [connection, stats] : tcp_stat_manager.connectionStats) {
             if ((connection.first == self_ip && connection.second == current_leader_ip) ||
                 (connection.second == self_ip && connection.first == current_leader_ip)) {
-                double avgRttSec = stats.averageRtt() / 1000.0; // Convert microseconds to seconds
+                double avgRttSec = stats.meanRtt() / 1000.0; // Convert microseconds to seconds
                 if (avgRttSec > 0.0) {
 //                    timeout = 2 * avgRttSec;
 //                    get the 95 confidence interval and use the upperbound for the timeout

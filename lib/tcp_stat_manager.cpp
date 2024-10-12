@@ -4,6 +4,7 @@
 #include <cstdlib>
 #include <chrono>
 
+
 double TcpConnectionStats::meanRtt() const {
     if (rttSamples.empty()) return 0.0;
     double sum = std::accumulate(rttSamples.begin(), rttSamples.end(), 0.0);
@@ -49,13 +50,13 @@ TcpStatManager::~TcpStatManager() {
     stopMonitoring();
 }
 
-double TcpConnectionStats::averageRtt() const {
-    return count == 0 ? 0.0 : static_cast<double>(totalRtt) / count;
-}
-
-double TcpConnectionStats::averageRetransmissions() const {
-    return count == 0 ? 0.0 : static_cast<double>(retransmissions) / count;
-}
+//double TcpConnectionStats::averageRtt() const {
+//    return count == 0 ? 0.0 : static_cast<double>(totalRtt) / count;
+//}
+//
+//double TcpConnectionStats::averageRetransmissions() const {
+//    return count == 0 ? 0.0 : static_cast<double>(retransmissions) / count;
+//}
 
 void TcpStatManager::startMonitoring() {
     running = true;
@@ -147,13 +148,13 @@ void TcpStatManager::readTcpStats() {
         pclose(pipe);
 
         uint32_t retransmissions = retrnsmt;
-        aggregateTcpStats(src_ip, dst_ip, srtt, retransmissions);
+        aggregateTcpStats(src_ip, dst_ip, rtt, retransmissions);
     }
 
     tcpFile.close();
 }
 
-void TcpStatManager::aggregateTcpStats(const std::string& src_ip, const std::string& dst_ip, uint32_t rtt, uint32_t retransmissions) {
+void TcpStatManager::aggregateTcpStats(const std::string& src_ip, const std::string& dst_ip, double rtt, uint32_t retransmissions) {
     auto key = std::make_pair(src_ip, dst_ip);
     
     if (connectionStats.find(key) == connectionStats.end()) {
