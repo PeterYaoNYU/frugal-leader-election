@@ -25,11 +25,11 @@ def execute_on_node(node, id):
         # Establish SSH connection
         conn = Connection(host=node["host"], user=username, port=node["port"])
         
-        conn.run(f"rm -rf frugal-leader-election", hide=True)
+        # conn.run(f"rm -rf frugal-leader-election", hide=True)
         
         # Clone the repository
-        conn.run(f"git clone {repo_url}", hide=True)
-        print(f"Repository cloned on {node['host']}:{node['port']}")
+        # conn.run(f"git clone {repo_url}", hide=True)
+        # print(f"Repository cloned on {node['host']}:{node['port']}")
         
         # Run the target Python script
         # conn.run(f"python3 {target_script} {id} 7777", hide=True)
