@@ -3,12 +3,12 @@ import threading
 
 # Define node connection details
 nodes = [
-    # {"host": "ssh PeterYao@c220g2-011121.wisc.cloudlab.us", "port": 29210},
-    {"host": "c220g2-011121.wisc.cloudlab.us", "port": 25611},
-    {"host": "c220g2-011121.wisc.cloudlab.us", "port": 25612},
-    {"host": "c220g2-011121.wisc.cloudlab.us", "port": 25613},
-    {"host": "c220g2-011121.wisc.cloudlab.us", "port": 25614},
-    {"host": "c220g2-011121.wisc.cloudlab.us", "port": 25615},
+    # {"host": "c240g5-110103.wisc.cloudlab.us", "port": 26010},
+    {"host": "c240g5-110103.wisc.cloudlab.us", "port": 26011},
+    {"host": "c240g5-110103.wisc.cloudlab.us", "port": 26012},
+    {"host": "c240g5-110103.wisc.cloudlab.us", "port": 26013},
+    {"host": "c240g5-110103.wisc.cloudlab.us", "port": 26014},
+    {"host": "c240g5-110103.wisc.cloudlab.us", "port": 26015},
 ]
 
 # SSH username
@@ -29,7 +29,7 @@ def execute_on_node(node, id):
         
         # Clone the repository
         # conn.run(f"git clone {repo_url}", hide=True)
-        # print(f"Repository cloned on {node['host']}:{node['port']}")
+        print(f"Repository cloned on {node['host']}:{node['port']}")
         
         # Run the target Python script
         # conn.run(f"python3 {target_script} {id} 7777", hide=True)

@@ -1,9 +1,16 @@
 #!/usr/bin/env python3
 
+# ****************************************************
+# ****************************************************
+# Note: This file is not correct, still need debugging
+# ****************************************************
+# ****************************************************
+
 import os
 import subprocess
 import sys
 from invoke import task
+from fabric import Connection
 
 # Number of TCP connections per pair (adjustable)
 NUM_CONNECTIONS = 2
@@ -33,7 +40,7 @@ def start_iperf3_servers(node_num):
 
 # Function to start iperf3 clients to other nodes
 def start_iperf3_clients(node_num):
-    for target_node in range(node_num + 1, TOTAL_NODES + 1):
+    for target_node in range(1, TOTAL_NODES + 1):
         remote_host = f'10.0.{target_node}.2'
         for k in range(NUM_CONNECTIONS):
             port = 5000 + k
@@ -41,14 +48,15 @@ def start_iperf3_clients(node_num):
                 'iperf3', '-c', remote_host, '-p', str(port),
                 '-t', '0',  # Run indefinitely
                 '-P', '1',   # Number of parallel client streams
-                '-b', '1M'  # Limit bandwidth to 10 Mbps
+                '-b', '0.2M'  # Limit bandwidth to 1 Mbps
             ]
             print(f"Starting iperf3 client to {remote_host} on port {port} with bandwidth limit of 1 Mbps")
             subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 def main():
-    if len(sys.argv) != 2:
-        print("Usage: ./iperf_tcp_gen.py <node_id>")
+    if len(sys.argv) != 3:
+        print("Usage: ./iperf_tcp_gen.py <node_id> <mode>")
+        print("Mode should be either 'server' or 'client'")
         sys.exit(1)
 
     try:
@@ -59,10 +67,18 @@ def main():
         print(e)
         sys.exit(1)
 
-    install_iperf3()
-    start_iperf3_servers(node_num)
-    start_iperf3_clients(node_num)
-    print("All iperf3 servers and clients have been started.")
+    mode = sys.argv[2].lower()
+    # install_iperf3()
+
+    if mode == 'server':
+        start_iperf3_servers(node_num)
+        print("iperf3 servers have been started.")
+    elif mode == 'client':
+        start_iperf3_clients(node_num)
+        print("iperf3 clients have been started.")
+    else:
+        print("Invalid mode. Use 'server' or 'client'.")
+        sys.exit(1)
 
 if __name__ == '__main__':
     main()

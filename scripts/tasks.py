@@ -230,18 +230,64 @@ def analyze_logs_false_pos(c):
     
     
 @task
-def run_iperf3(c):
+def run_iperf3_servers(c):
+    """
+    Task to automate the running of iperf3 servers on all nodes using Fabric.
+    """
+
     for node_id, node in enumerate(nodes, start=1):
         node_host = node["host"]
-        print(f"Running iperf3 script on node {node_id} with host {node_host}")
+        print(f"Running iperf3 server script on node {node_id} with host {node_host}")
 
         try:
-            conn = Connection(host=node_host, user="username")  # Replace "username" with your actual SSH username
-            cmd = f"sudo python3 frugal-leader-election/scripts/background_tcp_simulation/iperf_tcp_gen.py {node_id}"
+            conn = Connection(host=node_host, user="username")
+            cmd = f"python3 frugal-leader-election/scripts/background_tcp_simulation/iperf_tcp_gen.py {node_id} server"
+            # Replace "username" with your actual SSH username
             result = conn.run(cmd, hide=True)
             print(result.stdout)
         except Exception as e:
-            print(f"Failed to run iperf3 script on node {node_id} ({node_host}): {e}")
+            print(f"Failed to run iperf3 server script on node {node_id} ({node_host}): {e}")
             continue
 
-    print("iperf3 script execution completed for all nodes.")
+    print("iperf3 server script execution completed for all nodes.")
+
+@task
+def run_iperf3_clients(c):
+    """
+    Task to automate the running of iperf3 clients on all nodes using Fabric.
+    """
+
+    for node_id, node in enumerate(nodes, start=1):
+        node_host = node["host"]
+        print(f"Running iperf3 client script on node {node_id} with host {node_host}")
+
+        try:
+            conn = Connection(host=node_host, user=username, port=node["port"])
+            cmd = f"python3 frugal-leader-election/scripts/background_tcp_simulation/iperf_tcp_gen.py {node_id} client"
+            result = conn.sudo(cmd, hide=True)
+            print(result.stdout)
+        except Exception as e:
+            print(f"Failed to run iperf3 client script on node {node_id} ({node_host}): {e}")
+            continue
+
+    print("iperf3 client script execution completed for all nodes.")
+    
+    
+@task
+def killall_remote(c):
+    for replica_id, node in enumerate(nodes):
+        replica_ip = node["host"]
+        replica_port = node["port"]
+
+
+        try:
+            # Establish connection to the remote node
+            conn = Connection(host=replica_ip, user=username, port=node["port"])
+
+            cmd = "killall leader_election"
+            result = conn.sudo(cmd, hide=True)
+            print(result.stdout)
+        except Exception as e:
+            print(f"Failed to kill all leader_election processes on node {replica_ip}: {e}")
+            continue
+
