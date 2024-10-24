@@ -194,6 +194,12 @@ def analyze_logs_false_pos(c):
         try:
             # Establish connection to the remote node
             conn = Connection(host=replica_ip, user=username, port=node["port"])
+            
+            
+            # Install matplotlib using pip with the -y flag
+            # install_cmd = "pip install matplotlib"
+            # print(f"Installing matplotlib on remote node: {install_cmd}")
+            # conn.run(install_cmd, pty=True)
 
             # Run extract_failure.py on the remote node
             cmd = f"cd frugal-leader-election/scripts && python3 extract_failure.py {replica_id + 1}"
@@ -202,8 +208,40 @@ def analyze_logs_false_pos(c):
 
             # Print the output of the command
             print(result.stdout)
+            
+            
+            # Download the plot file from the remote node
+            remote_plot_path = f"failure_occurrences.png"
+            local_plot_path = f"plots/leader_failure_node_{replica_id + 1}_downloaded.png"
+            print(f"Downloading plot file from {replica_ip}: {remote_plot_path} to local path: {local_plot_path}")
+            
+            # Ensure local plot directory exists
+            Path("plots").mkdir(exist_ok=True)
+            
+            # Download the plot file
+            conn.get(remote=remote_plot_path, local=local_plot_path)
+            
+            
         except Exception as e:
             print(f"Failed to analyze logs for replica {replica_id + 1} on {replica_ip}: {e}")
             continue
 
     print("Log analysis completed for all remote nodes.")
+    
+    
+@task
+def run_iperf3(c):
+    for node_id, node in enumerate(nodes, start=1):
+        node_host = node["host"]
+        print(f"Running iperf3 script on node {node_id} with host {node_host}")
+
+        try:
+            conn = Connection(host=node_host, user="username")  # Replace "username" with your actual SSH username
+            cmd = f"sudo python3 frugal-leader-election/scripts/background_tcp_simulation/iperf_tcp_gen.py {node_id}"
+            result = conn.run(cmd, hide=True)
+            print(result.stdout)
+        except Exception as e:
+            print(f"Failed to run iperf3 script on node {node_id} ({node_host}): {e}")
+            continue
+
+    print("iperf3 script execution completed for all nodes.")
