@@ -13,7 +13,7 @@ from invoke import task
 from fabric import Connection
 
 # Number of TCP connections per pair (adjustable)
-NUM_CONNECTIONS = 2
+NUM_CONNECTIONS = 4  # Adjusted to 4 servers per node
 
 # Total number of spoke nodes
 TOTAL_NODES = 5
@@ -32,7 +32,7 @@ def install_iperf3():
 # Function to start iperf3 servers on multiple ports
 def start_iperf3_servers(node_num):
     server_ip = f"10.0.{node_num}.2"
-    for k in range(NUM_CONNECTIONS):
+    for k in range(1, TOTAL_NODES + 1):
         port = 5000 + k
         cmd = ['iperf3', '-s', '-p', str(port), '-B', server_ip, '-D']
         print(f"Starting iperf3 server on {server_ip}:{port}")
@@ -41,17 +41,18 @@ def start_iperf3_servers(node_num):
 # Function to start iperf3 clients to other nodes
 def start_iperf3_clients(node_num):
     for target_node in range(1, TOTAL_NODES + 1):
+        if target_node == node_num:
+            continue
         remote_host = f'10.0.{target_node}.2'
-        for k in range(NUM_CONNECTIONS):
-            port = 5000 + k
-            cmd = [
-                'iperf3', '-c', remote_host, '-p', str(port),
-                '-t', '0',  # Run indefinitely
-                '-P', '1',   # Number of parallel client streams
-                '-b', '0.2M'  # Limit bandwidth to 1 Mbps
-            ]
-            print(f"Starting iperf3 client to {remote_host} on port {port} with bandwidth limit of 1 Mbps")
-            subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        port = 5000 + node_num  # Each node connects to a unique port on the remote node
+        cmd = [
+            'iperf3', '-c', remote_host, '-p', str(port),
+            '-t', '0',  # Run indefinitely
+            '-P', '1',   # Number of parallel client streams
+            '-b', '0.2M'  # Limit bandwidth to 0.2 Mbps
+        ]
+        print(f"Starting iperf3 client to {remote_host} on port {port} with bandwidth limit of 0.2 Mbps")
+        subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 def main():
     if len(sys.argv) != 3:

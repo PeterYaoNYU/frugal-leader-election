@@ -237,10 +237,10 @@ def run_iperf3_servers(c):
 
     for node_id, node in enumerate(nodes, start=1):
         node_host = node["host"]
-        print(f"Running iperf3 server script on node {node_id} with host {node_host}")
+        print(f"Running iperf3 client script on node {node_id} with host {node_host}")
 
         try:
-            conn = Connection(host=node_host, user="username")
+            conn = Connection(host=node_host, user=username, port=node["port"])
             cmd = f"python3 frugal-leader-election/scripts/background_tcp_simulation/iperf_tcp_gen.py {node_id} server"
             # Replace "username" with your actual SSH username
             result = conn.run(cmd, hide=True)
@@ -289,5 +289,23 @@ def killall_remote(c):
             print(result.stdout)
         except Exception as e:
             print(f"Failed to kill all leader_election processes on node {replica_ip}: {e}")
+            continue
+        
+@task
+def killall_remote_iperf(c):
+    for replica_id, node in enumerate(nodes):
+        replica_ip = node["host"]
+        replica_port = node["port"]
+
+
+        try:
+            # Establish connection to the remote node
+            conn = Connection(host=replica_ip, user=username, port=node["port"])
+
+            cmd = "killall iperf3"
+            result = conn.sudo(cmd, hide=True)
+            print(result.stdout)
+        except Exception as e:
+            print(f"Failed to kill all iperf3 processes on node {replica_ip}: {e}")
             continue
 
