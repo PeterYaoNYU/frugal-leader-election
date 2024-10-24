@@ -3,12 +3,12 @@ import threading
 
 # Define node connection details
 nodes = [
-    # {"host": "ssh PeterYao@c220g2-011121.wisc.cloudlab.us", "port": 29210},
-    {"host": "c220g2-011121.wisc.cloudlab.us", "port": 25611},
-    {"host": "c220g2-011121.wisc.cloudlab.us", "port": 25612},
-    {"host": "c220g2-011121.wisc.cloudlab.us", "port": 25613},
-    {"host": "c220g2-011121.wisc.cloudlab.us", "port": 25614},
-    {"host": "c220g2-011121.wisc.cloudlab.us", "port": 25615},
+    {"host": "c240g5-110103.wisc.cloudlab.us", "port": 26010},
+    {"host": "c240g5-110103.wisc.cloudlab.us", "port": 26011},
+    {"host": "c240g5-110103.wisc.cloudlab.us", "port": 26012},
+    {"host": "c240g5-110103.wisc.cloudlab.us", "port": 26013},
+    {"host": "c240g5-110103.wisc.cloudlab.us", "port": 26014},
+    {"host": "c240g5-110103.wisc.cloudlab.us", "port": 26015},
 ]
 
 # SSH username
@@ -58,16 +58,16 @@ def execute_on_node(node, id, build_bazel=False, build_invoke=False, build_fabri
         
         # conn.run(f"rm -rf frugal-leader-election", hide=True)
         
-        # Clone the repository
+        # # Clone the repository
         # conn.run(f"git clone {repo_url}", hide=True)
         # print(f"Repository cloned on {node['host']}:{node['port']}")
         
-        conn.run(f"cd frugal-leader-election && git pull && bazel build //:leader_election")
+        # conn.run(f"cd frugal-leader-election && git pull && bazel build //:leader_election")
         
         # conn.run("cd frugal-leader-election && git pull")
         
-        # Run the target Python script without waiting for it to finish
-        # conn.run(f"cd frugal-leader-election/scripts && invoke start-remote", warn=True)
+        # # Run the target Python script without waiting for it to finish
+        conn.run(f"cd frugal-leader-election/scripts && invoke start-remote", warn=True)
         
         print(f"Script executed on {node['host']}:{node['port']}")
     except Exception as e:
@@ -77,6 +77,7 @@ def execute_on_node(node, id, build_bazel=False, build_invoke=False, build_fabri
 threads = []
 for id, node in enumerate(nodes):
     thread = threading.Thread(target=execute_on_node, args=(node, id+1,))
+    # thread = threading.Thread(target=build_install_bazel, args=(Connection(host=node["host"], user=username, port=node["port"]),))
     thread.start()
     threads.append(thread)
 

@@ -39,6 +39,9 @@ struct ProcessConfig {
     // simulation
     bool useSimulatedLinks;
 
+    // a bool which tells us if we are in a check CI false positive mode. 
+    bool checkFalsePositive;
+
 
 
     template <class T> T parseField(const YAML::Node &parent, const std::string &key)
@@ -100,6 +103,7 @@ struct ProcessConfig {
             delayLowerBound = parseField<int>(replicaNode, "delayLowerBound");
             delayUpperBound = parseField<int>(replicaNode, "delayUpperBound");
             linkLossRate = parseField<double>(replicaNode, "linkLossRate");
+            checkFalsePositive = parseField<bool>(replicaNode, "checkFalsePositiveRate");
 
         } catch (const ConfigParseException &e) {
             throw ConfigParseException("Error parsing replica " + std::string(e.what()));

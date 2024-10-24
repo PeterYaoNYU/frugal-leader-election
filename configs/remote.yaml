@@ -16,3 +16,4 @@ replica:
   delayUpperBound: 250
   useSimulatedLinks: false
   linkLossRate: 0
+  checkFalsePositiveRate: true

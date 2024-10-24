@@ -67,6 +67,13 @@ private:
     // extract network layer information
     TcpStatManager tcp_stat_manager;
 
+    // if we are in a check false positive mode or not
+    bool check_false_positive;  
+
+    // a number for check false positive mode
+    int suspected_leader_failures = 0;
+    int recv_heartbeat_count = 0;
+
     void start_election_timeout();
     void reset_election_timeout();
     static void election_timeout_cb(EV_P_ ev_timer* w, int revents);

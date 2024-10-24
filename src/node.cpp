@@ -53,12 +53,17 @@ Node::Node(const ProcessConfig& config, int replicaId)
         peer_addresses.emplace_back(peer, port_for_service);
     }
 
-    LOG(INFO) << "Peer addresses size is: " << peer_addresses.size();
+    LOG(INFO) << "Peer addresses size is: " << peer_addresses.size() << "and replica id is: " << replicaId;
 
 
     // init the self_ip by the replicaId
-    self_ip = config.peerIPs[replicaId-1];
+    self_ip = config.peerIPs[replicaId];
+    LOG(INFO) << "Node initialized with IP: " << self_ip << ", port: " << port;
+
     runtime_seconds = config.runtimeSeconds;
+
+    check_false_positive = config.checkFalsePositive;
+
 }
 
 void Node::send_with_delay_and_loss(const std::string& message, const sockaddr_in& recipient_addr) {
@@ -170,6 +175,8 @@ void Node::shutdown_cb(EV_P_ ev_timer* w, int revents) {
 void Node::start_election_timeout() {
     double timeout = dist(rng) / 1000.0; // Convert ms to seconds
 
+    bool using_raft_timeout = true;
+
     // Check if there is an existing TCP connection with the leader or peers
     {
         std::lock_guard<std::mutex> lock(tcp_stat_manager.statsMutex);
@@ -182,12 +189,16 @@ void Node::start_election_timeout() {
 //                    get the 95 confidence interval and use the upperbound for the timeout
                     auto [lowerbound, upperbound] = stats.rttConfidenceInterval(0.95);
                     LOG(INFO) << "Using 95% CI upperbound for RTT as election timueout: " << upperbound<< " MilliSeconds";
-                    timeout = 1.5 * upperbound/1000;
+                    timeout = (upperbound+75) / 1000;
                     LOG(INFO) << "Using average RTT from TCP connection as election timeout: " << timeout << " MilliSeconds";
+                    using_raft_timeout = false;
                 }
                 break;
             }
         }
+    }
+    if (using_raft_timeout) {
+        LOG(INFO) << "Using Raft timeout for election timeout: " << timeout << " seconds";
     }
 
     ev_timer_init(&election_timer, election_timeout_cb, timeout, 0);
@@ -202,6 +213,12 @@ void Node::reset_election_timeout() {
 
 void Node::election_timeout_cb(EV_P_ ev_timer* w, int revents) {
     Node* self = static_cast<Node*>(w->data);
+
+    if (self->check_false_positive) {
+        // In "check false positive rate mode", do not initiate leader election
+        self->suspected_leader_failures++;
+        LOG(INFO) << "Election timeout occurred. Suspected leader failure count: " << self->suspected_leader_failures;
+    }
 
     LOG(INFO) << "Election timeout occurred. Starting leader election and voting for myself. View number: " << self->current_term; 
     LOG(INFO) << "The dead leader is " << self->current_leader_ip << ":" << self->current_leader_port;
@@ -526,6 +543,12 @@ void Node::handle_append_entries(const raft::leader_election::AppendEntries& app
     if (sender_addr.sin_addr.s_addr == inet_addr(self_ip.c_str())) {
         // Ignore messages from self
         return;
+    }
+
+    if (check_false_positive) {
+        recv_heartbeat_count++;
+        LOG(INFO) << "Heartbeat received from leader " << leader_id << " for term " << received_term
+                  << ". False positive check mode is active, resetting election timeout. " << suspected_leader_failures << " failures out of " << recv_heartbeat_count; 
     }
 
     // If term is newer or equal, update current_term and leader info

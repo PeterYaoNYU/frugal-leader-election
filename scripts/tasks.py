@@ -19,11 +19,12 @@ processes = {}
 
 # Define node connection details
 nodes = [
-    {"host": "c220g2-011121.wisc.cloudlab.us", "port": 25611},
-    {"host": "c220g2-011121.wisc.cloudlab.us", "port": 25612},
-    {"host": "c220g2-011121.wisc.cloudlab.us", "port": 25613},
-    {"host": "c220g2-011121.wisc.cloudlab.us", "port": 25614},
-    {"host": "c220g2-011121.wisc.cloudlab.us", "port": 25615},
+    # {"host": "c240g5-110103.wisc.cloudlab.us", "port": 26010},
+    {"host": "c240g5-110103.wisc.cloudlab.us", "port": 26011},
+    {"host": "c240g5-110103.wisc.cloudlab.us", "port": 26012},
+    {"host": "c240g5-110103.wisc.cloudlab.us", "port": 26013},
+    {"host": "c240g5-110103.wisc.cloudlab.us", "port": 26014},
+    {"host": "c240g5-110103.wisc.cloudlab.us", "port": 26015},
 ]
 
 # SSH username
