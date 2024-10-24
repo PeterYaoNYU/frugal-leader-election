@@ -62,12 +62,12 @@ def execute_on_node(node, id, build_bazel=False, build_invoke=False, build_fabri
         # conn.run(f"git clone {repo_url}", hide=True)
         # print(f"Repository cloned on {node['host']}:{node['port']}")
         
-        # conn.run(f"cd frugal-leader-election && git pull && bazel build //:leader_election")
+        conn.run(f"cd frugal-leader-election && git pull && bazel build //:leader_election")
         
         # conn.run("cd frugal-leader-election && git pull")
         
         # # Run the target Python script without waiting for it to finish
-        conn.run(f"cd frugal-leader-election/scripts && invoke start-remote", warn=True)
+        # conn.run(f"cd frugal-leader-election/scripts && invoke start-remote", warn=True)
         
         print(f"Script executed on {node['host']}:{node['port']}")
     except Exception as e:

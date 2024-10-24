@@ -70,7 +70,7 @@ def start_remote(c):
             
             conn = Connection(host=replica_ip, user=username, port=node["port"])
             
-            cmd = f"cd frugal-leader-election && nohup {binary_path} --config={remote_config_path} --replicaId={replica_id + 1} > scripts/logs/node_{replica_id + 1}.log 2>&1 &"
+            cmd = f"cd frugal-leader-election && nohup {binary_path} --config={remote_config_path} --replicaId={replica_id} > scripts/logs/node_{replica_id + 1}.log 2>&1 &"
             print(cmd)
             conn.run(cmd, pty=False, asynchronous=True)
 
@@ -178,3 +178,32 @@ def status(c):
             print(f"Node on port {port} is running with PID {process.pid}")
         else:
             print(f"Node on port {port} has terminated with exit code {ret}")
+
+
+@task
+def analyze_logs_false_pos(c):
+    """
+    Runs extract_failure.py on all remote hosts using the respective replica ID as the argument.
+    """
+    for replica_id, node in enumerate(nodes):
+        replica_ip = node["host"]
+        replica_port = node["port"]
+
+        print(f"Analyzing logs for replica {replica_id + 1} on remote node {replica_ip} with port {replica_port}")
+
+        try:
+            # Establish connection to the remote node
+            conn = Connection(host=replica_ip, user=username, port=node["port"])
+
+            # Run extract_failure.py on the remote node
+            cmd = f"cd frugal-leader-election/scripts && python3 extract_failure.py {replica_id + 1}"
+            print(f"Running command on remote node: {cmd}")
+            result = conn.run(cmd, hide=True)
+
+            # Print the output of the command
+            print(result.stdout)
+        except Exception as e:
+            print(f"Failed to analyze logs for replica {replica_id + 1} on {replica_ip}: {e}")
+            continue
+
+    print("Log analysis completed for all remote nodes.")
