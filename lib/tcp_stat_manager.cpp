@@ -26,6 +26,8 @@ double getZScore(double confidenceLevel) {
     if (confidenceLevel == 0.90) return 1.645;
     if (confidenceLevel == 0.95) return 1.96;
     if (confidenceLevel == 0.99) return 2.576;
+    if (confidenceLevel == 0.999) return 3.291;
+    if (confidenceLevel == 0.995) return 2.807;
     // Default to 95% confidence
     return 1.96;
 }
