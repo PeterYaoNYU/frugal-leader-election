@@ -16,8 +16,8 @@
 #include <glog/logging.h>
 
 // Add the threshold definitions at the top
-#define BYTES_ACKS_THRESHOLD 100
-#define BYTES_RECV_THRESHOLD 200
+#define BYTES_ACKS_THRESHOLD 2000
+#define BYTES_RECV_THRESHOLD 2000
 
 // Time thresholds in milliseconds
 #define LAST_SEND_TIME_THRESHOLD 500

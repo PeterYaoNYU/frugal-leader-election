@@ -153,8 +153,6 @@ void TcpStatManager::readTcpStats() {
                 rttVar = std::stod(match[2]);
             }
 
-
-
             // ADDITION: Parse bytes_acked
             if (std::regex_search(output, match, std::regex("bytes_acked:([0-9]+)"))) {
                 bytes_acked = std::stoull(match[1]);
@@ -184,7 +182,7 @@ void TcpStatManager::readTcpStats() {
         if (data_received && recent_activity) {
             uint32_t retransmissions = retrnsmt;
             aggregateTcpStats(src_ip, dst_ip, rtt, retransmissions);
-            LOG(INFO) << "src IP: " << src_ip << "dst IP: " << dst_ip << "RTT: " << rtt << " ms, RTT Variance: " << rttVar << " ms";
+            LOG(INFO) << "src IP: " << src_ip << " dst IP: " << dst_ip << " RTT: " << rtt << " ms, RTT Variance: " << rttVar << " ms. Bytes Acked: " << bytes_acked << ", Bytes Received: " << bytes_received << ", last send time: " << lastsnd << ", last recv time: " << lastrcv;
         } else {
             // Skip aggregation for this connection
             continue;
