@@ -10,6 +10,7 @@ import yaml
 import threading
 from fabric import Connection, ThreadingGroup
 from datetime import datetime
+
 # Define the ports and peers
 PORTS = [5000, 5001, 5002, 5003]
 IP = "127.0.0.1"
@@ -340,3 +341,25 @@ def download_logs(c):
             print(f"Failed to download log file from {replica_ip}: {e}")
 
     print(f"Logs downloaded into {logs_dir}")
+
+
+@task
+def run_multiple_experiments(c, times=5, wait_time=320):
+    """
+    Runs the remote experiment multiple times.
+    After each run, downloads the logs to the local machine before starting the next experiment.
+    Parameters:
+        times (int): Number of times to run the experiment.
+        wait_time (int): Time in seconds to wait between starting the experiment and downloading logs.
+    """
+    for i in range(times):
+        print(f"\n=== Starting experiment iteration {i+1}/{times} ===")
+        start_remote(c)
+        print(f"Experiment {i+1} started. Waiting for {wait_time} seconds to let it run...")
+        time.sleep(wait_time)
+        print(f"Downloading logs for experiment {i+1}")
+        download_logs(c)
+        print(f"Stopping remote processes after experiment {i+1}")
+        killall_remote(c)
+        print(f"Experiment {i+1} completed.")
+    print("\nAll experiments completed.")
