@@ -178,25 +178,25 @@ void Node::start_election_timeout() {
     bool using_raft_timeout = true;
 
     // Check if there is an existing TCP connection with the leader or peers
-    {
-        std::lock_guard<std::mutex> lock(tcp_stat_manager.statsMutex);
-        for (const auto& [connection, stats] : tcp_stat_manager.connectionStats) {
-            if ((connection.first == self_ip && connection.second == current_leader_ip) ||
-                (connection.second == self_ip && connection.first == current_leader_ip)) {
-                double avgRttSec = stats.meanRtt() / 1000.0; // Convert microseconds to seconds
-                if (avgRttSec > 0.0) {
-//                    timeout = 2 * avgRttSec;
-//                    get the 95 confidence interval and use the upperbound for the timeout
-                    auto [lowerbound, upperbound] = stats.rttConfidenceInterval(0.99);
-                    LOG(INFO) << "Using 95% CI upperbound for RTT as election timueout: " << upperbound<< " MilliSeconds";
-                    timeout = (upperbound+75) / 1000;
-                    LOG(INFO) << "Using average RTT from TCP connection as election timeout: " << timeout * 1000 << " MilliSeconds";
-                    using_raft_timeout = false;
-                }
-                break;
-            }
-        }
-    }
+//     {
+//         std::lock_guard<std::mutex> lock(tcp_stat_manager.statsMutex);
+//         for (const auto& [connection, stats] : tcp_stat_manager.connectionStats) {
+//             if ((connection.first == self_ip && connection.second == current_leader_ip) ||
+//                 (connection.second == self_ip && connection.first == current_leader_ip)) {
+//                 double avgRttSec = stats.meanRtt() / 1000.0; // Convert microseconds to seconds
+//                 if (avgRttSec > 0.0) {
+// //                    timeout = 2 * avgRttSec;
+// //                    get the 95 confidence interval and use the upperbound for the timeout
+//                     auto [lowerbound, upperbound] = stats.rttConfidenceInterval(0.99);
+//                     LOG(INFO) << "Using 95% CI upperbound for RTT as election timueout: " << upperbound<< " MilliSeconds";
+//                     timeout = (upperbound+75) / 1000;
+//                     LOG(INFO) << "Using average RTT from TCP connection as election timeout: " << timeout * 1000 << " MilliSeconds";
+//                     using_raft_timeout = false;
+//                 }
+//                 break;
+//             }
+//         }
+//     }
     if (using_raft_timeout) {
         LOG(INFO) << "Using Raft timeout for election timeout: " << timeout << " seconds";
     }
