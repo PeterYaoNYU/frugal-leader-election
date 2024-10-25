@@ -15,6 +15,14 @@
 
 #include <glog/logging.h>
 
+// Add the threshold definitions at the top
+#define BYTES_ACKS_THRESHOLD 100
+#define BYTES_RECV_THRESHOLD 200
+
+// Time thresholds in milliseconds
+#define LAST_SEND_TIME_THRESHOLD 500
+#define LAST_RECV_TIME_THRESHOLD 500
+
 const size_t MAX_SAMPLES = 1000;
 
 struct TcpConnectionStats {

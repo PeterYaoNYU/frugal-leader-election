@@ -137,6 +137,13 @@ void TcpStatManager::readTcpStats() {
         char buffer[512];
         double rtt = 0.0;
         double rttVar = 0.0;
+
+        uint64_t bytes_acked = 0;
+        uint64_t bytes_received = 0;
+        uint64_t lastsnd = 0;
+        uint64_t lastrcv = 0;
+
+
         while (fgets(buffer, sizeof(buffer), pipe) != nullptr) {
             std::string output(buffer);
             std::smatch match;
@@ -144,14 +151,44 @@ void TcpStatManager::readTcpStats() {
             if (std::regex_search(output, match, std::regex("rtt:([0-9]+(?:\\.[0-9]+)?)/([0-9]+(?:\\.[0-9]+)?)"))) {
                 rtt = std::stod(match[1]);
                 rttVar = std::stod(match[2]);
-                LOG(INFO) << "RTT: " << rtt << " ms, RTT Variance: " << rttVar << " ms";
-                break;
+            }
+
+
+
+            // ADDITION: Parse bytes_acked
+            if (std::regex_search(output, match, std::regex("bytes_acked:([0-9]+)"))) {
+                bytes_acked = std::stoull(match[1]);
+            }
+
+            // ADDITION: Parse bytes_received
+            if (std::regex_search(output, match, std::regex("bytes_received:([0-9]+)"))) {
+                bytes_received = std::stoull(match[1]);
+            }
+
+            // ADDITION: Parse lastsnd
+            if (std::regex_search(output, match, std::regex("lastsnd:([0-9]+)"))) {
+                lastsnd = std::stoull(match[1]);
+            }
+
+            // ADDITION: Parse lastrcv
+            if (std::regex_search(output, match, std::regex("lastrcv:([0-9]+)"))) {
+                lastrcv = std::stoull(match[1]);
             }
         }
         pclose(pipe);
 
-        uint32_t retransmissions = retrnsmt;
-        aggregateTcpStats(src_ip, dst_ip, rtt, retransmissions);
+        bool data_received = (bytes_acked >= BYTES_ACKS_THRESHOLD) || (bytes_received >= BYTES_RECV_THRESHOLD);
+        bool recent_activity = (lastsnd <= LAST_SEND_TIME_THRESHOLD) || (lastrcv <= LAST_RECV_TIME_THRESHOLD);
+
+        // Only aggregate if both conditions are met
+        if (data_received && recent_activity) {
+            uint32_t retransmissions = retrnsmt;
+            aggregateTcpStats(src_ip, dst_ip, rtt, retransmissions);
+            LOG(INFO) << "src IP: " << src_ip << "dst IP: " << dst_ip << "RTT: " << rtt << " ms, RTT Variance: " << rttVar << " ms";
+        } else {
+            // Skip aggregation for this connection
+            continue;
+        }
     }
 
     tcpFile.close();
