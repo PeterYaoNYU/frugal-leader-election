@@ -9,7 +9,7 @@ from pathlib import Path
 import yaml
 import threading
 from fabric import Connection, ThreadingGroup
-
+from datetime import datetime
 # Define the ports and peers
 PORTS = [5000, 5001, 5002, 5003]
 IP = "127.0.0.1"
@@ -308,4 +308,35 @@ def killall_remote_iperf(c):
         except Exception as e:
             print(f"Failed to kill all iperf3 processes on node {replica_ip}: {e}")
             continue
+        
+username = "PeterYao"
 
+@task
+def download_logs(c):
+    """
+    Downloads log files from remote nodes into a local folder named with the current timestamp.
+    """
+    # Create a folder with the current timestamp
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    logs_dir = Path("downloaded_logs") / timestamp
+    logs_dir.mkdir(parents=True, exist_ok=True)
+
+    # For each node, download the log file
+    for replica_id, node in enumerate(nodes):
+        replica_ip = node["host"]
+        replica_port = node["port"]
+        node_name = f"node_{replica_id + 1}"
+
+        remote_log_path = f"/users/{username}/frugal-leader-election/scripts/logs/{node_name}.log"
+        local_log_path = logs_dir / f"{node_name}.log"
+
+        print(f"Downloading log file from {replica_ip}:{remote_log_path} to {local_log_path}")
+
+        try:
+            conn = Connection(host=replica_ip, user=username, port=replica_port)
+            # Use conn.get() to download the file
+            conn.get(remote=remote_log_path, local=str(local_log_path))
+        except Exception as e:
+            print(f"Failed to download log file from {replica_ip}: {e}")
+
+    print(f"Logs downloaded into {logs_dir}")
