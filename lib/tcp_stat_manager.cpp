@@ -86,11 +86,11 @@ void TcpStatManager::printStats() {
     std::lock_guard<std::mutex> lock(statsMutex);
     std::cout << "TCP Statistics (by Connection Pair):\n";
     for (const auto& [connection, stats] : connectionStats) {
-        auto [lowerBound, upperBound] = stats.rttConfidenceInterval(0.95);
+        auto [lowerBound, upperBound] = stats.rttConfidenceInterval(0.995);
         LOG(INFO) << "Connection: " << connection.first << " -> " << connection.second
                   << ", Mean RTT: " << stats.meanRtt() << " ms"
-                  << ", RTT 95% Confidence Interval: [" << lowerBound << ", " << upperBound << "] ms"
-                  << ", Retransmissions: " << stats.retransmissions;
+                  << ", RTT Confidence Interval: [" << lowerBound << ", " << upperBound << "] ms"
+                  << ", Samples size: " << stats.rttSamples.size();
     }
 }
 

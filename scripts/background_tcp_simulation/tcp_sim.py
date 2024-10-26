@@ -95,7 +95,7 @@ def close_all_connections():
                 print(f"Failed to close connection: {s} - {e}")
         active_sockets.clear()
 
-def main(node_id, central_port):
+def main(node_id, central_port, duration):
     node_ip_format = "10.0.{}.2"
 
     # Validate the node ID
@@ -105,7 +105,7 @@ def main(node_id, central_port):
 
     # Start listening for incoming connections
     listen_ip = node_ip_format.format(node_id)
-    listen_thread = threading.Thread(target=listen_for_connections, args=(listen_ip, central_port))
+    listen_thread = threading.Thread(target=listen_for_connections, args=(listen_ip, central_port, duration, 256, 0.1))
     listen_thread.start()
     
     wait_time = 10
@@ -138,15 +138,16 @@ def main(node_id, central_port):
         sys.exit(0)
 
 if __name__ == "__main__":
-    if len(sys.argv) != 3:
-        print("Usage: python tcp_sim.py <node_id> <port>")
+    if len(sys.argv) != 4:
+        print("Usage: python tcp_sim.py <node_id> <port> <duration>")
         sys.exit(1)
 
     try:
         node_id = int(sys.argv[1])
         central_port = int(sys.argv[2])
+        duration = int(sys.argv[3])
     except ValueError:
-        print("Node ID and port must be integers.")
+        print("Node ID, port, and duration must be integers.")
         sys.exit(1)
 
-    main(node_id, central_port)
+    main(node_id, central_port, duration)
