@@ -35,7 +35,7 @@ def execute_on_node(node, id):
         # conn.run(f"python3 {target_script} {id} 7777", hide=True)
         
         # Run the target Python script without waiting for it to finish
-        conn.run(f"nohup python3 {target_script} {id} 7778 &", hide=True, warn=True, asynchronous=True)
+        conn.run(f"nohup python3 {target_script} {id} 7787 &", hide=True, warn=True, asynchronous=True)
         
         print(f"Script executed on {node['host']}:{node['port']}")
     except Exception as e:
@@ -44,7 +44,7 @@ def execute_on_node(node, id):
 # Start threads to connect to each node and perform the actions
 threads = []
 for id, node in enumerate(nodes):
-    thread = threading.Thread(target=execute_on_node, args=(node, id+1,))
+    thread = threading.Thread(target=execute_on_node, args=(node, id+1, ))
     thread.start()
     threads.append(thread)
 

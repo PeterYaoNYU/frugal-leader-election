@@ -120,7 +120,7 @@ def main(node_id, central_port):
 
         target_ip = node_ip_format.format(target_id)
         for i in range(1):  # Start 10 TCP connections to the target node
-            thread = threading.Thread(target=start_tcp_connection, args=(target_ip, central_port, 200, 4096, 0.2))
+            thread = threading.Thread(target=start_tcp_connection, args=(target_ip, central_port, 200, 256, 0.1))
             thread.start()
             threads.append(thread)
             time.sleep(0.1)  # Small delay to avoid overwhelming the target
