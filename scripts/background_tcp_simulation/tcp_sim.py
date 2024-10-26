@@ -20,9 +20,9 @@ def start_tcp_connection(target_ip, target_port, duration=120, message_size=1024
             
             # Platform-specific settings
             if sys.platform.startswith('linux'):
-                s.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 60)
+                s.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 30)
                 s.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, 10)
-                s.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 5)
+                s.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 20)
             elif sys.platform == 'darwin':  # macOS
                 s.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPALIVE, 60)
             
@@ -122,7 +122,7 @@ def main(node_id, central_port):
 
         target_ip = node_ip_format.format(target_id)
         for i in range(1):  # Start 10 TCP connections to the target node
-            thread = threading.Thread(target=start_tcp_connection, args=(target_ip, central_port, 120))
+            thread = threading.Thread(target=start_tcp_connection, args=(target_ip, central_port, 200, 4096, 0.05))
             thread.start()
             threads.append(thread)
             time.sleep(0.1)  # Small delay to avoid overwhelming the target

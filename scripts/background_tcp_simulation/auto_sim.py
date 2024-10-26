@@ -29,7 +29,7 @@ def execute_on_node(node, id):
         
         # Clone the repository
         # conn.run(f"git clone {repo_url}", hide=True)
-        print(f"Repository cloned on {node['host']}:{node['port']}")
+        # print(f"Repository cloned on {node['host']}:{node['port']}")
         
         # Run the target Python script
         # conn.run(f"python3 {target_script} {id} 7777", hide=True)
