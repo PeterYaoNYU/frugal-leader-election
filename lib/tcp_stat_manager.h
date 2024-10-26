@@ -43,6 +43,9 @@ public:
     void stopMonitoring();
     void printStats();
 
+    void startPeriodicStatsPrinting(int intervalInSeconds);
+    void stopPeriodicStatsPrinting();
+
     std::map<std::pair<std::string, std::string>, TcpConnectionStats> connectionStats;
     std::mutex statsMutex;
 
@@ -54,6 +57,9 @@ private:
 //    bool running;
 //    fot thread safety
     std::atomic<bool> running;
+
+    std::thread statsPrintingThread;
+    bool stopPeriodicPrinting = false;
 };
 
 #endif // TCP_STAT_MANAGER_H

@@ -52,6 +52,7 @@ TcpStatManager::TcpStatManager() : running(false) {}
 
 TcpStatManager::~TcpStatManager() {
     stopMonitoring();
+    stopPeriodicStatsPrinting();
 }
 
 //double TcpConnectionStats::averageRtt() const {
@@ -69,7 +70,7 @@ void TcpStatManager::startMonitoring() {
             readTcpStats();
             // std::this_thread::sleep_for(std::chrono::seconds(1));
             // change the frequency of the monitoring
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            std::this_thread::sleep_for(std::chrono::milliseconds(50));
         }
     });
 }
@@ -211,5 +212,22 @@ void TcpStatManager::aggregateTcpStats(const std::string& src_ip, const std::str
         stats.rttSamples.push_back(rtt);
         stats.retransmissions += retransmissions;
         stats.count++;
+    }
+}
+
+void TcpStatManager::startPeriodicStatsPrinting(int intervalInSeconds) {
+    stopPeriodicPrinting = false; // Reset the stop flag
+    statsPrintingThread = std::thread([this, intervalInSeconds]() {
+        while (!stopPeriodicPrinting) {
+            printStats();
+            std::this_thread::sleep_for(std::chrono::seconds(intervalInSeconds));
+        }
+    });
+}
+
+void TcpStatManager::stopPeriodicStatsPrinting() {
+    stopPeriodicPrinting = true;
+    if (statsPrintingThread.joinable()) {
+        statsPrintingThread.join();
     }
 }

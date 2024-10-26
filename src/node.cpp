@@ -123,6 +123,8 @@ void Node::run() {
     // start the tcp stat manager
     tcp_stat_manager.startMonitoring();
 
+    tcp_stat_manager.startPeriodicStatsPrinting(5);
+
     // Set socket to non-blocking
     fcntl(sock_fd, F_SETFL, O_NONBLOCK);
 
@@ -167,6 +169,8 @@ void Node::shutdown_cb(EV_P_ ev_timer* w, int revents) {
     LOG(INFO) << "Runtime exceeded (" << self->runtime_seconds << " seconds). Shutting down node.";
 
     self->tcp_stat_manager.stopMonitoring();
+
+    self->tcp_stat_manager.stopPeriodicStatsPrinting();
 
     // Stop the event loop
     ev_break(EV_A_ EVBREAK_ALL);
