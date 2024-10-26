@@ -11,16 +11,23 @@ double TcpConnectionStats::meanRtt() const {
     return sum / rttSamples.size();
 }
 
-
-double TcpConnectionStats::rttVariance() const {
-    if (rttSamples.size() < 2) return 0.0;
-    double mean = meanRtt();
-    double accum = 0.0;
-    for (double rtt : rttSamples) {
-        accum += (rtt - mean) * (rtt - mean);
-    }
-    return accum / (rttSamples.size() - 1);
+double TcpConnectionStats::meanRttVar() const {
+    if (rttVarSamples.empty()) return 0.0;
+    double sum = std::accumulate(rttVarSamples.begin(), rttVarSamples.end(), 0.0);
+    return sum / rttVarSamples.size();
 }
+
+
+
+// double TcpConnectionStats::rttVariance() const {
+//     if (rttSamples.size() < 2) return 0.0;
+//     double mean = meanRtt();
+//     double accum = 0.0;
+//     for (double rtt : rttSamples) {
+//         accum += (rtt - mean) * (rtt - mean);
+//     }
+//     return accum / (rttSamples.size() - 1);
+// }
 
 double getZScore(double confidenceLevel) {
     if (confidenceLevel == 0.90) return 1.645;
@@ -36,7 +43,7 @@ double getZScore(double confidenceLevel) {
 std::pair<double, double> TcpConnectionStats::rttConfidenceInterval(double confidenceLevel) const {
     if (rttSamples.size() < 2) return {meanRtt(), meanRtt()};
     double mean = meanRtt();
-    double variance = rttVariance();
+    double variance = meanRttVar();
     double stddev = std::sqrt(variance);
     // For large sample sizes, use Z-score
     double z = getZScore(confidenceLevel);
@@ -86,9 +93,10 @@ void TcpStatManager::printStats() {
     std::lock_guard<std::mutex> lock(statsMutex);
     std::cout << "TCP Statistics (by Connection Pair):\n";
     for (const auto& [connection, stats] : connectionStats) {
-        auto [lowerBound, upperBound] = stats.rttConfidenceInterval(0.995);
+        auto [lowerBound, upperBound] = stats.rttConfidenceInterval(0.95);
         LOG(INFO) << "Connection: " << connection.first << " -> " << connection.second
                   << ", Mean RTT: " << stats.meanRtt() << " ms"
+                  << ", Mean RTT Variance: " << stats.meanRttVar() << " ms"
                   << ", RTT Confidence Interval: [" << lowerBound << ", " << upperBound << "] ms"
                   << ", Samples size: " << stats.rttSamples.size();
     }
@@ -184,7 +192,7 @@ void TcpStatManager::readTcpStats() {
         // Only aggregate if both conditions are met
         if (data_received && recent_activity) {
             uint32_t retransmissions = retrnsmt;
-            aggregateTcpStats(src_ip, dst_ip, rtt, retransmissions);
+            aggregateTcpStats(src_ip, dst_ip, rtt, rttVar, retransmissions);
             LOG(INFO) << "src IP: " << src_ip << " dst IP: " << dst_ip << " RTT: " << rtt << " ms, RTT Variance: " << rttVar << " ms. Bytes Acked: " << bytes_acked << ", Bytes Received: " << bytes_received << ", last send time: " << lastsnd << ", last recv time: " << lastrcv;
         } else {
             // Skip aggregation for this connection
@@ -195,12 +203,13 @@ void TcpStatManager::readTcpStats() {
     tcpFile.close();
 }
 
-void TcpStatManager::aggregateTcpStats(const std::string& src_ip, const std::string& dst_ip, double rtt, uint32_t retransmissions) {
+void TcpStatManager::aggregateTcpStats(const std::string& src_ip, const std::string& dst_ip, double rtt, double rttVar, uint32_t retransmissions) {
     auto key = std::make_pair(src_ip, dst_ip);
     
     if (connectionStats.find(key) == connectionStats.end()) {
         TcpConnectionStats stats;
         stats.rttSamples = {rtt};
+        stats.rttVarSamples = {rttVar}; // Store rttVar
         stats.retransmissions = retransmissions;
         stats.count = 1;
         connectionStats[key] = stats;
@@ -208,8 +217,10 @@ void TcpStatManager::aggregateTcpStats(const std::string& src_ip, const std::str
         TcpConnectionStats& stats = connectionStats[key];
         if (stats.rttSamples.size() >= MAX_SAMPLES) {
             stats.rttSamples.erase(stats.rttSamples.begin());
+            stats.rttVarSamples.erase(stats.rttVarSamples.begin()); // Maintain same size
         }
         stats.rttSamples.push_back(rtt);
+        stats.rttVarSamples.push_back(rttVar); // Add rttVar
         stats.retransmissions += retransmissions;
         stats.count++;
     }

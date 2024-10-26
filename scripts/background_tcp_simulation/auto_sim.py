@@ -26,8 +26,8 @@ def execute_on_node(node, id, port, duration):
         conn = Connection(host=node["host"], user=username, port=node["port"])
         
         # Run the target Python script without waiting for it to finish
-        # conn.run(f"nohup python3 {target_script} {id} {port} {duration} &", hide=True, warn=True, asynchronous=True)
-        conn.run(f"python3 {target_script} {id} {port} {duration}", hide=True, warn=True)
+        conn.run(f"nohup python3 {target_script} {id} {port} {duration} &", hide=True, warn=True, asynchronous=True)
+        # conn.run(f"python3 {target_script} {id} {port} {duration}", hide=True, warn=True)
         print(f"Script executed on {node['host']}:{node['port']} with port {port} and duration {duration}")
     except Exception as e:
         print(f"Failed on {node['host']}:{node['port']} - {e}")

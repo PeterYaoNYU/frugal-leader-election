@@ -27,13 +27,15 @@ const size_t MAX_SAMPLES = 1000;
 
 struct TcpConnectionStats {
     std::vector<double> rttSamples;
+    std::vector<double> rttVarSamples; // New vector to store rttvar values
     uint32_t retransmissions;
-    uint32_t count;      // Count of connections
+    uint32_t count;
 
     double meanRtt() const;
-    double rttVariance() const;
+    double meanRttVar() const; // New method to calculate mean rttvar
     std::pair<double, double> rttConfidenceInterval(double confidenceLevel) const;
 };
+
 
 class TcpStatManager {
 public:
@@ -51,7 +53,7 @@ public:
 
 private:
     void readTcpStats();
-    void aggregateTcpStats(const std::string& src_ip, const std::string& dst_ip, double rtt, uint32_t retransmissions);
+    void aggregateTcpStats(const std::string& src_ip, const std::string& dst_ip, double rtt, double rttVar, uint32_t retransmissions);
 
     std::thread monitoringThread;
 //    bool running;
