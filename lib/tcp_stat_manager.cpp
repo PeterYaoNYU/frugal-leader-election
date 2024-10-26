@@ -47,7 +47,8 @@ std::pair<double, double> TcpConnectionStats::rttConfidenceInterval(double confi
     double stddev = std::sqrt(variance);
     // For large sample sizes, use Z-score
     double z = getZScore(confidenceLevel);
-    double marginOfError = z * stddev / std::sqrt(rttSamples.size());
+    // double marginOfError = z * stddev / std::sqrt(rttSamples.size());
+    double marginOfError = z * stddev;
 
     LOG(INFO) << "Calculating the confidence interval: Mean: " << mean << ", Variance: " << variance << ", StdDev: " << stddev << ", Margin of Error: " << marginOfError;
     return {mean - marginOfError, mean + marginOfError};
