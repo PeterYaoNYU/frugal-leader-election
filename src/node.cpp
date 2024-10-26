@@ -64,6 +64,8 @@ Node::Node(const ProcessConfig& config, int replicaId)
 
     check_false_positive = config.checkFalsePositive;
 
+    tcp_monitor = config.tcp_monitor;
+
 }
 
 void Node::send_with_delay_and_loss(const std::string& message, const sockaddr_in& recipient_addr) {
@@ -120,8 +122,10 @@ void Node::run() {
         LOG(FATAL) << "Failed to create socket.";
     }
 
-    // start the tcp stat manager
-    tcp_stat_manager.startMonitoring();
+    if (tcp_monitor) {
+        LOG(INFO) << "Starting TCP monitoring";
+        tcp_stat_manager.startMonitoring();
+    }
 
     // Set socket to non-blocking
     fcntl(sock_fd, F_SETFL, O_NONBLOCK);
@@ -166,8 +170,9 @@ void Node::shutdown_cb(EV_P_ ev_timer* w, int revents) {
     Node* self = static_cast<Node*>(w->data);
     LOG(INFO) << "Runtime exceeded (" << self->runtime_seconds << " seconds). Shutting down node.";
 
-    self->tcp_stat_manager.stopMonitoring();
-
+    if (self->tcp_monitor) {
+        self->tcp_stat_manager.stopMonitoring();
+    }
     // Stop the event loop
     ev_break(EV_A_ EVBREAK_ALL);
 }
@@ -178,6 +183,7 @@ void Node::start_election_timeout() {
     bool using_raft_timeout = true;
 
     // Check if there is an existing TCP connection with the leader or peers
+    if (tcp_monitor)
     {
         std::lock_guard<std::mutex> lock(tcp_stat_manager.statsMutex);
         for (const auto& [connection, stats] : tcp_stat_manager.connectionStats) {

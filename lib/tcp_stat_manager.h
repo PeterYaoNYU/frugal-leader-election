@@ -10,8 +10,33 @@
 #include <regex>
 #include <mutex>
 
+#include <vector>              // CHANGED: For thread pool
+#include <queue>               // CHANGED: For task queue
+#include <condition_variable>  // CHANGED: For synchronization
+#include <atomic>              // CHANGED: For thread-safe flags
+
 #include <numeric>
 #include <cmath>
+
+#include <netinet/in.h>       // CHANGED: Include for Netlink sockets
+#include <linux/netlink.h>    // CHANGED: Include for Netlink sockets
+#include <linux/inet_diag.h>  // CHANGED: Include for Netlink sockets
+// #include <linux/tcp.h>        // CHANGED: Include for TCP info
+#include <sys/socket.h>       // CHANGED: Include for sockets
+#include <unistd.h>           // CHANGED: Include for close()
+
+#include <linux/sock_diag.h>
+#include <linux/rtnetlink.h>
+#include <cstring>            // For memset
+#include <arpa/inet.h>        // For inet_ntop
+
+#include <netinet/ip.h>
+#include <netinet/tcp.h>
+
+#include <fcntl.h>
+
+#include <asm/byteorder.h>
+
 
 #include <glog/logging.h>
 
@@ -40,7 +65,17 @@ public:
 
 private:
     void readTcpStats();
-    void aggregateTcpStats(const std::string& src_ip, const std::string& dst_ip, double rtt, uint32_t retransmissions);
+    void processNetlinkResponse(const char* buffer, int len);
+    void aggregateTcpStats(const std::string& src_ip, const std::string& dst_ip, double rtt, uint32_t  retransmissions);
+
+    void initializeThreadPool(size_t numThreads);
+    void shutdownThreadPool();
+
+    std::vector<std::thread> threadPool;                       // CHANGED: Thread pool
+    std::queue<std::function<void()>> taskQueue;               // CHANGED: Task queue
+    std::mutex queueMutex;                                     // CHANGED: Mutex for task queue
+    std::condition_variable condition;                         // CHANGED: Condition variable for synchronization
+    bool stopThreadPool;                                       // CHANGED: Flag to stop thread pool
 
     std::thread monitoringThread;
 //    bool running;

@@ -8,6 +8,11 @@
 #include <fcntl.h>
 #include <string>
 #include <vector>
+
+#include <queue>               // CHANGED: For task queue
+#include <condition_variable>  // CHANGED: For synchronization
+#include <atomic>              // CHANGED: For thread-safe flags
+
 #include <random>
 #include <unordered_map>
 #include "process_config.h"
@@ -73,6 +78,8 @@ private:
     // a number for check false positive mode
     int suspected_leader_failures = 0;
     int recv_heartbeat_count = 0;
+
+    bool tcp_monitor;
 
     void start_election_timeout();
     void reset_election_timeout();
