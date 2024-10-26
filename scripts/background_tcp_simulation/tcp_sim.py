@@ -7,8 +7,9 @@ import time
 active_sockets = []
 active_sockets_lock = threading.Lock()
 
-def start_tcp_connection(target_ip, target_port, duration=600):
+def start_tcp_connection(target_ip, target_port, duration=120, message_size=1024, interval=0.05):
     start_time = time.time()
+    message = b"A" * message_size
     while time.time() - start_time < duration:
         try:
             # Create a TCP socket
@@ -32,11 +33,11 @@ def start_tcp_connection(target_ip, target_port, duration=600):
             
             while time.time() - start_time < duration:
                 try:
-                    s.sendall(b"Hello from node!")
+                    s.sendall(message)
                 except Exception as e:
                     print(f"Error sending data to {target_ip}:{target_port} - {e}")
                     break
-                time.sleep(1)  # Wait for 1 second before sending the next message
+                time.sleep(interval)  # Wait for some time before sending the next message
         except Exception as e:
             print(f"Failed to connect to {target_ip}:{target_port} - {e}")
         finally:
@@ -121,7 +122,7 @@ def main(node_id, central_port):
 
         target_ip = node_ip_format.format(target_id)
         for i in range(1):  # Start 10 TCP connections to the target node
-            thread = threading.Thread(target=start_tcp_connection, args=(target_ip, central_port))
+            thread = threading.Thread(target=start_tcp_connection, args=(target_ip, central_port, 120))
             thread.start()
             threads.append(thread)
             time.sleep(0.1)  # Small delay to avoid overwhelming the target
