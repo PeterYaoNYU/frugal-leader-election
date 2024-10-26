@@ -52,10 +52,8 @@ def start_tcp_connection(target_ip, target_port, duration=120, message_size=1024
 def handle_client_connection(conn, addr):
     try:
         while True:
-            data = conn.recv(1024)
-            if data:
-                print(f"Received message from {addr}: {data.decode()}")
-            else:
+            data = conn.recv(4096)
+            if not data:
                 # No data means the client has closed the connection
                 print(f"Connection closed by {addr}")
                 break
@@ -122,7 +120,7 @@ def main(node_id, central_port):
 
         target_ip = node_ip_format.format(target_id)
         for i in range(1):  # Start 10 TCP connections to the target node
-            thread = threading.Thread(target=start_tcp_connection, args=(target_ip, central_port, 200, 4096, 0.05))
+            thread = threading.Thread(target=start_tcp_connection, args=(target_ip, central_port, 200, 4096, 0.2))
             thread.start()
             threads.append(thread)
             time.sleep(0.1)  # Small delay to avoid overwhelming the target
