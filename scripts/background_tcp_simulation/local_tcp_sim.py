@@ -7,7 +7,7 @@ import sys
 active_sockets = []
 active_sockets_lock = threading.Lock()
 
-def start_tcp_connection(local_ip, target_ip, target_port, duration=120, message_size=1024, interval=0.05):
+def start_tcp_connection(local_ip, target_ip, target_port, duration=120, message_size=128, interval=0.10):
     start_time = time.time()
     message = b"A" * message_size
     while time.time() - start_time < duration:

@@ -22,11 +22,20 @@ double TcpConnectionStats::rttVariance() const {
     return accum / (rttSamples.size() - 1);
 }
 
+double TcpConnectionStats::meanRttVar() const {
+    if (rttVarSamples.empty()) return 0.0;
+    double sum = std::accumulate(rttVarSamples.begin(), rttVarSamples.end(), 0.0);
+    return sum / rttVarSamples.size();
+}
+
+
 double getZScore(double confidenceLevel) {
     if (confidenceLevel == 0.90) return 1.645;
     if (confidenceLevel == 0.95) return 1.96;
     if (confidenceLevel == 0.99) return 2.576;
     // Default to 95% confidence
+    if (confidenceLevel == 0.999) return 3.291;
+    if (confidenceLevel == 0.995) return 2.807;
     return 1.96;
 }
 
@@ -34,11 +43,13 @@ double getZScore(double confidenceLevel) {
 std::pair<double, double> TcpConnectionStats::rttConfidenceInterval(double confidenceLevel) const {
     if (rttSamples.size() < 2) return {meanRtt(), meanRtt()};
     double mean = meanRtt();
-    double variance = rttVariance();
+    double variance = meanRttVar();
     double stddev = std::sqrt(variance);
     // For large sample sizes, use Z-score
     double z = getZScore(confidenceLevel);
-    double marginOfError = z * stddev / std::sqrt(rttSamples.size());
+
+
+    double marginOfError = z * stddev;
 
     LOG(INFO) << "Calculating the confidence interval: Mean: " << mean << ", Variance: " << variance << ", StdDev: " << stddev << ", Margin of Error: " << marginOfError;
     return {mean - marginOfError, mean + marginOfError};
@@ -49,11 +60,13 @@ std::pair<double, double> TcpConnectionStats::rttConfidenceInterval(double confi
 TcpStatManager::TcpStatManager() : running(false), stopThreadPool(false) {
     initializeThreadPool(std::thread::hardware_concurrency());  // Initialize thread pool
     LOG(INFO) << "Initialized TCP statistics manager, concurrency: " << std::thread::hardware_concurrency();
+    startPeriodicStatsPrinting(15);
 }
 
 TcpStatManager::~TcpStatManager() {
     stopMonitoring();
     shutdownThreadPool();
+    stopPeriodicStatsPrinting();
 }
 
 // CHANGED: Initialize thread pool
@@ -139,9 +152,9 @@ void TcpStatManager::stopMonitoring() {
 
 void TcpStatManager::printStats() {
     std::lock_guard<std::mutex> lock(statsMutex);
-    std::cout << "TCP Statistics (by Connection Pair):\n";
+    LOG(INFO) << "TCP Statistics (by Connection Pair):\n";
     for (const auto& [connection, stats] : connectionStats) {
-        auto [lowerBound, upperBound] = stats.rttConfidenceInterval(0.95);
+        auto [lowerBound, upperBound] = stats.rttConfidenceInterval(0.99);
         LOG(INFO) << "Connection: " << connection.first << " -> " << connection.second
                   << ", Mean RTT: " << stats.meanRtt() << " ms"
                   << ", RTT 95% Confidence Interval: [" << lowerBound << ", " << upperBound << "] ms"
@@ -149,82 +162,8 @@ void TcpStatManager::printStats() {
     }
 }
 
-// void TcpStatManager::readTcpStats() {
-//     std::ifstream tcpFile("/proc/net/tcp");
-//     if (!tcpFile.is_open()) {
-//         std::cerr << "Failed to open /proc/net/tcp" << std::endl;
-//         return;
-//     }
-
-//     std::string line;
-//     std::getline(tcpFile, line); // Skip the header line
-
-//     std::lock_guard<std::mutex> lock(statsMutex);
-
-//     while (std::getline(tcpFile, line)) {
-//         std::istringstream iss(line);
-//         std::string sl, localAddress, remAddress, state;
-//         uint32_t txQueue, rxQueue, tr, tm_when, retrnsmt, uid, timeout, inode;
-
-//         iss >> sl >> localAddress >> remAddress >> state >> txQueue >> rxQueue >> tr >> tm_when >> retrnsmt >> uid >> timeout >> inode;
-
-//         // Extract source and destination IP addresses considering endianess
-//         std::string src_ip = std::to_string((std::stoul(localAddress.substr(6, 2), nullptr, 16))) + "." +
-//                              std::to_string((std::stoul(localAddress.substr(4, 2), nullptr, 16))) + "." +
-//                              std::to_string((std::stoul(localAddress.substr(2, 2), nullptr, 16))) + "." +
-//                              std::to_string((std::stoul(localAddress.substr(0, 2), nullptr, 16)));
-
-//         std::string dst_ip = std::to_string((std::stoul(remAddress.substr(6, 2), nullptr, 16))) + "." +
-//                              std::to_string((std::stoul(remAddress.substr(4, 2), nullptr, 16))) + "." +
-//                              std::to_string((std::stoul(remAddress.substr(2, 2), nullptr, 16))) + "." +
-//                              std::to_string((std::stoul(remAddress.substr(0, 2), nullptr, 16)));
-
-//         // Apply the filter to keep only entries with destination or origin of 10.0.*.2
-//         // if (!std::regex_match(src_ip, std::regex("^10\.0\..*\.2$")) && !std::regex_match(dst_ip, std::regex("^10\.0\..*\.2$"))) {
-//         //     continue;
-//         // } else {
-//         //     LOG(INFO) << "found matching connections worth documenting";
-//         // }
-
-//         // if (!(std::regex_match(src_ip, std::regex("^127\\.0\\.0\\.[2-9]+$")) && std::regex_match(dst_ip, std::regex("^127\\.0\\.0\\.[2-9]+$")))) {
-//         //     continue;
-//         // } 
-
-//         // Use `ss` command to get SRTT for the socket
-//         std::string command = "ss -ti src " + src_ip + " dst " + dst_ip;
-//         FILE* pipe = popen(command.c_str(), "r");
-//         if (!pipe) {
-//             std::cerr << "Failed to run ss command" << std::endl;
-//             continue;
-//         }
-
-//         char buffer[512];
-//         double rtt = 0.0;
-//         double rttVar = 0.0;
-//         while (fgets(buffer, sizeof(buffer), pipe) != nullptr) {
-//             std::string output(buffer);
-//             std::smatch match;
-//             // Match RTT and variance (e.g., rtt:100/50)
-//             if (std::regex_search(output, match, std::regex("rtt:([0-9]+(?:\\.[0-9]+)?)/([0-9]+(?:\\.[0-9]+)?)"))) {
-//                 rtt = std::stod(match[1]);
-//                 rttVar = std::stod(match[2]);
-//                 // LOG(INFO) << "RTT: " << rtt << " ms, RTT Variance: " << rttVar << " ms";
-//                 break;
-//             }
-//         }
-//         pclose(pipe);
-
-//         uint32_t retransmissions = retrnsmt;
-//         aggregateTcpStats(src_ip, dst_ip, rtt, retransmissions);
-//     }
-
-//     tcpFile.close();
-// }
-
-
-
 void TcpStatManager::readTcpStats() {
-    LOG(INFO) << "Reading TCP stats using Netlink socket";
+    // LOG(INFO) << "Reading TCP stats using Netlink socket";
     int sock = socket(AF_NETLINK, SOCK_RAW, NETLINK_INET_DIAG);
     if (sock < 0) {
         perror("socket");
@@ -275,7 +214,7 @@ void TcpStatManager::readTcpStats() {
         if (len > 0) {
             // Process the Netlink response in a separate task
             {
-                LOG(INFO) << "Netlink info received, len=" << len;
+                // LOG(INFO) << "Netlink info received, len=" << len;
                 std::unique_lock<std::mutex> lock(queueMutex);
                 taskQueue.emplace([this, bufferCopy = std::string(buffer, len)]() {
                     processNetlinkResponse(bufferCopy.c_str(), bufferCopy.size());
@@ -301,10 +240,10 @@ void TcpStatManager::readTcpStats() {
 
 
 void TcpStatManager::processNetlinkResponse(const char* buffer, int len) {
-    LOG(INFO) << "Processing Netlink response";
+    // LOG(INFO) << "Processing Netlink response";
     struct nlmsghdr *nlh = (struct nlmsghdr *)buffer;
     for (; NLMSG_OK(nlh, len); nlh = NLMSG_NEXT(nlh, len)) {
-        LOG(INFO) << "Netlink message type: " << nlh->nlmsg_type << ", length: " << nlh->nlmsg_len;
+        // LOG(INFO) << "Netlink message type: " << nlh->nlmsg_type << ", length: " << nlh->nlmsg_len;
         if (nlh->nlmsg_type == NLMSG_DONE) {
             LOG(INFO) << "Netlink message done";
             break;
@@ -339,21 +278,23 @@ void TcpStatManager::processNetlinkResponse(const char* buffer, int len) {
             }
         }
 
+        // LOG(INFO) << "Raw tcpi_rttvar: " << rtt_var;
+
         // Convert RTT and RTT variance to milliseconds
         double rtt_ms = rtt / 1000.0;
         double rtt_var_ms = rtt_var / 1000.0;
 
-        LOG(INFO) << "Connection: " << src_ip << " -> " << dst_ip
-                  << ", RTT: " << rtt_ms << " ms, RTT Variance: " << rtt_var_ms << " ms, Retransmissions: " << retrans;
+        // LOG(INFO) << "Connection: " << src_ip << " -> " << dst_ip
+        //           << ", RTT: " << rtt_ms << " ms, RTT Variance: " << rtt_var_ms << " ms, Retransmissions: " << retrans;
 
         // Aggregate stats
-        aggregateTcpStats(src_ip, dst_ip, rtt_ms, retrans);
+        aggregateTcpStats(src_ip, dst_ip, rtt_ms, rtt_var_ms, retrans);
     }
 
-    LOG(INFO) << "DONE Processed Netlink response";
+    // LOG(INFO) << "DONE Processed Netlink response";
 }
 
-void TcpStatManager::aggregateTcpStats(const std::string& src_ip, const std::string& dst_ip, double rtt, uint32_t retransmissions) {
+void TcpStatManager::aggregateTcpStats(const std::string& src_ip, const std::string& dst_ip, double rtt, double rttVar, uint32_t retransmissions) {
     std::lock_guard<std::mutex> lock(statsMutex); 
     
     auto key = std::make_pair(src_ip, dst_ip);
@@ -361,20 +302,41 @@ void TcpStatManager::aggregateTcpStats(const std::string& src_ip, const std::str
     if (connectionStats.find(key) == connectionStats.end()) {
         TcpConnectionStats stats;
         stats.rttSamples = {rtt};
+        stats.rttVarSamples = {rttVar};
         stats.retransmissions = retransmissions;
         stats.count = 1;
         connectionStats[key] = stats;
-        LOG(INFO) << "Added stats for new connection: " << src_ip << " -> " << dst_ip
-                  << ", RTT: " << rtt << " ms, Retransmissions: " << retransmissions;
+        // LOG(INFO) << "Added stats for new connection: " << src_ip << " -> " << dst_ip
+        //           << ", RTT: " << rtt << " ms, rttvat: " << rttVar;
     } else {
         TcpConnectionStats& stats = connectionStats[key];
         if (stats.rttSamples.size() >= MAX_SAMPLES) {
             stats.rttSamples.erase(stats.rttSamples.begin());
         }
         stats.rttSamples.push_back(rtt);
+        stats.rttVarSamples.push_back(rttVar);
         stats.retransmissions += retransmissions;
         stats.count++;
-        LOG(INFO) << "Aggregated stats for connection: " << src_ip << " -> " << dst_ip
-                  << ", RTT: " << rtt << " ms, Retransmissions: " << retransmissions;
+        // LOG(INFO) << "Added stats for connection: " << src_ip << " -> " << dst_ip
+        //           << ", RTT: " << rtt << " ms, rttvar: " << rttVar;
     }
 }
+
+
+void TcpStatManager::startPeriodicStatsPrinting(int intervalInSeconds) {
+    stopPeriodicPrinting = false; // Reset the stop flag
+    statsPrintingThread = std::thread([this, intervalInSeconds]() {
+        while (!stopPeriodicPrinting) {
+            printStats();
+            std::this_thread::sleep_for(std::chrono::seconds(intervalInSeconds));
+        }
+    });
+}
+
+void TcpStatManager::stopPeriodicStatsPrinting() {
+    stopPeriodicPrinting = true;
+    if (statsPrintingThread.joinable()) {
+        statsPrintingThread.join();
+    }
+}
+

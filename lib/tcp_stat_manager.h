@@ -44,11 +44,13 @@ const size_t MAX_SAMPLES = 1000;
 
 struct TcpConnectionStats {
     std::vector<double> rttSamples;
+    std::vector<double> rttVarSamples;
     uint32_t retransmissions;
     uint32_t count;      // Count of connections
 
     double meanRtt() const;
     double rttVariance() const;
+    double meanRttVar() const;
     std::pair<double, double> rttConfidenceInterval(double confidenceLevel) const;
 };
 
@@ -60,13 +62,16 @@ public:
     void stopMonitoring();
     void printStats();
 
+    void startPeriodicStatsPrinting(int intervalInSeconds);
+    void stopPeriodicStatsPrinting();
+
     std::map<std::pair<std::string, std::string>, TcpConnectionStats> connectionStats;
     std::mutex statsMutex;
 
 private:
     void readTcpStats();
     void processNetlinkResponse(const char* buffer, int len);
-    void aggregateTcpStats(const std::string& src_ip, const std::string& dst_ip, double rtt, uint32_t  retransmissions);
+    void aggregateTcpStats(const std::string& src_ip, const std::string& dst_ip, double rtt,double rttVar, uint32_t  retransmissions);
 
     void initializeThreadPool(size_t numThreads);
     void shutdownThreadPool();
@@ -81,6 +86,10 @@ private:
 //    bool running;
 //    fot thread safety
     std::atomic<bool> running;
+
+
+    std::thread statsPrintingThread;
+    std::atomic<bool> stopPeriodicPrinting{false};
 };
 
 #endif // TCP_STAT_MANAGER_H

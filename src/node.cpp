@@ -172,6 +172,7 @@ void Node::shutdown_cb(EV_P_ ev_timer* w, int revents) {
 
     if (self->tcp_monitor) {
         self->tcp_stat_manager.stopMonitoring();
+        self->tcp_stat_manager.stopPeriodicStatsPrinting();
     }
     // Stop the event loop
     ev_break(EV_A_ EVBREAK_ALL);
@@ -193,9 +194,9 @@ void Node::start_election_timeout() {
                 if (avgRttSec > 0.0) {
 //                    timeout = 2 * avgRttSec;
 //                    get the 95 confidence interval and use the upperbound for the timeout
-                    auto [lowerbound, upperbound] = stats.rttConfidenceInterval(0.95);
-                    LOG(INFO) << "Using 95% CI upperbound for RTT as election timueout: " << upperbound<< " MilliSeconds";
-                    timeout = (upperbound+75) / 1000;
+                    auto [lowerbound, upperbound] = stats.rttConfidenceInterval(0.999);
+                    LOG(INFO) << "Using 999% CI upperbound for RTT as election timueout: " << upperbound<< " MilliSeconds";
+                    timeout = (upperbound+80) / 1000;
                     LOG(INFO) << "Using average RTT from TCP connection as election timeout: " << timeout << " MilliSeconds";
                     using_raft_timeout = false;
                 }
