@@ -32,7 +32,7 @@ Node::Node(const ProcessConfig& config, int replicaId)
       delay_dist(config.delayLowerBound, config.delayUpperBound),                     // 25
       role(Role::FOLLOWER),                         // 26
       link_loss_rate(config.linkLossRate),          // 27
-      tcp_stat_manager()
+      tcp_stat_manager(config.peerIPs[replicaId])
 {
     election_timer.data = this;
     heartbeat_timer.data = this;
@@ -65,6 +65,7 @@ Node::Node(const ProcessConfig& config, int replicaId)
     check_false_positive = config.checkFalsePositive;
 
     tcp_monitor = config.tcp_monitor;
+
 
 }
 

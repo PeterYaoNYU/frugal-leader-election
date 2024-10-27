@@ -56,7 +56,8 @@ struct TcpConnectionStats {
 
 class TcpStatManager {
 public:
-    TcpStatManager();
+    // TcpStatManager();
+    TcpStatManager(const std::string& self_ip);
     ~TcpStatManager();
     void startMonitoring();
     void stopMonitoring();
@@ -70,6 +71,8 @@ public:
 
 private:
     void readTcpStats();
+    void readTcpStats(const std::string& filterIp, bool filterBySource);
+
     void processNetlinkResponse(const char* buffer, int len);
     void aggregateTcpStats(const std::string& src_ip, const std::string& dst_ip, double rtt,double rttVar, uint32_t  retransmissions);
 
@@ -90,6 +93,8 @@ private:
 
     std::thread statsPrintingThread;
     std::atomic<bool> stopPeriodicPrinting{false};
+
+    std::string self_ip;
 };
 
 #endif // TCP_STAT_MANAGER_H
