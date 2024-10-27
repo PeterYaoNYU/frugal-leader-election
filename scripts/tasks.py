@@ -9,6 +9,7 @@ from pathlib import Path
 import yaml
 import threading
 from fabric import Connection, ThreadingGroup
+from datetime import datetime
 
 # Define the ports and peers
 PORTS = [5000, 5001, 5002, 5003]
@@ -70,7 +71,7 @@ def start_remote(c):
             
             conn = Connection(host=replica_ip, user=username, port=node["port"])
             
-            cmd = f"cd frugal-leader-election && nohup {binary_path} --config={remote_config_path} --replicaId={replica_id + 1} > scripts/logs/node_{replica_id + 1}.log 2>&1 &"
+            cmd = f"cd frugal-leader-election && nohup {binary_path} --config={remote_config_path} --replicaId={replica_id} > scripts/logs/node_{replica_id + 1}.log 2>&1 &"
             print(cmd)
             conn.run(cmd, pty=False, asynchronous=True)
 
@@ -178,3 +179,205 @@ def status(c):
             print(f"Node on port {port} is running with PID {process.pid}")
         else:
             print(f"Node on port {port} has terminated with exit code {ret}")
+
+
+@task
+def analyze_logs_false_pos(c):
+    """
+    Runs extract_failure.py on all remote hosts using the respective replica ID as the argument.
+    """
+    for replica_id, node in enumerate(nodes):
+        replica_ip = node["host"]
+        replica_port = node["port"]
+
+        print(f"Analyzing logs for replica {replica_id + 1} on remote node {replica_ip} with port {replica_port}")
+
+        try:
+            # Establish connection to the remote node
+            conn = Connection(host=replica_ip, user=username, port=node["port"])
+            
+            
+            # Install matplotlib using pip with the -y flag
+            # install_cmd = "pip install matplotlib"
+            # print(f"Installing matplotlib on remote node: {install_cmd}")
+            # conn.run(install_cmd, pty=True)
+
+            # Run extract_failure.py on the remote node
+            cmd = f"cd frugal-leader-election/scripts && python3 extract_failure.py {replica_id + 1}"
+            print(f"Running command on remote node: {cmd}")
+            result = conn.run(cmd, hide=True)
+
+            # Print the output of the command
+            print(result.stdout)
+            
+            
+            # Download the plot file from the remote node
+            remote_plot_path = f"failure_occurrences.png"
+            local_plot_path = f"plots/leader_failure_node_{replica_id + 1}_downloaded.png"
+            print(f"Downloading plot file from {replica_ip}: {remote_plot_path} to local path: {local_plot_path}")
+            
+            # Ensure local plot directory exists
+            Path("plots").mkdir(exist_ok=True)
+            
+            # Download the plot file
+            conn.get(remote=remote_plot_path, local=local_plot_path)
+            
+            
+        except Exception as e:
+            print(f"Failed to analyze logs for replica {replica_id + 1} on {replica_ip}: {e}")
+            continue
+
+    print("Log analysis completed for all remote nodes.")
+    
+    
+@task
+def run_iperf3_servers(c):
+    """
+    Task to automate the running of iperf3 servers on all nodes using Fabric.
+    """
+
+    for node_id, node in enumerate(nodes, start=1):
+        node_host = node["host"]
+        print(f"Running iperf3 client script on node {node_id} with host {node_host}")
+
+        try:
+            conn = Connection(host=node_host, user=username, port=node["port"])
+            cmd = f"python3 frugal-leader-election/scripts/background_tcp_simulation/iperf_tcp_gen.py {node_id} server"
+            # Replace "username" with your actual SSH username
+            result = conn.run(cmd, hide=True)
+            print(result.stdout)
+        except Exception as e:
+            print(f"Failed to run iperf3 server script on node {node_id} ({node_host}): {e}")
+            continue
+
+    print("iperf3 server script execution completed for all nodes.")
+
+@task
+def run_iperf3_clients(c):
+    """
+    Task to automate the running of iperf3 clients on all nodes using Fabric.
+    """
+
+    for node_id, node in enumerate(nodes, start=1):
+        node_host = node["host"]
+        print(f"Running iperf3 client script on node {node_id} with host {node_host}")
+
+        try:
+            conn = Connection(host=node_host, user=username, port=node["port"])
+            cmd = f"python3 frugal-leader-election/scripts/background_tcp_simulation/iperf_tcp_gen.py {node_id} client"
+            result = conn.sudo(cmd, hide=True)
+            print(result.stdout)
+        except Exception as e:
+            print(f"Failed to run iperf3 client script on node {node_id} ({node_host}): {e}")
+            continue
+
+    print("iperf3 client script execution completed for all nodes.")
+    
+    
+@task
+def killall_remote(c):
+    for replica_id, node in enumerate(nodes):
+        replica_ip = node["host"]
+        replica_port = node["port"]
+
+
+        try:
+            # Establish connection to the remote node
+            conn = Connection(host=replica_ip, user=username, port=node["port"])
+
+            cmd = "killall leader_election"
+            result = conn.sudo(cmd, hide=True)
+            print(result.stdout)
+        except Exception as e:
+            print(f"Failed to kill all leader_election processes on node {replica_ip}: {e}")
+            continue
+        
+@task
+def killall_python(c):
+    for replica_id, node in enumerate(nodes):
+        replica_ip = node["host"]
+        replica_port = node["port"]
+
+
+        try:
+            # Establish connection to the remote node
+            conn = Connection(host=replica_ip, user=username, port=node["port"])
+
+            cmd = "killall python3"
+            result = conn.sudo(cmd, hide=True)
+            print(result.stdout)
+        except Exception as e:
+            print(f"Failed to kill all python3 processes on node {replica_ip}: {e}")
+            continue
+        
+@task
+def killall_remote_iperf(c):
+    for replica_id, node in enumerate(nodes):
+        replica_ip = node["host"]
+        replica_port = node["port"]
+
+
+        try:
+            # Establish connection to the remote node
+            conn = Connection(host=replica_ip, user=username, port=node["port"])
+
+            cmd = "killall iperf3"
+            result = conn.sudo(cmd, hide=True)
+            print(result.stdout)
+        except Exception as e:
+            print(f"Failed to kill all iperf3 processes on node {replica_ip}: {e}")
+            continue
+        
+username = "PeterYao"
+
+@task
+def download_logs(c):
+    """
+    Downloads log files from remote nodes into a local folder named with the current timestamp.
+    """
+    # Create a folder with the current timestamp
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    logs_dir = Path("downloaded_logs") / timestamp
+    logs_dir.mkdir(parents=True, exist_ok=True)
+
+    # For each node, download the log file
+    for replica_id, node in enumerate(nodes):
+        replica_ip = node["host"]
+        replica_port = node["port"]
+        node_name = f"node_{replica_id + 1}"
+
+        remote_log_path = f"/users/{username}/frugal-leader-election/scripts/logs/{node_name}.log"
+        local_log_path = logs_dir / f"{node_name}.log"
+
+        print(f"Downloading log file from {replica_ip}:{remote_log_path} to {local_log_path}")
+
+        try:
+            conn = Connection(host=replica_ip, user=username, port=replica_port)
+            # Use conn.get() to download the file
+            conn.get(remote=remote_log_path, local=str(local_log_path))
+        except Exception as e:
+            print(f"Failed to download log file from {replica_ip}: {e}")
+
+    print(f"Logs downloaded into {logs_dir}")
+
+
+@task
+def run_multiple_experiments(c, times=5, wait_time=320):
+    """
+    Runs the remote experiment multiple times.
+    After each run, downloads the logs to the local machine before starting the next experiment.
+    Parameters:
+        times (int): Number of times to run the experiment.
+        wait_time (int): Time in seconds to wait between starting the experiment and downloading logs.
+    """
+    for i in range(times):
+        print(f"\n=== Starting experiment iteration {i+1}/{times} ===")
+        start_remote(c)
+        print(f"Experiment {i+1} started. Waiting for {wait_time} seconds to let it run...")
+        time.sleep(wait_time)
+        print(f"Downloading logs for experiment {i+1}")
+        download_logs(c)
+        print(f"Stopping remote processes after experiment {i+1}")
+        killall_remote(c)
+        print(f"Experiment {i+1} completed.")
+    print("\nAll experiments completed.")
