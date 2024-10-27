@@ -513,8 +513,8 @@ void TcpStatManager::processNetlinkResponse(const char* buffer, int len) {
         double rtt_ms = rtt / 1000.0;
         double rtt_var_ms = rtt_var / 1000.0;
 
-        LOG(INFO) << "Netlink INFO: " << src_ip << " -> " << dst_ip
-                  << ", RTT: " << rtt_ms << " ms, RTT Variance: " << rtt_var_ms << " ms, Retransmissions: " << retrans;
+        // LOG(INFO) << "Netlink INFO: " << src_ip << " -> " << dst_ip
+        //           << ", RTT: " << rtt_ms << " ms, RTT Variance: " << rtt_var_ms << " ms, Retransmissions: " << retrans;
 
         // Aggregate stats
         aggregateTcpStats(src_ip, dst_ip, rtt_ms, rtt_var_ms, retrans);
@@ -535,8 +535,8 @@ void TcpStatManager::aggregateTcpStats(const std::string& src_ip, const std::str
         stats.retransmissions = retransmissions;
         stats.count = 1;
         connectionStats[key] = stats;
-        LOG(INFO) << "Added stats for new connection: " << src_ip << " -> " << dst_ip
-                  << ", RTT: " << rtt << " ms, rttvat: " << rttVar;
+        // LOG(INFO) << "Added stats for new connection: " << src_ip << " -> " << dst_ip
+        //           << ", RTT: " << rtt << " ms, rttvat: " << rttVar;
     } else {
         TcpConnectionStats& stats = connectionStats[key];
         if (stats.rttSamples.size() >= MAX_SAMPLES) {
@@ -547,8 +547,8 @@ void TcpStatManager::aggregateTcpStats(const std::string& src_ip, const std::str
         stats.rttVarSamples.push_back(rttVar);
         stats.retransmissions += retransmissions;
         stats.count++;
-        LOG(INFO) << "Added stats for connection: " << src_ip << " -> " << dst_ip
-                  << ", RTT: " << rtt << " ms, rttvar: " << rttVar;
+        // LOG(INFO) << "Added stats for connection: " << src_ip << " -> " << dst_ip
+        //           << ", RTT: " << rtt << " ms, rttvar: " << rttVar;
     }
 }
 
