@@ -43,6 +43,8 @@ struct ProcessConfig {
     bool checkFalsePositive;
 
     bool tcp_monitor;
+    double confidenceLevel;
+    int heartbeatIntervalMargin;
 
 
 
@@ -107,6 +109,9 @@ struct ProcessConfig {
             linkLossRate = parseField<double>(replicaNode, "linkLossRate");
             checkFalsePositive = parseField<bool>(replicaNode, "checkFalsePositiveRate");
             tcp_monitor = parseField<bool>(replicaNode, "tcp_monitor");
+
+            confidenceLevel = parseField<double>(replicaNode, "confidenceLevel");
+            heartbeatIntervalMargin = parseField<int>(replicaNode, "heartbeatIntervalMargin");
 
         } catch (const ConfigParseException &e) {
             throw ConfigParseException("Error parsing replica " + std::string(e.what()));

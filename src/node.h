@@ -9,6 +9,7 @@
 #include <string>
 #include <vector>
 
+// using a thread pool to get the socket statistics. 
 #include <queue>               // CHANGED: For task queue
 #include <condition_variable>  // CHANGED: For synchronization
 #include <atomic>              // CHANGED: For thread-safe flags
@@ -80,6 +81,9 @@ private:
     int recv_heartbeat_count = 0;
 
     bool tcp_monitor;
+
+    double confidence_level = 0.999;
+    int heartbeat_interval_margin = 75; // 75 ms
 
     void start_election_timeout();
     void reset_election_timeout();

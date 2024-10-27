@@ -32,7 +32,9 @@ Node::Node(const ProcessConfig& config, int replicaId)
       delay_dist(config.delayLowerBound, config.delayUpperBound),                     // 25
       role(Role::FOLLOWER),                         // 26
       link_loss_rate(config.linkLossRate),          // 27
-      tcp_stat_manager(config.peerIPs[replicaId])
+      tcp_stat_manager(config.peerIPs[replicaId]),
+      confidence_level(config.confidenceLevel),
+      heartbeat_interval_margin(config.heartbeatIntervalMargin)
 {
     election_timer.data = this;
     heartbeat_timer.data = this;
@@ -195,9 +197,9 @@ void Node::start_election_timeout() {
                 if (avgRttSec > 0.0) {
 //                    timeout = 2 * avgRttSec;
 //                    get the 95 confidence interval and use the upperbound for the timeout
-                    auto [lowerbound, upperbound] = stats.rttConfidenceInterval(0.999);
-                    LOG(INFO) << "Using 999% CI upperbound for RTT as election timueout: " << upperbound<< " MilliSeconds";
-                    timeout = (upperbound+80) / 1000;
+                    auto [lowerbound, upperbound] = stats.rttConfidenceInterval(confidence_level);
+                    LOG(INFO) << "Using "<< confidence_level <<"% CI upperbound for RTT as election timueout: " << upperbound<< " MilliSeconds";
+                    timeout = (upperbound / 2 + heartbeat_interval_margin) / 1000;
                     LOG(INFO) << "Using average RTT from TCP connection as election timeout: " << timeout << " MilliSeconds";
                     using_raft_timeout = false;
                 }
