@@ -10,6 +10,7 @@ import yaml
 import threading
 from fabric import Connection, ThreadingGroup
 from datetime import datetime
+import time
 
 # Define the ports and peers
 PORTS = [5000, 5001, 5002, 5003]
@@ -31,8 +32,100 @@ nodes = [
 # SSH username
 username = "PeterYao"
 
+
+
 @task
-def start_remote(c):
+def start_remote(c, config_file):
+    """
+    Starts instances of the leader_election binary on remote nodes as specified in the given config file.
+    Logs are stored in the logs/ directory with a subdirectory named after the config file.
+    
+    Parameters:
+        config_file (str): The path to the configuration file to use.
+    """
+    remote_config_path = f"configs/{config_file}"
+    log_subdir = f"logs/{config_file.replace('.yaml', '')}"
+
+    # Ensure the binary path is defined
+    binary_path = "bazel-bin/leader_election"
+
+    with open(f"../{remote_config_path}", "r") as f:
+        config = yaml.safe_load(f)
+
+    replica_ips = config["replica"]["ips"]
+    n_replicas = len(replica_ips)
+    print("Number of replicas: ", n_replicas)
+    
+    for replica_id, node in enumerate(nodes):
+        replica_ip = node["host"]
+        replica_port = node["port"]
+        print(f"Clearing logs and running processes for replica {replica_id} on {replica_ip} with port {replica_port}")
+
+        # Establish connection to the remote node
+        conn = Connection(host=replica_ip, user=username, port=node["port"])
+        
+        conn.sudo("killall leader_election", warn=True)
+        conn.run(f"mkdir -p frugal-leader-election/scripts/{log_subdir}", warn=True)
+        conn.run(f"rm -f frugal-leader-election/scripts/{log_subdir}/*", warn=True)
+
+    for replica_id, node in enumerate(nodes):
+        replica_ip = node["host"]
+        replica_port = node["port"]
+        print(f"Starting replica {replica_id+1} on remote node {replica_ip} with port {replica_port}")
+
+        try:
+            conn = Connection(host=replica_ip, user=username, port=node["port"])
+            
+            cmd = f"cd frugal-leader-election && nohup {binary_path} --config={remote_config_path} --replicaId={replica_id} > scripts/{log_subdir}/node_{replica_id + 1}.log 2>&1 &"
+            print(cmd)
+            conn.run(cmd, pty=False, asynchronous=True)
+
+            print(f"Replica {replica_id+1} started on {replica_ip}, logging to ./{log_subdir}/node_{replica_id+1}.log")
+        except Exception as e:
+            print(f"Failed to start replica {replica_id+1} on {replica_ip}: {e}")
+            continue
+
+    print("All remote nodes have been started.")
+    print(f"Logs are available in the '{log_subdir}/' directory on each respective node.")
+
+
+@task
+def download_logs(c, log_dir_name=None):
+    """
+    Downloads log files from remote nodes into a local folder named with the provided log_dir_name or the current timestamp.
+    
+    Parameters:
+        log_dir_name (str, optional): The name for the local logs directory. Defaults to a timestamp-based name.
+    """
+    # Create a folder with the specified name or current timestamp
+    if log_dir_name is None:
+        log_dir_name = datetime.now().strftime("%Y%m%d_%H%M%S")
+    logs_dir = Path("downloaded_logs") / log_dir_name
+    logs_dir.mkdir(parents=True, exist_ok=True)
+
+    # For each node, download the log file
+    for replica_id, node in enumerate(nodes):
+        replica_ip = node["host"]
+        replica_port = node["port"]
+        node_name = f"node_{replica_id + 1}"
+
+        remote_log_path = f"/users/{username}/frugal-leader-election/scripts/logs/{log_dir_name}/{node_name}.log"
+        local_log_path = logs_dir / f"{node_name}.log"
+
+        print(f"Downloading log file from {replica_ip}:{remote_log_path} to {local_log_path}")
+
+        try:
+            conn = Connection(host=replica_ip, user=username, port=replica_port)
+            # Use conn.get() to download the file
+            conn.get(remote=remote_log_path, local=str(local_log_path))
+        except Exception as e:
+            print(f"Failed to download log file from {replica_ip}: {e}")
+
+    print(f"Logs downloaded into {logs_dir}")
+
+
+@task
+def start_remote_default(c):
     """
     Starts instances of the leader_election binary on remote nodes as specified in the config file.
     Logs are stored in the logs/ directory of each respective node.
@@ -331,7 +424,7 @@ def killall_remote_iperf(c):
 username = "PeterYao"
 
 @task
-def download_logs(c):
+def download_logs_default(c):
     """
     Downloads log files from remote nodes into a local folder named with the current timestamp.
     """
@@ -380,4 +473,46 @@ def run_multiple_experiments(c, times=5, wait_time=320):
         print(f"Stopping remote processes after experiment {i+1}")
         killall_remote(c)
         print(f"Experiment {i+1} completed.")
+    print("\nAll experiments completed.")
+    
+    
+    
+@task
+def automate_exp(c, *config_files):
+    """
+    Automates a series of experiments using the given list of configuration files.
+    Each experiment runs for 3000 seconds, followed by a 100-second buffer for log handling.
+    
+    Parameters:
+        config_files (str): A list of configuration file names (YAML files) to use for each experiment.
+    """
+    if not config_files:
+        print("No configuration files provided. Please specify at least one configuration file.")
+        return
+
+    experiment_duration = 3000  # 3000 seconds
+    buffer_time = 100  # Extra time to ensure logs are properly saved
+    total_time = experiment_duration + buffer_time
+
+    for config_file in config_files:
+        print(f"\n=== Starting experiment with config file: {config_file} ===")
+        
+        # Start the remote experiment using the specified configuration
+        start_remote(c, config_file=config_file)
+
+        # Wait for the experiment to run
+        print(f"Experiment started with {config_file}. Waiting for {experiment_duration} seconds...")
+        time.sleep(experiment_duration)
+
+        # Download the logs and append the configuration file name to the local log directory
+        download_logs(c, log_dir_name=config_file.replace(".yaml", ""))
+
+        # Stop all remote processes
+        print(f"Stopping remote processes after experiment with {config_file}")
+        killall_remote(c)
+
+        # Wait before starting the next experiment
+        print(f"Waiting for {buffer_time} seconds before the next experiment.")
+        time.sleep(buffer_time)
+
     print("\nAll experiments completed.")
