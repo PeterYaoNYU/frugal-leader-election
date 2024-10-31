@@ -5,7 +5,7 @@ replica:
   - "10.0.3.2"
   - "10.0.4.2"
   - "10.0.5.2"
-  runtimeSeconds: 300
+  runtimeSeconds: 500
   timeoutLowerBound: 150
   timeoutUpperBound: 300
   failureLeader: false
@@ -19,4 +19,4 @@ replica:
   checkFalsePositiveRate: true
   tcp_monitor: true
   confidenceLevel: 0.95
-  heartbeatIntervalMargin: 78
+  heartbeatIntervalMargin: 85

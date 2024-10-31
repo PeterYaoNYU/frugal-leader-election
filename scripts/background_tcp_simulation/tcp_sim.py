@@ -7,7 +7,7 @@ import time
 active_sockets = []
 active_sockets_lock = threading.Lock()
 
-def start_tcp_connection(target_ip, target_port, duration=5000):
+def start_tcp_connection(target_ip, target_port, duration=50000):
     start_time = time.time()
     while time.time() - start_time < duration:
         try:
@@ -36,7 +36,7 @@ def start_tcp_connection(target_ip, target_port, duration=5000):
                 except Exception as e:
                     print(f"Error sending data to {target_ip}:{target_port} - {e}")
                     break
-                time.sleep(1)  # Wait for 1 second before sending the next message
+                time.sleep(0.05)  # Wait for 1 second before sending the next message
         except Exception as e:
             print(f"Failed to connect to {target_ip}:{target_port} - {e}")
         finally:

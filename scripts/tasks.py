@@ -90,12 +90,13 @@ def start_remote(c, config_file, log_suffix=""):
 
 
 @task
-def download_logs(c, log_dir_name=None):
+def download_logs(c, log_dir_name=None, log_suffix=""):
     """
     Downloads log files from remote nodes into a local folder named with the provided log_dir_name or the current timestamp.
     
     Parameters:
         log_dir_name (str, optional): The name for the local logs directory. Defaults to a timestamp-based name.
+        log_suffix (str, optional): A suffix to identify log files for specific experiment iterations.
     """
     # Create a folder with the specified name or current timestamp
     if log_dir_name is None:
@@ -103,14 +104,15 @@ def download_logs(c, log_dir_name=None):
     logs_dir = Path("downloaded_logs") / log_dir_name
     logs_dir.mkdir(parents=True, exist_ok=True)
 
-    # For each node, download the log file
-    for replica_id, node in enumerate(nodes):
+    # For each node, download the log file with the specified suffix
+    for replica_id, node in enumerate(nodes[4:]):
         replica_ip = node["host"]
         replica_port = node["port"]
         node_name = f"node_{replica_id + 1}"
 
-        remote_log_path = f"/users/{username}/frugal-leader-election/scripts/logs/{log_dir_name}/{node_name}.log"
-        local_log_path = logs_dir / f"{node_name}.log"
+        # Append log_suffix to both remote and local log file paths
+        remote_log_path = f"/users/{username}/frugal-leader-election/scripts/logs/{log_dir_name}/{node_name}_{log_suffix}.log"
+        local_log_path = logs_dir / f"{node_name}_{log_suffix}.log"
 
         print(f"Downloading log file from {replica_ip}:{remote_log_path} to {local_log_path}")
 
@@ -122,6 +124,31 @@ def download_logs(c, log_dir_name=None):
             print(f"Failed to download log file from {replica_ip}: {e}")
 
     print(f"Logs downloaded into {logs_dir}")
+
+
+@task
+def download_multi_logs(c, log_dir_name=None, start_idx=1, end_idx=5):
+    """
+    Downloads log files for multiple runs from remote nodes within a specified range.
+    Each log file is distinguished by an index-based suffix.
+
+    Parameters:
+        log_dir_name (str, optional): The name for the local logs directory. Defaults to a timestamp-based name.
+        start_idx (int): The starting index for the log files to download.
+        end_idx (int): The ending index for the log files to download.
+    """
+    if log_dir_name is None:
+        log_dir_name = datetime.now().strftime("%Y%m%d_%H%M%S")
+    logs_dir = Path("downloaded_logs") / log_dir_name
+    logs_dir.mkdir(parents=True, exist_ok=True)
+
+    for idx in range(start_idx, end_idx + 1):
+        log_suffix = f"run_{idx}"
+        print(f"\n=== Downloading logs for iteration {log_suffix} ===")
+        download_logs(c, log_dir_name=log_dir_name, log_suffix=log_suffix)
+
+    print(f"\nAll logs from run {start_idx} to {end_idx} have been downloaded.")
+
 
 
 @task
@@ -499,6 +526,6 @@ def automate_exp(c, config_files):
         print(f"\n=== Starting automated experiments with config file: {config_file} ===")
         
         # Run multiple experiments with the current config file
-        run_multiple_experiments(c, config_file=config_file, times=5, wait_time=330)
+        run_multiple_experiments(c, config_file=config_file, times=5, wait_time=530)
 
     print("\nAll automated experiments completed.")
