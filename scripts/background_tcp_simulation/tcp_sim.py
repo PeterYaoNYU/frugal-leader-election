@@ -7,8 +7,20 @@ import time
 active_sockets = []
 active_sockets_lock = threading.Lock()
 
-def start_tcp_connection(target_ip, target_port, duration=50000):
+def start_tcp_connection(target_ip, target_port, duration=50000, message_size=2048, send_interval=0.1):
+    """
+    Creates a persistent TCP connection with the specified target and sends messages at a frequent interval.
+
+    Parameters:
+        target_ip (str): IP address of the target node.
+        target_port (int): Port number of the target node.
+        duration (int): Duration to keep the connection open (in seconds).
+        message_size (int): Size of each message to send (in bytes).
+        send_interval (float): Interval between messages (in seconds).
+    """
     start_time = time.time()
+    message = b"X" * message_size  # Increase message size by repeating 'X' character
+
     while time.time() - start_time < duration:
         try:
             # Create a TCP socket
@@ -17,7 +29,7 @@ def start_tcp_connection(target_ip, target_port, duration=50000):
             # Enable TCP Keep-Alive
             s.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
             
-            # Platform-specific settings
+            # Platform-specific keep-alive settings
             if sys.platform.startswith('linux'):
                 s.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 60)
                 s.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, 10)
@@ -30,28 +42,31 @@ def start_tcp_connection(target_ip, target_port, duration=50000):
                 active_sockets.append(s)
             print(f"Connected to {target_ip}:{target_port}")
             
+            # Send messages in a frequent loop
             while time.time() - start_time < duration:
                 try:
-                    s.sendall(b"Hello from node!")
+                    s.sendall(message)  # Send larger message
                 except Exception as e:
-                    print(f"Error sending data to {target_ip}:{target_port} - {e}")
-                    break
-                time.sleep(0.05)  # Wait for 1 second before sending the next message
+                    print(f"Error in connection to {target_ip}:{target_port} - {e}")
+                    break  # Exit inner loop if sending fails
+                time.sleep(send_interval)  # Short interval between messages
         except Exception as e:
             print(f"Failed to connect to {target_ip}:{target_port} - {e}")
         finally:
+            # Cleanup and prepare to reconnect
             with active_sockets_lock:
                 if s in active_sockets:
                     active_sockets.remove(s)
             s.close()
-            print(f"Connection to {target_ip}:{target_port} closed. Reconnecting in 5 seconds...")
-            time.sleep(5)  # Wait before attempting to reconnect
+            print(f"Connection to {target_ip}:{target_port} closed. Reconnecting in 2 seconds...")
+            time.sleep(1)  # Short delay to attempt reconnection
+
 
         
 def handle_client_connection(conn, addr):
     try:
         while True:
-            data = conn.recv(1024)
+            data = conn.recv(4096)
             if data:
                 print(f"Received message from {addr}: {data.decode()}")
             else:
