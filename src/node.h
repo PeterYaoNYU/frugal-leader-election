@@ -85,6 +85,9 @@ private:
     double confidence_level = 0.999;
     int heartbeat_interval_margin = 75; // 75 ms
 
+    // debugging
+    int heartbeat_current_term = 0;
+
     void start_election_timeout();
     void reset_election_timeout();
     static void election_timeout_cb(EV_P_ ev_timer* w, int revents);

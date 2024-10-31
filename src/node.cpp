@@ -34,7 +34,8 @@ Node::Node(const ProcessConfig& config, int replicaId)
       link_loss_rate(config.linkLossRate),          // 27
       tcp_stat_manager(config.peerIPs[replicaId]),
       confidence_level(config.confidenceLevel),
-      heartbeat_interval_margin(config.heartbeatIntervalMargin)
+      heartbeat_interval_margin(config.heartbeatIntervalMargin),
+      heartbeat_current_term(0)
 {
     election_timer.data = this;
     heartbeat_timer.data = this;
@@ -219,10 +220,10 @@ void Node::start_election_timeout() {
 void Node::reset_election_timeout() {
     ev_timer_stop(loop, &election_timer);
 
-    LOG(INFO) << "reset election timeout .";
+    LOG(INFO) << "resetting election timeout... the current term heartbeat count is " << heartbeat_current_term;
     start_election_timeout();
 
-    LOG(INFO) << "Election timeout restarted.";
+    LOG(INFO) << "Election timeout restarted. the current term heartbeat count is " << heartbeat_current_term;
 }
 
 void Node::election_timeout_cb(EV_P_ ev_timer* w, int revents) {
@@ -234,7 +235,7 @@ void Node::election_timeout_cb(EV_P_ ev_timer* w, int revents) {
         LOG(INFO) << "Election timeout occurred. Suspected leader failure count: " << self->suspected_leader_failures;
     }
 
-    LOG(INFO) << "Election timeout occurred. Starting leader election and voting for myself. View number: " << self->current_term; 
+    LOG(INFO) << "Election timeout occurred. Starting leader election and voting for myself. View number: " << self->current_term << " Current term hb count " <<self->heartbeat_current_term; 
     LOG(INFO) << "The dead leader is " << self->current_leader_ip << ":" << self->current_leader_port;
 
     self->current_term++;
@@ -550,7 +551,8 @@ void Node::handle_append_entries(const raft::leader_election::AppendEntries& app
     }
 
     if (received_term > current_term && ev_is_active(&heartbeat_timer)) {
-        LOG(INFO) << "Got a heartbeat from another leader with bigger term";
+        LOG(INFO) << "Got a heartbeat from another leader with bigger term, resetting current heartbeat count...";
+        heartbeat_current_term = 0;
         ev_timer_stop(loop, &heartbeat_timer);
     }
 
@@ -559,10 +561,12 @@ void Node::handle_append_entries(const raft::leader_election::AppendEntries& app
         return;
     }
 
+    heartbeat_current_term++;
+
     if (check_false_positive) {
         recv_heartbeat_count++;
         LOG(INFO) << "Heartbeat received from leader " << leader_id << " for term " << received_term
-                  << ". False positive check mode is active, resetting election timeout. " << suspected_leader_failures << " failures out of " << recv_heartbeat_count; 
+                  << ". HB count for this term is: "<< heartbeat_current_term <<". False positive check mode is active, resetting election timeout. " << suspected_leader_failures << " failures out of " << recv_heartbeat_count; 
     }
 
     // If term is newer or equal, update current_term and leader info
@@ -573,7 +577,6 @@ void Node::handle_append_entries(const raft::leader_election::AppendEntries& app
     voted_for = ""; // Reset voted_for in the new term
 
     reset_election_timeout(); // Reset election timeout upon receiving heartbeat
-
     // Assuming logs are consistent for simplicity
 
     raft::leader_election::AppendEntriesResponse response;
