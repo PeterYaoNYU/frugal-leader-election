@@ -66,7 +66,7 @@ def start_remote(c, config_file, log_suffix=""):
         
         conn.sudo("killall leader_election", warn=True)
         conn.run(f"mkdir -p frugal-leader-election/scripts/{log_subdir}", warn=True)
-        conn.run(f"rm -f frugal-leader-election/scripts/{log_subdir}/*", warn=True)
+        # conn.run(f"rm -f frugal-leader-election/scripts/{log_subdir}/*", warn=True)
 
     for replica_id, node in enumerate(nodes):
         replica_ip = node["host"]
@@ -455,7 +455,7 @@ def download_logs_default(c):
 
 
 @task
-def run_multiple_experiments(c, times=5, wait_time=30):
+def run_multiple_experiments(c, config_file, times=5, wait_time=30):
     """
     Runs the remote experiment multiple times.
     After each run, downloads the logs to the local machine before starting the next experiment.
@@ -466,7 +466,7 @@ def run_multiple_experiments(c, times=5, wait_time=30):
     for i in range(times):
         log_suffix = f"run_{i+1}"
         print(f"\n=== Starting experiment iteration {i+1}/{times} ===")
-        start_remote(c, "remote.yaml", log_suffix=log_suffix)
+        start_remote(c, config_file, log_suffix=log_suffix)
         print(f"Experiment {i+1} started. Waiting for {wait_time} seconds to let it run...")
         time.sleep(wait_time)
         print(f"Downloading logs for experiment {i+1}")
@@ -482,7 +482,7 @@ def run_multiple_experiments(c, times=5, wait_time=30):
 def automate_exp(c, *config_files):
     """
     Automates a series of experiments using the given list of configuration files.
-    Each experiment runs for 3000 seconds, followed by a 100-second buffer for log handling.
+    Each experiment runs for multiple iterations as defined in run_multiple_experiments.
     
     Parameters:
         config_files (str): A list of configuration file names (YAML files) to use for each experiment.
@@ -491,29 +491,12 @@ def automate_exp(c, *config_files):
         print("No configuration files provided. Please specify at least one configuration file.")
         return
 
-    experiment_duration = 3000  # 3000 seconds
-    buffer_time = 100  # Extra time to ensure logs are properly saved
-    total_time = experiment_duration + buffer_time
-
     for config_file in config_files:
-        print(f"\n=== Starting experiment with config file: {config_file} ===")
+        print(f"\n=== Starting automated experiments with config file: {config_file} ===")
         
-        # Start the remote experiment using the specified configuration
-        start_remote(c, config_file=config_file)
+        # Run multiple experiments with the current config file
+        run_multiple_experiments(c, config_file=config_file, times=5, wait_time=30)
 
-        # Wait for the experiment to run
-        print(f"Experiment started with {config_file}. Waiting for {experiment_duration} seconds...")
-        time.sleep(experiment_duration)
-
-        # Download the logs and append the configuration file name to the local log directory
-        download_logs(c, log_dir_name=config_file.replace(".yaml", ""))
-
-        # Stop all remote processes
-        print(f"Stopping remote processes after experiment with {config_file}")
-        killall_remote(c)
-
-        # Wait before starting the next experiment
-        print(f"Waiting for {buffer_time} seconds before the next experiment.")
-        time.sleep(buffer_time)
+    print("\nAll automated experiments completed.")
 
     print("\nAll experiments completed.")
