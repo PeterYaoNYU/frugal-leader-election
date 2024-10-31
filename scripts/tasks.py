@@ -35,7 +35,7 @@ username = "PeterYao"
 
 
 @task
-def start_remote(c, config_file):
+def start_remote(c, config_file, log_suffix=""):
     """
     Starts instances of the leader_election binary on remote nodes as specified in the given config file.
     Logs are stored in the logs/ directory with a subdirectory named after the config file.
@@ -76,11 +76,11 @@ def start_remote(c, config_file):
         try:
             conn = Connection(host=replica_ip, user=username, port=node["port"])
             
-            cmd = f"cd frugal-leader-election && nohup {binary_path} --config={remote_config_path} --replicaId={replica_id} > scripts/{log_subdir}/node_{replica_id + 1}.log 2>&1 &"
+            cmd = f"cd frugal-leader-election && nohup {binary_path} --config={remote_config_path} --replicaId={replica_id} > scripts/{log_subdir}/node_{replica_id + 1}_{log_suffix}.log 2>&1 &"
             print(cmd)
             conn.run(cmd, pty=False, asynchronous=True)
 
-            print(f"Replica {replica_id+1} started on {replica_ip}, logging to ./{log_subdir}/node_{replica_id+1}.log")
+            print(f"Replica {replica_id+1} started on {replica_ip}, logging to ./{log_subdir}/node_{replica_id+1}_{log_suffix}.log")
         except Exception as e:
             print(f"Failed to start replica {replica_id+1} on {replica_ip}: {e}")
             continue
@@ -455,7 +455,7 @@ def download_logs_default(c):
 
 
 @task
-def run_multiple_experiments(c, times=5, wait_time=320):
+def run_multiple_experiments(c, times=5, wait_time=30):
     """
     Runs the remote experiment multiple times.
     After each run, downloads the logs to the local machine before starting the next experiment.
@@ -464,8 +464,9 @@ def run_multiple_experiments(c, times=5, wait_time=320):
         wait_time (int): Time in seconds to wait between starting the experiment and downloading logs.
     """
     for i in range(times):
+        log_suffix = f"run_{i+1}"
         print(f"\n=== Starting experiment iteration {i+1}/{times} ===")
-        start_remote(c)
+        start_remote(c, "remote.yaml", log_suffix=log_suffix)
         print(f"Experiment {i+1} started. Waiting for {wait_time} seconds to let it run...")
         time.sleep(wait_time)
         print(f"Downloading logs for experiment {i+1}")
