@@ -218,7 +218,11 @@ void Node::start_election_timeout() {
 
 void Node::reset_election_timeout() {
     ev_timer_stop(loop, &election_timer);
+
+    LOG(INFO) << "reset election timeout .";
     start_election_timeout();
+
+    LOG(INFO) << "Election timeout restarted.";
 }
 
 void Node::election_timeout_cb(EV_P_ ev_timer* w, int revents) {

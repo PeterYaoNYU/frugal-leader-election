@@ -105,7 +105,7 @@ def download_logs(c, log_dir_name=None, log_suffix=""):
     logs_dir.mkdir(parents=True, exist_ok=True)
 
     # For each node, download the log file with the specified suffix
-    for replica_id, node in enumerate(nodes[4:]):
+    for replica_id, node in enumerate(nodes[0:1]):
         replica_ip = node["host"]
         replica_port = node["port"]
         node_name = f"node_{replica_id + 1}"
