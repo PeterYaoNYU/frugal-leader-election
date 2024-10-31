@@ -494,6 +494,7 @@ void TcpStatManager::processNetlinkResponse(const char* buffer, int len) {
         // Extract RTT and RTT variance
         uint32_t rtt = 0, rtt_var = 0;
         uint32_t retrans = 0;
+        uint32_t lastsnd = 0;
 
         struct rtattr *attr = (struct rtattr *)(diag_msg + 1);
         int rta_len = nlh->nlmsg_len - NLMSG_LENGTH(sizeof(*diag_msg));
@@ -504,6 +505,12 @@ void TcpStatManager::processNetlinkResponse(const char* buffer, int len) {
                 rtt = tcpi->tcpi_rtt;           // Value in microseconds
                 rtt_var = tcpi->tcpi_rttvar;    // Value in microseconds
                 retrans = tcpi->tcpi_total_retrans;
+                lastsnd = tcpi->tcpi_last_data_sent;
+
+                if (lastsnd > 100) {
+                    LOG(INFO) << "Last send time: " << lastsnd << " which is too far back into history, DISCARDING";
+                    continue;
+                }
             }
         }
 
