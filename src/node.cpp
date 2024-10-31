@@ -208,7 +208,7 @@ void Node::start_election_timeout() {
                         LOG(INFO) << "Using average RTT from TCP connection as election timeout: " << timeout << " MilliSeconds";
                         using_raft_timeout = false;
                     } else if (election_timeout_bound == Jacobson) {
-                        timeout = stats.jacobsonEst();
+                        timeout = (stats.jacobsonEst()/2 + heartbeat_interval_margin) / 1000;
                         LOG(INFO) << "Using Jacobson estimation for election timeout: " << timeout << " MilliSeconds";
                         using_raft_timeout = false;
                     }
