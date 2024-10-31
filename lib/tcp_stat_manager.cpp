@@ -55,6 +55,24 @@ std::pair<double, double> TcpConnectionStats::rttConfidenceInterval(double confi
     return {mean - marginOfError, mean + marginOfError};
 }
 
+double TcpConnectionStats::jacobsonEst() const {
+    if (rttSamples.empty()) return 0.0;  // No RTT samples available
+
+    double alpha = 0.125;  // Weight for SRTT update
+    double beta = 0.25;    // Weight for RTTVAR update
+
+    // Initialize SRTT and RTTVAR if they don't exist
+    double srtt = meanRtt();   // Initial SRTT
+    double rttvar = rttVariance(); // Initial RTTVAR
+
+    // Calculate Retransmission Timeout (RTO) using SRTT and RTTVAR
+    double rto = srtt + 4 * rttvar;
+
+    // Ensure RTO is at least a minimum threshold, in our case 300ms
+    const double max_RTO = 300;
+    return std::min(rto, max_RTO);
+}
+
 
 
 TcpStatManager::TcpStatManager(const std::string& self_ip) : stopThreadPool(false), running(false)  {

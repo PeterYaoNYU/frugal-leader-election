@@ -88,6 +88,8 @@ private:
     // debugging
     int heartbeat_current_term = 0;
 
+    enum bound_type {CI, Jacobson} election_timeout_bound = Jacobson;
+
     void start_election_timeout();
     void reset_election_timeout();
     static void election_timeout_cb(EV_P_ ev_timer* w, int revents);

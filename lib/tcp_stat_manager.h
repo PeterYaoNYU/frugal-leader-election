@@ -52,6 +52,7 @@ struct TcpConnectionStats {
     double rttVariance() const;
     double meanRttVar() const;
     std::pair<double, double> rttConfidenceInterval(double confidenceLevel) const;
+    double jacobsonEst() const;
 };
 
 class TcpStatManager {

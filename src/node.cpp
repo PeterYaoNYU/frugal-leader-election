@@ -201,11 +201,17 @@ void Node::start_election_timeout() {
                 if (avgRttSec > 0.0) {
 //                    timeout = 2 * avgRttSec;
 //                    get the 95 confidence interval and use the upperbound for the timeout
-                    auto [lowerbound, upperbound] = stats.rttConfidenceInterval(confidence_level);
-                    LOG(INFO) << "Using "<< confidence_level <<"% CI upperbound for RTT as election timueout: " << upperbound<< " MilliSeconds";
-                    timeout = (upperbound / 2 + heartbeat_interval_margin) / 1000;
-                    LOG(INFO) << "Using average RTT from TCP connection as election timeout: " << timeout << " MilliSeconds";
-                    using_raft_timeout = false;
+                    if (election_timeout_bound == CI) {
+                        auto [lowerbound, upperbound] = stats.rttConfidenceInterval(confidence_level);
+                        LOG(INFO) << "Using "<< confidence_level <<"% CI upperbound for RTT as election timueout: " << upperbound<< " MilliSeconds";
+                        timeout = (upperbound / 2 + heartbeat_interval_margin) / 1000;
+                        LOG(INFO) << "Using average RTT from TCP connection as election timeout: " << timeout << " MilliSeconds";
+                        using_raft_timeout = false;
+                    } else if (election_timeout_bound == Jacobson) {
+                        timeout = stats.jacobsonEst();
+                        LOG(INFO) << "Using Jacobson estimation for election timeout: " << timeout << " MilliSeconds";
+                        using_raft_timeout = false;
+                    }
                 }
                 break;
             }
