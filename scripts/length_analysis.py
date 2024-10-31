@@ -1,0 +1,118 @@
+import re
+import matplotlib.pyplot as plt
+from collections import defaultdict
+from pathlib import Path
+import numpy as np
+
+def plot_heartbeat_lengths(log_file, output_dir="plots"):
+    """
+    Parses the log file to determine the length of each term in heartbeats
+    and plots it as a bar chart. Different bar colors indicate different leaders.
+    Also prints and plots the average, variance, min, and max of the term length.
+
+    Parameters:
+        log_file (str): Path to the log file to parse.
+        output_dir (str): Directory where the plot should be saved.
+    """
+    # Regular expressions to detect heartbeat patterns
+    follower_pattern = r"Received heartbeat \(AppendEntries\) from leader ([\d\.]+):\d+ for term (\d+)"
+    leader_pattern = r"\[LEADER\] Sent heartbeat (\d+) for term (\d+)"
+    
+    # Dictionary to store heartbeat counts for each term by leader
+    heartbeat_counts = defaultdict(lambda: defaultdict(int))
+    
+    # Parse the log file for heartbeat information
+    with open(log_file, 'r') as f:
+        for line in f:
+            # Match follower's received heartbeat
+            follower_match = re.search(follower_pattern, line)
+            if follower_match:
+                leader_ip = follower_match.group(1)
+                term = int(follower_match.group(2))
+                heartbeat_counts[term][leader_ip] += 1
+            
+            # Match leader's sent heartbeat
+            leader_match = re.search(leader_pattern, line)
+            if leader_match:
+                term = int(leader_match.group(2))
+                heartbeat_count = int(leader_match.group(1))
+                leader_ip = "self"  # Mark the node as leader for this term
+                heartbeat_counts[term][leader_ip] = max(heartbeat_counts[term][leader_ip], heartbeat_count)
+
+    # Prepare data for plotting
+    terms = sorted(heartbeat_counts.keys())
+    term_lengths = []
+    leaders = []
+    colors = []
+    
+    color_map = {}  # Map leader IP to color
+    unique_leaders = set(leader for term in heartbeat_counts.values() for leader in term)
+    color_palette = plt.cm.get_cmap("tab10", len(unique_leaders))
+    
+    # Assign a unique color for each leader
+    for i, leader in enumerate(unique_leaders):
+        color_map[leader] = color_palette(i)
+    
+    for term in terms:
+        leader = max(heartbeat_counts[term], key=heartbeat_counts[term].get)  # Leader with max heartbeats
+        term_length = heartbeat_counts[term][leader]
+        term_lengths.append(term_length)
+        leaders.append(leader)
+        colors.append(color_map[leader])
+
+    # Calculate statistics
+    avg_length = np.mean(term_lengths)
+    var_length = np.var(term_lengths)
+    min_length = np.min(term_lengths)
+    max_length = np.max(term_lengths)
+    sum_length = np.sum(term_lengths)   
+
+    print(f"Statistics for {Path(log_file).name}:")
+    print(f"  Average Term Length: {avg_length}")
+    print(f"  Variance of Term Length: {var_length}")
+    print(f"  Min Term Length: {min_length}")
+    print(f"  Max Term Length: {max_length}")
+    print(f"  Total Heartbeats: {sum_length}")
+    print(f"  Total number of terms: {len(terms)}")
+
+    # Plot the bar chart
+    plt.figure(figsize=(10, 6))
+    plt.bar(range(len(terms)), term_lengths, color=colors, tick_label=terms)
+    plt.xlabel("Term")
+    plt.ylabel("Length (Number of Heartbeats)")
+    plt.title(f"Heartbeat Lengths by Term\n(Average: {avg_length:.2f}, Variance: {var_length:.2f}, Min: {min_length}, Max: {max_length}, Total: {sum_length}, Terms: {len(terms)}, rate: {(len(terms) - 1)/sum_length:.4f})")
+    plt.xticks(rotation=45, fontsize=8)  # Smaller font size for term labels
+    plt.tight_layout()
+
+    # Save the plot
+    output_path = Path(output_dir)
+    output_path.mkdir(parents=True, exist_ok=True)
+    plot_file = output_path / f"{Path(log_file).stem}_heartbeat_lengths.png"
+    plt.savefig(plot_file)
+    plt.close()
+
+
+def bulk_process_logs(log_dir, start_idx, end_idx, output_dir="plots"):
+    """
+    Processes multiple log files for a range of indices and generates
+    heartbeat length plots for each run.
+
+    Parameters:
+        log_dir (str): Directory containing log files.
+        start_idx (int): Starting index for the log files to process.
+        end_idx (int): Ending index for the log files to process.
+        output_dir (str): Directory where the plots should be saved.
+    """
+    for idx in range(start_idx, end_idx + 1):
+        log_file = Path(log_dir) / f"node_1_run_{idx}.log"  # Adjust node and filename pattern as needed
+        if log_file.exists():
+            print(f"\nProcessing {log_file}")
+            plot_heartbeat_lengths(log_file, output_dir=output_dir)
+        else:
+            print(f"Log file {log_file} not found. Skipping.")
+
+# Example usage for a single file
+# plot_heartbeat_lengths("./downloaded_logs/remote/node_5_run_1.log", output_dir="custom_plots")
+
+# Example usage for bulk processing
+bulk_process_logs("./downloaded_logs/remote-99CI", start_idx=1, end_idx=5, output_dir="99_plots-10ms-500s-no-recv")

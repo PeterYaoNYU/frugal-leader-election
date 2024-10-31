@@ -482,7 +482,7 @@ def download_logs_default(c):
 
 
 @task
-def run_multiple_experiments(c, config_file, times=5, wait_time=330):
+def run_multiple_experiments(c, config_file, times=5, wait_time=530):
     """
     Runs the remote experiment multiple times.
     After each run, downloads the logs to the local machine before starting the next experiment.

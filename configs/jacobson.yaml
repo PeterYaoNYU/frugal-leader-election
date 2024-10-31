@@ -1,0 +1,22 @@
+replica:
+  ips: 
+  - "10.0.1.2"
+  - "10.0.2.2"
+  - "10.0.3.2"
+  - "10.0.4.2"
+  - "10.0.5.2"
+  runtimeSeconds: 500
+  timeoutLowerBound: 150
+  timeoutUpperBound: 300
+  failureLeader: false
+  # if the failureLeader is true, after maxHeartbeats number of heartbeats, the leader will fail
+  maxHeartbeats: 30
+  port: 7912
+  delayLowerBound: 10
+  delayUpperBound: 250
+  useSimulatedLinks: false
+  linkLossRate: 0
+  checkFalsePositiveRate: true
+  tcp_monitor: true
+  confidenceLevel: 0.99
+  heartbeatIntervalMargin: 85
