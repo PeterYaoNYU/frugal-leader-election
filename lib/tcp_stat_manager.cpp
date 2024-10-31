@@ -58,12 +58,11 @@ std::pair<double, double> TcpConnectionStats::rttConfidenceInterval(double confi
 double TcpConnectionStats::jacobsonEst() const {
     if (rttSamples.empty()) return 0.0;  // No RTT samples available
 
-    double alpha = 0.125;  // Weight for SRTT update
-    double beta = 0.25;    // Weight for RTTVAR update
-
     // Initialize SRTT and RTTVAR if they don't exist
     double srtt = meanRtt();   // Initial SRTT
-    double rttvar = rttVariance(); // Initial RTTVAR
+    double rttvar = meanRttVar(); // Initial RTTVAR
+
+    LOG(INFO) << "SRTT: " << srtt << ", RTTVAR: " << rttvar;
 
     // Calculate Retransmission Timeout (RTO) using SRTT and RTTVAR
     double rto = srtt + 4 * rttvar;
