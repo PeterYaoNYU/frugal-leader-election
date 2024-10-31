@@ -455,7 +455,7 @@ def download_logs_default(c):
 
 
 @task
-def run_multiple_experiments(c, config_file, times=5, wait_time=30):
+def run_multiple_experiments(c, config_file, times=5, wait_time=330):
     """
     Runs the remote experiment multiple times.
     After each run, downloads the logs to the local machine before starting the next experiment.
@@ -469,8 +469,8 @@ def run_multiple_experiments(c, config_file, times=5, wait_time=30):
         start_remote(c, config_file, log_suffix=log_suffix)
         print(f"Experiment {i+1} started. Waiting for {wait_time} seconds to let it run...")
         time.sleep(wait_time)
-        print(f"Downloading logs for experiment {i+1}")
-        download_logs(c)
+        # print(f"Downloading logs for experiment {i+1}")
+        # download_logs(c)
         print(f"Stopping remote processes after experiment {i+1}")
         killall_remote(c)
         print(f"Experiment {i+1} completed.")
@@ -479,24 +479,26 @@ def run_multiple_experiments(c, config_file, times=5, wait_time=30):
     
     
 @task
-def automate_exp(c, *config_files):
+def automate_exp(c, config_files):
     """
     Automates a series of experiments using the given list of configuration files.
     Each experiment runs for multiple iterations as defined in run_multiple_experiments.
     
     Parameters:
-        config_files (str): A list of configuration file names (YAML files) to use for each experiment.
+        config_files (str): A comma-separated string of configuration file names (YAML files) to use for each experiment.
     """
-    if not config_files:
+    # Split the config_files string into a list
+    config_files_list = config_files.split(',')
+
+    if not config_files_list:
         print("No configuration files provided. Please specify at least one configuration file.")
         return
 
-    for config_file in config_files:
+    for config_file in config_files_list:
+        config_file = config_file.strip()
         print(f"\n=== Starting automated experiments with config file: {config_file} ===")
         
         # Run multiple experiments with the current config file
-        run_multiple_experiments(c, config_file=config_file, times=5, wait_time=30)
+        run_multiple_experiments(c, config_file=config_file, times=5, wait_time=330)
 
     print("\nAll automated experiments completed.")
-
-    print("\nAll experiments completed.")
