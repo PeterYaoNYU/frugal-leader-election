@@ -156,6 +156,9 @@ void Node::run() {
 
     // Initialize receive watcher
     ev_io_init(&recv_watcher, recv_cb, sock_fd, EV_READ);
+
+    ev_set_priority(&recv_watcher, -2);
+
     ev_io_start(loop, &recv_watcher);
 
     // Start election timeout
@@ -244,6 +247,8 @@ void Node::election_timeout_cb(EV_P_ ev_timer* w, int revents) {
     self->current_leader_port = -1;
     self->voted_for = self->self_ip + ":" + std::to_string(self->port);
     self->votes_received = 0; // Vote for self later when it receives its own message
+
+    self->heartbeat_current_term = 0;
 
     self->start_election_timeout();
     self->send_request_vote();

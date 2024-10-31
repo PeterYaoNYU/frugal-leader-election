@@ -507,10 +507,10 @@ void TcpStatManager::processNetlinkResponse(const char* buffer, int len) {
                 retrans = tcpi->tcpi_total_retrans;
                 lastsnd = tcpi->tcpi_last_data_sent;
 
-                if (lastsnd > 100) {
-                    LOG(INFO) << "Last send time: " << lastsnd << " which is too far back into history, DISCARDING";
-                    continue;
-                }
+                // if (lastsnd > 100) {
+                //     LOG(INFO) << "Last send time: " << lastsnd << " which is too far back into history, DISCARDING";
+                //     continue;
+                // }
             }
         }
 
