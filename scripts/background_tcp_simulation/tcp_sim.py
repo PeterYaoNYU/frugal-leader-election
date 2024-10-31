@@ -67,9 +67,9 @@ def handle_client_connection(conn, addr):
     try:
         while True:
             data = conn.recv(4096)
-            if data:
-                print(f"Received message from {addr}: {data.decode()}")
-            else:
+            # if data:
+            #     print(f"Received message from {addr}: {data.decode()}")
+            if not data:
                 # No data means the client has closed the connection
                 print(f"Connection closed by {addr}")
                 break
