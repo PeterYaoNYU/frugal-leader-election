@@ -35,7 +35,8 @@ Node::Node(const ProcessConfig& config, int replicaId)
       tcp_stat_manager(config.peerIPs[replicaId]),
       confidence_level(config.confidenceLevel),
       heartbeat_interval_margin(config.heartbeatIntervalMargin),
-      heartbeat_current_term(0)
+      heartbeat_current_term(0),
+      self_id(replicaId)
 {
     election_timer.data = this;
     heartbeat_timer.data = this;
@@ -68,6 +69,12 @@ Node::Node(const ProcessConfig& config, int replicaId)
     check_false_positive = config.checkFalsePositive;
 
     tcp_monitor = config.tcp_monitor;
+
+    for (int i = 0; i < config.peerIPs.size(); ++i) {
+        ip_to_id[config.peerIPs[i]] = i;
+    }
+
+    LOG(INFO) << "Node initialized with ID: " << self_id << ", IP: " << self_ip << ", port: " << port;
 
 
 }
@@ -190,6 +197,23 @@ void Node::start_election_timeout() {
 
     bool using_raft_timeout = true;
 
+    // Calculate additional delay based on node IDs
+    int dead_leader_id = -1;
+
+    if (!current_leader_ip.empty()) {
+        auto it = ip_to_id.find(current_leader_ip);
+        if (it != ip_to_id.end()) {
+            dead_leader_id = it->second;
+        }
+    }
+
+    int delay_ms = 0;
+    if (dead_leader_id >= 0) {
+        delay_ms = (abs(self_id - dead_leader_id) - 1) * 20;
+    } else {
+        delay_ms = self_id * 20;  // Use self_id if dead leader ID is unknown
+    }
+
     // Check if there is an existing TCP connection with the leader
     if (tcp_monitor && election_timeout_bound != raft) {
         std::lock_guard<std::mutex> lock(tcp_stat_manager.statsMutex);
@@ -208,8 +232,8 @@ void Node::start_election_timeout() {
                     LOG(INFO) << "Using average RTT from TCP connection as election timeout: " << timeout << " Milliseconds";
                     using_raft_timeout = false;
                 } else if (election_timeout_bound == Jacobson) {
-                    timeout = (stats.jacobsonEst() / 2 + heartbeat_interval_margin) / 1000;
-                    LOG(INFO) << "Using Jacobson estimation for election timeout: " << timeout << " Milliseconds";
+                    timeout = (stats.jacobsonEst() / 2 + heartbeat_interval_margin + delay_ms) / 1000;
+                    LOG(INFO) << "Using Jacobson estimation for election timeout: " << timeout << " Milliseconds, additional delay: " << delay_ms << " Milliseconds";
                     using_raft_timeout = false;
                 }
             }
