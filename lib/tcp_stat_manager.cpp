@@ -166,7 +166,7 @@ void TcpStatManager::startMonitoring() {
             // condition.notify_one();
             condition.notify_all();
             // Adjust sleep interval as needed
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            std::this_thread::sleep_for(std::chrono::milliseconds(4000));
         }
     });
 }
