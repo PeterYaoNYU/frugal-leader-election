@@ -197,22 +197,24 @@ void Node::start_election_timeout() {
 
     bool using_raft_timeout = true;
 
-    // Calculate additional delay based on node IDs
-    int dead_leader_id = -1;
+    // // Calculate additional delay based on node IDs
+    // int dead_leader_id = -1;
 
-    if (!current_leader_ip.empty()) {
-        auto it = ip_to_id.find(current_leader_ip);
-        if (it != ip_to_id.end()) {
-            dead_leader_id = it->second;
-        }
-    }
+    // if (!current_leader_ip.empty()) {
+    //     auto it = ip_to_id.find(current_leader_ip);
+    //     if (it != ip_to_id.end()) {
+    //         dead_leader_id = it->second;
+    //     }
+    // }
 
-    int delay_ms = 0;
-    if (dead_leader_id >= 0) {
-        delay_ms = (abs(self_id - dead_leader_id) - 1) * 20;
-    } else {
-        delay_ms = self_id * 20;  // Use self_id if dead leader ID is unknown
-    }
+    // int delay_ms = 0;
+    // if (dead_leader_id >= 0) {
+    //     delay_ms = (abs(self_id - dead_leader_id) - 1) * 20;
+    // } else {
+    //     delay_ms = self_id * 20;  // Use self_id if dead leader ID is unknown
+    // }
+
+    int delay_ms = (rand() % 101);
 
     // Check if there is an existing TCP connection with the leader
     if (tcp_monitor && election_timeout_bound != raft) {
