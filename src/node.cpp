@@ -190,33 +190,32 @@ void Node::start_election_timeout() {
 
     bool using_raft_timeout = true;
 
-    // Check if there is an existing TCP connection with the leader or peers
-    if (tcp_monitor && election_timeout_bound != raft)
-    {
+    // Check if there is an existing TCP connection with the leader
+    if (tcp_monitor && election_timeout_bound != raft) {
         std::lock_guard<std::mutex> lock(tcp_stat_manager.statsMutex);
-        for (const auto& [connection, stats] : tcp_stat_manager.connectionStats) {
-            if ((connection.first == self_ip && connection.second == current_leader_ip) ||
-                (connection.second == self_ip && connection.first == current_leader_ip)) {
-                double avgRttSec = stats.meanRtt() / 1000.0; // Convert microseconds to seconds
-                if (avgRttSec > 0.0) {
-//                    timeout = 2 * avgRttSec;
-//                    get the 95 confidence interval and use the upperbound for the timeout
-                    if (election_timeout_bound == CI) {
-                        auto [lowerbound, upperbound] = stats.rttConfidenceInterval(confidence_level);
-                        LOG(INFO) << "Using "<< confidence_level <<"% CI upperbound for RTT as election timueout: " << upperbound<< " MilliSeconds";
-                        timeout = (upperbound / 2 + heartbeat_interval_margin) / 1000;
-                        LOG(INFO) << "Using average RTT from TCP connection as election timeout: " << timeout << " MilliSeconds";
-                        using_raft_timeout = false;
-                    } else if (election_timeout_bound == Jacobson) {
-                        timeout = (stats.jacobsonEst()/2 + heartbeat_interval_margin) / 1000;
-                        LOG(INFO) << "Using Jacobson estimation for election timeout: " << timeout << " MilliSeconds";
-                        using_raft_timeout = false;
-                    }
+        auto key = std::make_pair(self_ip, current_leader_ip);
+        
+        auto it = tcp_stat_manager.connectionStats.find(key);
+        if (it != tcp_stat_manager.connectionStats.end()) {
+            const TcpConnectionStats& stats = it->second;
+            double avgRttSec = stats.meanRtt() / 1000.0; // Convert microseconds to seconds
+            if (avgRttSec > 0.0) {
+                if (election_timeout_bound == CI) {
+                    auto [lowerbound, upperbound] = stats.rttConfidenceInterval(confidence_level);
+                    LOG(INFO) << "Using " << confidence_level << "% CI upperbound for RTT as election timeout: " 
+                              << upperbound << " Milliseconds";
+                    timeout = (upperbound / 2 + heartbeat_interval_margin) / 1000;
+                    LOG(INFO) << "Using average RTT from TCP connection as election timeout: " << timeout << " Milliseconds";
+                    using_raft_timeout = false;
+                } else if (election_timeout_bound == Jacobson) {
+                    timeout = (stats.jacobsonEst() / 2 + heartbeat_interval_margin) / 1000;
+                    LOG(INFO) << "Using Jacobson estimation for election timeout: " << timeout << " Milliseconds";
+                    using_raft_timeout = false;
                 }
-                break;
             }
         }
     }
+
     if (using_raft_timeout) {
         LOG(INFO) << "Using Raft timeout for election timeout: " << timeout << " seconds";
     }
@@ -225,6 +224,7 @@ void Node::start_election_timeout() {
     ev_timer_start(loop, &election_timer);
     LOG(INFO) << "Election timeout started: " << timeout << " seconds";
 }
+
 
 void Node::reset_election_timeout() {
     ev_timer_stop(loop, &election_timer);

@@ -17,6 +17,6 @@ replica:
   useSimulatedLinks: false
   linkLossRate: 0.1
   checkFalsePositiveRate: true
-  tcp_monitor: true
+  tcp_monitor: yes
   confidenceLevel: 0.95
   heartbeatIntervalMargin: 85

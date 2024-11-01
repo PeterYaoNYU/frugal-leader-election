@@ -38,9 +38,22 @@
 #include <asm/byteorder.h>
 
 
+#include <unordered_map>
+
 #include <glog/logging.h>
 
 const size_t MAX_SAMPLES = 1000;
+
+// Define a hash function for std::pair<std::string, std::string>
+struct pair_hash {
+    template <class T1, class T2>
+    std::size_t operator()(const std::pair<T1, T2>& pair) const {
+        auto hash1 = std::hash<T1>{}(pair.first);
+        auto hash2 = std::hash<T2>{}(pair.second);
+        return hash1 ^ hash2; // XOR hash combination
+    }
+};
+
 
 struct TcpConnectionStats {
     std::vector<double> rttSamples;
@@ -67,7 +80,9 @@ public:
     void startPeriodicStatsPrinting(int intervalInSeconds);
     void stopPeriodicStatsPrinting();
 
-    std::map<std::pair<std::string, std::string>, TcpConnectionStats> connectionStats;
+
+    std::unordered_map<std::pair<std::string, std::string>, TcpConnectionStats, pair_hash> connectionStats;
+
     std::mutex statsMutex;
 
 private:
