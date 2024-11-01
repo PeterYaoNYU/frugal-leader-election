@@ -18,3 +18,5 @@ replica:
   linkLossRate: 0.1
   checkFalsePositiveRate: true
   tcp_monitor: true
+  confidenceLevel: 0.95
+  heartbeatIntervalMargin: 85

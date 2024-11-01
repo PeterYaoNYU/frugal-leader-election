@@ -88,7 +88,7 @@ private:
     // debugging
     int heartbeat_current_term = 0;
 
-    enum bound_type {CI, Jacobson} election_timeout_bound = Jacobson;
+    enum bound_type {CI, Jacobson, raft} election_timeout_bound = raft;
 
     void start_election_timeout();
     void reset_election_timeout();

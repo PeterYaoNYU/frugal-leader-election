@@ -191,7 +191,7 @@ void Node::start_election_timeout() {
     bool using_raft_timeout = true;
 
     // Check if there is an existing TCP connection with the leader or peers
-    if (tcp_monitor)
+    if (tcp_monitor && election_timeout_bound != raft)
     {
         std::lock_guard<std::mutex> lock(tcp_stat_manager.statsMutex);
         for (const auto& [connection, stats] : tcp_stat_manager.connectionStats) {
@@ -490,6 +490,7 @@ void Node::send_heartbeat() {
     raft::leader_election::AppendEntries append_entries;
     append_entries.set_term(current_term);
     append_entries.set_leader_id(self_ip + ":" + std::to_string(port));
+    append_entries.set_id(++heartbeat_count);
 
     // wrap around:
     raft::leader_election::MessageWrapper wrapper;
@@ -517,7 +518,7 @@ void Node::send_heartbeat() {
         }
     }
 
-    heartbeat_count++;
+    // heartbeat_count++;
     LOG(INFO) << "[LEADER] Sent heartbeat " << heartbeat_count << " for term " << current_term;
 
     if (failure_leader) {
@@ -551,6 +552,7 @@ void Node::failure_cb(EV_P_ ev_timer* w, int revents) {
 void Node::handle_append_entries(const raft::leader_election::AppendEntries& append_entries, const sockaddr_in& sender_addr) {
     int received_term = append_entries.term();
     std::string leader_id = append_entries.leader_id();
+    int id = append_entries.id();   
 
     if (received_term < current_term) {
         raft::leader_election::AppendEntriesResponse response;
@@ -572,6 +574,13 @@ void Node::handle_append_entries(const raft::leader_election::AppendEntries& app
         return;
     }
 
+
+    LOG(INFO) << "Received AppendEntries from " << leader_id << " for term " << received_term << " with id " << id;
+
+    if (id != heartbeat_current_term + 1) {
+        LOG(INFO) << "Received out of order heartbeat. Expected id: " << heartbeat_current_term << ", received id: " << id;
+        return;
+    }
     heartbeat_current_term++;
 
     if (check_false_positive) {
