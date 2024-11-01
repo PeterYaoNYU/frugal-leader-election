@@ -65,7 +65,7 @@ double TcpConnectionStats::jacobsonEst() const {
     LOG(INFO) << "SRTT: " << srtt << ", RTTVAR: " << rttvar;
 
     // Calculate Retransmission Timeout (RTO) using SRTT and RTTVAR
-    double rto = srtt + 4 * rttvar;
+    double rto = srtt + 6 * rttvar;
 
     // Ensure RTO is at least a minimum threshold, in our case 300ms
     const double max_RTO = 300;
@@ -537,8 +537,8 @@ void TcpStatManager::processNetlinkResponse(const char* buffer, int len) {
         double rtt_ms = rtt / 1000.0;
         double rtt_var_ms = rtt_var / 1000.0;
 
-        // LOG(INFO) << "Netlink INFO: " << src_ip << " -> " << dst_ip
-        //           << ", RTT: " << rtt_ms << " ms, RTT Variance: " << rtt_var_ms << " ms, Retransmissions: " << retrans;
+        LOG(INFO) << "Netlink INFO: " << src_ip << " -> " << dst_ip
+                  << ", RTT: " << rtt_ms << " ms, RTT Variance: " << rtt_var_ms << " ms, Retransmissions: " << retrans;
 
         // Aggregate stats
         aggregateTcpStats(src_ip, dst_ip, rtt_ms, rtt_var_ms, retrans);
