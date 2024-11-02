@@ -116,5 +116,5 @@ def bulk_process_logs(log_dir, start_idx, end_idx, output_dir="plots"):
 # plot_heartbeat_lengths("./downloaded_logs/remote/node_5_run_1.log", output_dir="custom_plots")
 
 # Example usage for bulk processing
-bulk_process_logs("./downloaded_logs/20241102_135939", start_idx=1, end_idx=5, output_dir="jacobson_variation_try9_500s_4rttvar+random")
+bulk_process_logs("./downloaded_logs/20241102_143154", start_idx=1, end_idx=5, output_dir="jacobson_variation_try9_500s_4rttvar+random")
 # plot_heartbeat_lengths("./downloaded_logs/20241102_130839/node_.log", output_dir="jacobson6_variation_try8_500s_4rttvar+random")
