@@ -92,7 +92,7 @@ private:
     int self_id;
     std::unordered_map<std::string, int> ip_to_id;
 
-    enum bound_type {CI, Jacobson, raft} election_timeout_bound = Jacobson;
+    enum bound_type {CI, Jacobson, raft} election_timeout_bound = raft;
 
     void start_election_timeout();
     void reset_election_timeout();
