@@ -5,7 +5,7 @@ replica:
   - "10.0.3.2"
   - "10.0.4.2"
   - "10.0.5.2"
-  runtimeSeconds: 1200
+  runtimeSeconds: 500
   timeoutLowerBound: 150
   timeoutUpperBound: 300
   failureLeader: false
