@@ -20,14 +20,24 @@ IP = "127.0.0.1"
 processes = {}
 
 # Define node connection details
+# nodes = [
+#     # {"host": "c240g5-110103.wisc.cloudlab.us", "port": 26010},
+#     {"host": "c240g5-110103.wisc.cloudlab.us", "port": 26011},
+#     {"host": "c240g5-110103.wisc.cloudlab.us", "port": 26012},
+#     {"host": "c240g5-110103.wisc.cloudlab.us", "port": 26013},
+#     {"host": "c240g5-110103.wisc.cloudlab.us", "port": 26014},
+#     {"host": "c240g5-110103.wisc.cloudlab.us", "port": 26015},
+# ]
+
+
 nodes = [
-    # {"host": "c240g5-110103.wisc.cloudlab.us", "port": 26010},
-    {"host": "c240g5-110103.wisc.cloudlab.us", "port": 26011},
-    {"host": "c240g5-110103.wisc.cloudlab.us", "port": 26012},
-    {"host": "c240g5-110103.wisc.cloudlab.us", "port": 26013},
-    {"host": "c240g5-110103.wisc.cloudlab.us", "port": 26014},
-    {"host": "c240g5-110103.wisc.cloudlab.us", "port": 26015},
+    {"host": "c220g2-011125.wisc.cloudlab.us", "port": 26610},
+    {"host": "c220g2-011125.wisc.cloudlab.us", "port": 26611},
+    {"host": "c220g2-011125.wisc.cloudlab.us", "port": 26612},
+    {"host": "c220g2-011125.wisc.cloudlab.us", "port": 26613},
+    {"host": "c220g2-011125.wisc.cloudlab.us", "port": 26614},
 ]
+
 
 # SSH username
 username = "PeterYao"

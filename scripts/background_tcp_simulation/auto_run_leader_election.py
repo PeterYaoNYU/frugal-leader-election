@@ -2,13 +2,21 @@ from fabric import Connection
 import threading
 
 # Define node connection details
+# nodes = [
+#     {"host": "c240g5-110103.wisc.cloudlab.us", "port": 26010},
+#     {"host": "c240g5-110103.wisc.cloudlab.us", "port": 26011},
+#     {"host": "c240g5-110103.wisc.cloudlab.us", "port": 26012},
+#     {"host": "c240g5-110103.wisc.cloudlab.us", "port": 26013},
+#     {"host": "c240g5-110103.wisc.cloudlab.us", "port": 26014},
+#     {"host": "c240g5-110103.wisc.cloudlab.us", "port": 26015},
+# ]
+
 nodes = [
-    {"host": "c240g5-110103.wisc.cloudlab.us", "port": 26010},
-    {"host": "c240g5-110103.wisc.cloudlab.us", "port": 26011},
-    {"host": "c240g5-110103.wisc.cloudlab.us", "port": 26012},
-    {"host": "c240g5-110103.wisc.cloudlab.us", "port": 26013},
-    {"host": "c240g5-110103.wisc.cloudlab.us", "port": 26014},
-    {"host": "c240g5-110103.wisc.cloudlab.us", "port": 26015},
+    {"host": "c220g2-011125.wisc.cloudlab.us", "port": 26610},
+    {"host": "c220g2-011125.wisc.cloudlab.us", "port": 26611},
+    {"host": "c220g2-011125.wisc.cloudlab.us", "port": 26612},
+    {"host": "c220g2-011125.wisc.cloudlab.us", "port": 26613},
+    {"host": "c220g2-011125.wisc.cloudlab.us", "port": 26614},
 ]
 
 # SSH username
@@ -39,7 +47,7 @@ def build_install_bazel(conn):
     
     
     
-def execute_on_node(node, id, build_bazel=False, build_invoke=False, build_fabric=False):
+def execute_on_node(node, id, build_bazel=True, build_invoke=True, build_fabric=True):
     try:
         # Establish SSH connection
         conn = Connection(host=node["host"], user=username, port=node["port"])
@@ -59,15 +67,13 @@ def execute_on_node(node, id, build_bazel=False, build_invoke=False, build_fabri
         # conn.run(f"rm -rf frugal-leader-election", hide=True)
         
         # # Clone the repository
-        # conn.run(f"git clone {repo_url}", hide=True)
+        conn.run(f"git clone {repo_url}", hide=True)
         # print(f"Repository cloned on {node['host']}:{node['port']}")
         
         conn.run(f"cd frugal-leader-election && git pull  && git checkout old && bazel build //:leader_election")
         
         # conn.run("cd frugal-leader-election && git pull")
-        
-        # # Run the target Python script without waiting for it to finish
-        # conn.run(f"cd frugal-leader-election/scripts && invoke start-remote", warn=True)
+
         
         print(f"Script executed on {node['host']}:{node['port']}")
     except Exception as e:
