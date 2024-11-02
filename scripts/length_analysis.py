@@ -116,4 +116,4 @@ def bulk_process_logs(log_dir, start_idx, end_idx, output_dir="plots"):
 
 # Example usage for bulk processing
 # bulk_process_logs("./downloaded_logs/20241101_101049/node_1.log", start_idx=1, end_idx=1, output_dir="jaconbson-aggressive")
-plot_heartbeat_lengths("./downloaded_logs/20241102_021320/node_4.log", output_dir="jacobson6_variation_try1")
+plot_heartbeat_lengths("./downloaded_logs/20241102_022849/node_1.log", output_dir="jacobson6_variation_try2")

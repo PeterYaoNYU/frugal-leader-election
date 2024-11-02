@@ -364,7 +364,7 @@ void Node::recv_cb(EV_P_ ev_io* w, int revents) {
                     return;
                 }
                 self->handle_append_entries(append_entries, sender_addr);
-                LOG(INFO) << "Received append entries message.";
+                // LOG(INFO) << "Received append entries message.";
                 break;
             }
             default:
@@ -603,10 +603,10 @@ void Node::handle_append_entries(const raft::leader_election::AppendEntries& app
 
     LOG(INFO) << "Received AppendEntries from " << leader_id << " for term " << received_term << " with id " << id;
 
-    if (id != heartbeat_current_term + 1) {
-        LOG(INFO) << "Received out of order heartbeat. Expected id: " << heartbeat_current_term << ", received id: " << id;
-        return;
-    }
+    // if (id != heartbeat_current_term + 1) {
+    //     LOG(INFO) << "Received out of order heartbeat. Expected id: " << heartbeat_current_term << ", received id: " << id;
+    //     return;
+    // }
     heartbeat_current_term++;
 
     if (check_false_positive) {
@@ -621,9 +621,10 @@ void Node::handle_append_entries(const raft::leader_election::AppendEntries& app
     current_leader_ip = leader_id.substr(0, leader_id.find(':'));
     current_leader_port = std::stoi(leader_id.substr(leader_id.find(':') + 1));
     voted_for = ""; // Reset voted_for in the new term
-
+    LOG(INFO) << "resetting election timeout... the current term is " << current_term << " and the current leader is " << current_leader_ip << ":" << current_leader_port;
     reset_election_timeout(); // Reset election timeout upon receiving heartbeat
     // Assuming logs are consistent for simplicity
+    LOG(INFO) << "DONE resetting election timeout... the current term is " << current_term << " and the current leader is " << current_leader_ip << ":" << current_leader_port;
 
     raft::leader_election::AppendEntriesResponse response;
     response.set_term(current_term);
@@ -631,7 +632,7 @@ void Node::handle_append_entries(const raft::leader_election::AppendEntries& app
 
     send_append_entries_response(response, sender_addr);
 
-    LOG(INFO) << "Received heartbeat (AppendEntries) from leader " << leader_id << " for term " << received_term;
+    // LOG(INFO) << "Received heartbeat (AppendEntries) from leader " << leader_id << " for term " << received_term;
 }
 
 void Node::send_append_entries_response(const raft::leader_election::AppendEntriesResponse& response, const sockaddr_in& recipient_addr) {
