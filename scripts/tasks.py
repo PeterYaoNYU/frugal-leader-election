@@ -10,6 +10,7 @@ import yaml
 import threading
 from fabric import Connection, ThreadingGroup
 from datetime import datetime
+import time
 
 # Define the ports and peers
 PORTS = [5000, 5001, 5002, 5003]
@@ -19,20 +20,149 @@ IP = "127.0.0.1"
 processes = {}
 
 # Define node connection details
+# nodes = [
+#     # {"host": "c240g5-110103.wisc.cloudlab.us", "port": 26010},
+#     {"host": "c240g5-110103.wisc.cloudlab.us", "port": 26011},
+#     {"host": "c240g5-110103.wisc.cloudlab.us", "port": 26012},
+#     {"host": "c240g5-110103.wisc.cloudlab.us", "port": 26013},
+#     {"host": "c240g5-110103.wisc.cloudlab.us", "port": 26014},
+#     {"host": "c240g5-110103.wisc.cloudlab.us", "port": 26015},
+# ]
+
+
 nodes = [
-    # {"host": "c240g5-110103.wisc.cloudlab.us", "port": 26010},
-    {"host": "c240g5-110103.wisc.cloudlab.us", "port": 26011},
-    {"host": "c240g5-110103.wisc.cloudlab.us", "port": 26012},
-    {"host": "c240g5-110103.wisc.cloudlab.us", "port": 26013},
-    {"host": "c240g5-110103.wisc.cloudlab.us", "port": 26014},
-    {"host": "c240g5-110103.wisc.cloudlab.us", "port": 26015},
+    {"host": "c220g2-011125.wisc.cloudlab.us", "port": 26610},
+    {"host": "c220g2-011125.wisc.cloudlab.us", "port": 26611},
+    {"host": "c220g2-011125.wisc.cloudlab.us", "port": 26612},
+    {"host": "c220g2-011125.wisc.cloudlab.us", "port": 26613},
+    {"host": "c220g2-011125.wisc.cloudlab.us", "port": 26614},
 ]
+
 
 # SSH username
 username = "PeterYao"
 
+
+
 @task
-def start_remote(c):
+def start_remote(c, config_file, log_suffix=""):
+    """
+    Starts instances of the leader_election binary on remote nodes as specified in the given config file.
+    Logs are stored in the logs/ directory with a subdirectory named after the config file.
+    
+    Parameters:
+        config_file (str): The path to the configuration file to use.
+    """
+    remote_config_path = f"configs/{config_file}"
+    log_subdir = f"logs/{config_file.replace('.yaml', '')}"
+
+    # Ensure the binary path is defined
+    binary_path = "bazel-bin/leader_election"
+
+    with open(f"../{remote_config_path}", "r") as f:
+        config = yaml.safe_load(f)
+
+    replica_ips = config["replica"]["ips"]
+    n_replicas = len(replica_ips)
+    print("Number of replicas: ", n_replicas)
+    
+    for replica_id, node in enumerate(nodes):
+        replica_ip = node["host"]
+        replica_port = node["port"]
+        print(f"Clearing logs and running processes for replica {replica_id} on {replica_ip} with port {replica_port}")
+
+        # Establish connection to the remote node
+        conn = Connection(host=replica_ip, user=username, port=node["port"])
+        
+        conn.sudo("killall leader_election", warn=True)
+        conn.run(f"mkdir -p frugal-leader-election/scripts/{log_subdir}", warn=True)
+        # conn.run(f"rm -f frugal-leader-election/scripts/{log_subdir}/*", warn=True)
+
+    for replica_id, node in enumerate(nodes):
+        replica_ip = node["host"]
+        replica_port = node["port"]
+        print(f"Starting replica {replica_id+1} on remote node {replica_ip} with port {replica_port}")
+
+        try:
+            conn = Connection(host=replica_ip, user=username, port=node["port"])
+            
+            cmd = f"cd frugal-leader-election && nohup {binary_path} --config={remote_config_path} --replicaId={replica_id} > scripts/{log_subdir}/node_{replica_id + 1}_{log_suffix}.log 2>&1 &"
+            print(cmd)
+            conn.run(cmd, pty=False, asynchronous=True)
+
+            print(f"Replica {replica_id+1} started on {replica_ip}, logging to ./{log_subdir}/node_{replica_id+1}_{log_suffix}.log")
+        except Exception as e:
+            print(f"Failed to start replica {replica_id+1} on {replica_ip}: {e}")
+            continue
+
+    print("All remote nodes have been started.")
+    print(f"Logs are available in the '{log_subdir}/' directory on each respective node.")
+
+
+@task
+def download_logs(c, log_dir_name=None, log_suffix=""):
+    """
+    Downloads log files from remote nodes into a local folder named with the provided log_dir_name or the current timestamp.
+    
+    Parameters:
+        log_dir_name (str, optional): The name for the local logs directory. Defaults to a timestamp-based name.
+        log_suffix (str, optional): A suffix to identify log files for specific experiment iterations.
+    """
+    # Create a folder with the specified name or current timestamp
+    if log_dir_name is None:
+        log_dir_name = datetime.now().strftime("%Y%m%d_%H%M%S")
+    logs_dir = Path("downloaded_logs") / log_dir_name
+    logs_dir.mkdir(parents=True, exist_ok=True)
+
+    # For each node, download the log file with the specified suffix
+    for replica_id, node in enumerate(nodes[0:1]):
+        replica_ip = node["host"]
+        replica_port = node["port"]
+        node_name = f"node_{replica_id + 1}"
+
+        # Append log_suffix to both remote and local log file paths
+        remote_log_path = f"/users/{username}/frugal-leader-election/scripts/logs/{log_dir_name}/{node_name}_{log_suffix}.log"
+        local_log_path = logs_dir / f"{node_name}_{log_suffix}.log"
+
+        print(f"Downloading log file from {replica_ip}:{remote_log_path} to {local_log_path}")
+
+        try:
+            conn = Connection(host=replica_ip, user=username, port=replica_port)
+            # Use conn.get() to download the file
+            conn.get(remote=remote_log_path, local=str(local_log_path))
+        except Exception as e:
+            print(f"Failed to download log file from {replica_ip}: {e}")
+
+    print(f"Logs downloaded into {logs_dir}")
+
+
+@task
+def download_multi_logs(c, log_dir_name=None, start_idx=1, end_idx=5):
+    """
+    Downloads log files for multiple runs from remote nodes within a specified range.
+    Each log file is distinguished by an index-based suffix.
+
+    Parameters:
+        log_dir_name (str, optional): The name for the local logs directory. Defaults to a timestamp-based name.
+        start_idx (int): The starting index for the log files to download.
+        end_idx (int): The ending index for the log files to download.
+    """
+    if log_dir_name is None:
+        log_dir_name = datetime.now().strftime("%Y%m%d_%H%M%S")
+    logs_dir = Path("downloaded_logs") / log_dir_name
+    logs_dir.mkdir(parents=True, exist_ok=True)
+
+    for idx in range(start_idx, end_idx + 1):
+        log_suffix = f"run_{idx}"
+        print(f"\n=== Downloading logs for iteration {log_suffix} ===")
+        download_logs(c, log_dir_name=log_dir_name, log_suffix=log_suffix)
+
+    print(f"\nAll logs from run {start_idx} to {end_idx} have been downloaded.")
+
+
+
+@task
+def start_remote_default(c):
     """
     Starts instances of the leader_election binary on remote nodes as specified in the config file.
     Logs are stored in the logs/ directory of each respective node.
@@ -331,7 +461,7 @@ def killall_remote_iperf(c):
 username = "PeterYao"
 
 @task
-def download_logs(c):
+def download_logs_default(c):
     """
     Downloads log files from remote nodes into a local folder named with the current timestamp.
     """
@@ -362,7 +492,7 @@ def download_logs(c):
 
 
 @task
-def run_multiple_experiments(c, times=5, wait_time=320):
+def run_multiple_experiments(c, config_file, times=5, wait_time=530):
     """
     Runs the remote experiment multiple times.
     After each run, downloads the logs to the local machine before starting the next experiment.
@@ -371,13 +501,41 @@ def run_multiple_experiments(c, times=5, wait_time=320):
         wait_time (int): Time in seconds to wait between starting the experiment and downloading logs.
     """
     for i in range(times):
+        log_suffix = f"run_{i+1}"
         print(f"\n=== Starting experiment iteration {i+1}/{times} ===")
-        start_remote(c)
+        start_remote(c, config_file, log_suffix=log_suffix)
         print(f"Experiment {i+1} started. Waiting for {wait_time} seconds to let it run...")
         time.sleep(wait_time)
-        print(f"Downloading logs for experiment {i+1}")
-        download_logs(c)
+        # print(f"Downloading logs for experiment {i+1}")
+        # download_logs(c)
         print(f"Stopping remote processes after experiment {i+1}")
         killall_remote(c)
         print(f"Experiment {i+1} completed.")
     print("\nAll experiments completed.")
+    
+    
+    
+@task
+def automate_exp(c, config_files):
+    """
+    Automates a series of experiments using the given list of configuration files.
+    Each experiment runs for multiple iterations as defined in run_multiple_experiments.
+    
+    Parameters:
+        config_files (str): A comma-separated string of configuration file names (YAML files) to use for each experiment.
+    """
+    # Split the config_files string into a list
+    config_files_list = config_files.split(',')
+
+    if not config_files_list:
+        print("No configuration files provided. Please specify at least one configuration file.")
+        return
+
+    for config_file in config_files_list:
+        config_file = config_file.strip()
+        print(f"\n=== Starting automated experiments with config file: {config_file} ===")
+        
+        # Run multiple experiments with the current config file
+        run_multiple_experiments(c, config_file=config_file, times=5, wait_time=530)
+
+    print("\nAll automated experiments completed.")

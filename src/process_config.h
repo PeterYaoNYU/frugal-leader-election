@@ -42,6 +42,10 @@ struct ProcessConfig {
     // a bool which tells us if we are in a check CI false positive mode. 
     bool checkFalsePositive;
 
+    bool tcp_monitor;
+    double confidenceLevel;
+    int heartbeatIntervalMargin;
+
 
 
     template <class T> T parseField(const YAML::Node &parent, const std::string &key)
@@ -104,6 +108,10 @@ struct ProcessConfig {
             delayUpperBound = parseField<int>(replicaNode, "delayUpperBound");
             linkLossRate = parseField<double>(replicaNode, "linkLossRate");
             checkFalsePositive = parseField<bool>(replicaNode, "checkFalsePositiveRate");
+            tcp_monitor = parseField<bool>(replicaNode, "tcp_monitor");
+
+            confidenceLevel = parseField<double>(replicaNode, "confidenceLevel");
+            heartbeatIntervalMargin = parseField<int>(replicaNode, "heartbeatIntervalMargin");
 
         } catch (const ConfigParseException &e) {
             throw ConfigParseException("Error parsing replica " + std::string(e.what()));

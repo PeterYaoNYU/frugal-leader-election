@@ -15,6 +15,7 @@ message VoteResponse {
 message AppendEntries {
   int32 term = 1;
   string leader_id = 2; // IP:port of the leader
+  int32 id = 3; // id of the heartbeat/log entry
 }
 
 message AppendEntriesResponse {

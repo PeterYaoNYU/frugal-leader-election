@@ -49,8 +49,8 @@ def start_iperf3_clients(node_num):
             'iperf3', '-c', remote_host, '-p', str(port),
             '-t', '0',  # Run indefinitely
             '-P', '1',   # Number of parallel client streams
-            '-b', '100K',  # Limit bandwidth to 0.2 Mbps
-            '-l', '1K'
+            '-b', '10K',  # Limit bandwidth to 0.2 Mbps
+            '-l', '0.5K'
         ]
         print(f"Starting iperf3 client to {remote_host} on port {port} with bandwidth limit of 0.2 Mbps")
         subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)

@@ -8,6 +8,12 @@
 #include <fcntl.h>
 #include <string>
 #include <vector>
+
+// using a thread pool to get the socket statistics. 
+#include <queue>               // CHANGED: For task queue
+#include <condition_variable>  // CHANGED: For synchronization
+#include <atomic>              // CHANGED: For thread-safe flags
+
 #include <random>
 #include <unordered_map>
 #include "process_config.h"
@@ -73,6 +79,20 @@ private:
     // a number for check false positive mode
     int suspected_leader_failures = 0;
     int recv_heartbeat_count = 0;
+
+    bool tcp_monitor;
+
+    double confidence_level = 0.999;
+    int heartbeat_interval_margin = 75; // 75 ms
+
+    // debugging
+    int heartbeat_current_term = 0;
+
+    // timeout variation
+    int self_id;
+    std::unordered_map<std::string, int> ip_to_id;
+
+    enum bound_type {CI, Jacobson, raft} election_timeout_bound = Jacobson;
 
     void start_election_timeout();
     void reset_election_timeout();

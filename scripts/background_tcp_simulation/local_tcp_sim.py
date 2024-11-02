@@ -1,26 +1,15 @@
 import socket
-import sys
 import threading
 import time
+import sys
 
 # Store active socket connections
 active_sockets = []
 active_sockets_lock = threading.Lock()
 
-def start_tcp_connection(target_ip, target_port, duration=50000, message_size=64, send_interval=1.5):
-    """
-    Creates a persistent TCP connection with the specified target and sends messages at a frequent interval.
-
-    Parameters:
-        target_ip (str): IP address of the target node.
-        target_port (int): Port number of the target node.
-        duration (int): Duration to keep the connection open (in seconds).
-        message_size (int): Size of each message to send (in bytes).
-        send_interval (float): Interval between messages (in seconds).
-    """
+def start_tcp_connection(local_ip, target_ip, target_port, duration=120, message_size=128, interval=0.10):
     start_time = time.time()
-    message = b"X" * message_size  # Increase message size by repeating 'X' character
-
+    message = b"A" * message_size
     while time.time() - start_time < duration:
         try:
             # Create a TCP socket
@@ -29,46 +18,42 @@ def start_tcp_connection(target_ip, target_port, duration=50000, message_size=64
             # Enable TCP Keep-Alive
             s.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
             
-            # Platform-specific keep-alive settings
+            # Platform-specific settings
             if sys.platform.startswith('linux'):
-                s.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 60)
+                s.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 30)
                 s.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, 10)
-                s.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 5)
+                s.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 20)
             elif sys.platform == 'darwin':  # macOS
                 s.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPALIVE, 60)
+            
+            s.bind((local_ip, 0))
             
             s.connect((target_ip, target_port))
             with active_sockets_lock:
                 active_sockets.append(s)
             print(f"Connected to {target_ip}:{target_port}")
             
-            # Send messages in a frequent loop
             while time.time() - start_time < duration:
                 try:
-                    s.sendall(message)  # Send larger message
+                    s.sendall(message)
                 except Exception as e:
-                    print(f"Error in connection to {target_ip}:{target_port} - {e}")
-                    break  # Exit inner loop if sending fails
-                time.sleep(send_interval)  # Short interval between messages
+                    print(f"Error sending data to {target_ip}:{target_port} - {e}")
+                    break
+                time.sleep(interval)  # Wait for some time before sending the next message
         except Exception as e:
             print(f"Failed to connect to {target_ip}:{target_port} - {e}")
         finally:
-            # Cleanup and prepare to reconnect
             with active_sockets_lock:
                 if s in active_sockets:
                     active_sockets.remove(s)
             s.close()
-            print(f"Connection to {target_ip}:{target_port} closed. Reconnecting in 2 seconds...")
-            time.sleep(1)  # Short delay to attempt reconnection
+            print(f"Connection to {target_ip}:{target_port} closed. Reconnecting in 5 seconds...")
+            time.sleep(5)  # Wait before attempting to reconnect
 
-
-        
 def handle_client_connection(conn, addr):
     try:
         while True:
             data = conn.recv(4096)
-            # if data:
-            #     print(f"Received message from {addr}: {data.decode()}")
             if not data:
                 # No data means the client has closed the connection
                 print(f"Connection closed by {addr}")
@@ -80,8 +65,6 @@ def handle_client_connection(conn, addr):
         with active_sockets_lock:
             if conn in active_sockets:
                 active_sockets.remove(conn)
-
-
 
 def listen_for_connections(listen_ip, listen_port):
     try:
@@ -111,22 +94,17 @@ def close_all_connections():
                 print(f"Failed to close connection: {s} - {e}")
         active_sockets.clear()
 
-def main(node_id, central_port):
-    node_ip_format = "10.0.{}.2"
-
-    # Validate the node ID
-    if node_id < 1 or node_id > 5:
-        print("Node ID must be between 1 and 5.")
-        sys.exit(1)
+def start_node(node_id, central_port, duration):
+    # Local IP range: 127.0.0.2 - 127.0.0.6
+    node_ip_format = "127.0.0.{}"
+    listen_ip = node_ip_format.format(node_id + 1)  # 127.0.0.2 corresponds to node_id 1
 
     # Start listening for incoming connections
-    listen_ip = node_ip_format.format(node_id)
-    listen_thread = threading.Thread(target=listen_for_connections, args=(listen_ip, central_port))
+    listen_thread = threading.Thread(target=listen_for_connections, args=(listen_ip, central_port,))
     listen_thread.start()
-    
-    wait_time = 10
-    print(f"Waiting {wait_time} seconds for the listen thread to start...")
-    time.sleep(wait_time)
+
+    # Allow some time for the listener to start
+    time.sleep(5)
 
     # Start continuous TCP connections to each of the other nodes
     threads = []
@@ -134,35 +112,44 @@ def main(node_id, central_port):
         if target_id == node_id:
             continue  # Skip connecting to itself
 
-        target_ip = node_ip_format.format(target_id)
-        for i in range(1):  # Start 10 TCP connections to the target node
-            thread = threading.Thread(target=start_tcp_connection, args=(target_ip, central_port))
-            thread.start()
-            threads.append(thread)
-            time.sleep(0.1)  # Small delay to avoid overwhelming the target
+        target_ip = node_ip_format.format(target_id + 1)
+        thread = threading.Thread(target=start_tcp_connection, args=(listen_ip, target_ip, central_port, duration, 256, 0.1))
+        thread.start()
+        threads.append(thread)
+        time.sleep(0.1)  # Small delay to avoid overwhelming the target
 
-    try:
-        # Wait for all threads to finish (they run indefinitely)
-        for thread in threads:
-            thread.join()
+    # Wait for all threads to finish
+    for thread in threads:
+        thread.join()
 
-        # Wait for the listen thread to finish (it runs indefinitely)
-        listen_thread.join()
-    except KeyboardInterrupt:
-        # Handle keyboard interrupt to close all connections gracefully
-        close_all_connections()
-        sys.exit(0)
+    # Wait for the listen thread to finish
+    listen_thread.join()
+
+def main(central_port, duration):
+    # Start the 5 nodes
+    threads = []
+    for node_id in range(1, 6):
+        thread = threading.Thread(target=start_node, args=(node_id, central_port, duration))
+        thread.start()
+        threads.append(thread)
+
+    # Wait for all nodes to finish
+    for thread in threads:
+        thread.join()
+
+    # Close all connections
+    close_all_connections()
 
 if __name__ == "__main__":
     if len(sys.argv) != 3:
-        print("Usage: python tcp_sim.py <node_id> <port>")
+        print("Usage: python tcp_sim.py <port> <duration>")
         sys.exit(1)
 
     try:
-        node_id = int(sys.argv[1])
-        central_port = int(sys.argv[2])
+        central_port = int(sys.argv[1])
+        duration = int(sys.argv[2])
     except ValueError:
-        print("Node ID and port must be integers.")
+        print("Port and duration must be integers.")
         sys.exit(1)
 
-    main(node_id, central_port)
+    main(central_port, duration)

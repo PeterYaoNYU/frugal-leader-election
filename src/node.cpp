@@ -32,7 +32,11 @@ Node::Node(const ProcessConfig& config, int replicaId)
       delay_dist(config.delayLowerBound, config.delayUpperBound),                     // 25
       role(Role::FOLLOWER),                         // 26
       link_loss_rate(config.linkLossRate),          // 27
-      tcp_stat_manager()
+      tcp_stat_manager(config.peerIPs[replicaId]),
+      confidence_level(config.confidenceLevel),
+      heartbeat_interval_margin(config.heartbeatIntervalMargin),
+      heartbeat_current_term(0),
+      self_id(replicaId)
 {
     election_timer.data = this;
     heartbeat_timer.data = this;
@@ -63,6 +67,15 @@ Node::Node(const ProcessConfig& config, int replicaId)
     runtime_seconds = config.runtimeSeconds;
 
     check_false_positive = config.checkFalsePositive;
+
+    tcp_monitor = config.tcp_monitor;
+
+    for (int i = 0; i < config.peerIPs.size(); ++i) {
+        ip_to_id[config.peerIPs[i]] = i;
+    }
+
+    LOG(INFO) << "Node initialized with ID: " << self_id << ", IP: " << self_ip << ", port: " << port;
+
 
 }
 
@@ -120,10 +133,10 @@ void Node::run() {
         LOG(FATAL) << "Failed to create socket.";
     }
 
-    // start the tcp stat manager
-    tcp_stat_manager.startMonitoring();
-
-    tcp_stat_manager.startPeriodicStatsPrinting(5);
+    if (tcp_monitor) {
+        LOG(INFO) << "Starting TCP monitoring";
+        tcp_stat_manager.startMonitoring();
+    }
 
     // Set socket to non-blocking
     fcntl(sock_fd, F_SETFL, O_NONBLOCK);
@@ -150,6 +163,9 @@ void Node::run() {
 
     // Initialize receive watcher
     ev_io_init(&recv_watcher, recv_cb, sock_fd, EV_READ);
+
+    ev_set_priority(&recv_watcher, -2);
+
     ev_io_start(loop, &recv_watcher);
 
     // Start election timeout
@@ -168,10 +184,10 @@ void Node::shutdown_cb(EV_P_ ev_timer* w, int revents) {
     Node* self = static_cast<Node*>(w->data);
     LOG(INFO) << "Runtime exceeded (" << self->runtime_seconds << " seconds). Shutting down node.";
 
-    self->tcp_stat_manager.stopMonitoring();
-
-    self->tcp_stat_manager.stopPeriodicStatsPrinting();
-
+    if (self->tcp_monitor) {
+        self->tcp_stat_manager.stopMonitoring();
+        self->tcp_stat_manager.stopPeriodicStatsPrinting();
+    }
     // Stop the event loop
     ev_break(EV_A_ EVBREAK_ALL);
 }
@@ -181,24 +197,54 @@ void Node::start_election_timeout() {
 
     bool using_raft_timeout = true;
 
-    // Check if there is an existing TCP connection with the leader or peers
-    {
+    // // Calculate additional delay based on node IDs
+    // int dead_leader_id = -1;
+
+    // if (!current_leader_ip.empty()) {
+    //     auto it = ip_to_id.find(current_leader_ip);
+    //     if (it != ip_to_id.end()) {
+    //         dead_leader_id = it->second;
+    //     }
+    // }
+
+    // int delay_ms = 0;
+    // if (dead_leader_id >= 0) {
+    //     delay_ms = (abs(self_id - dead_leader_id) - 1) * 20;
+    // } else {
+    //     delay_ms = self_id * 20;  // Use self_id if dead leader ID is unknown
+    // }
+
+    // int delay_ms = (rand() % 31);
+
+    std::uniform_int_distribution<int> delay_distribution(19, 30);
+    int delay_ms = delay_distribution(rng);
+
+    // Check if there is an existing TCP connection with the leader
+    if (tcp_monitor && election_timeout_bound != raft) {
         std::lock_guard<std::mutex> lock(tcp_stat_manager.statsMutex);
-        for (const auto& [connection, stats] : tcp_stat_manager.connectionStats) {
-            if ((connection.first == self_ip && connection.second == current_leader_ip) ||
-                (connection.second == self_ip && connection.first == current_leader_ip)) {
-                double avgRttSec = stats.meanRtt() / 1000.0; // Convert microseconds to seconds
-                if (avgRttSec > 0.0) {
-                    auto [lowerbound, upperbound] = stats.rttConfidenceInterval(0.995);
-                    LOG(INFO) << "Using 995% CI upperbound for RTT as election timueout: " << upperbound<< " MilliSeconds";
-                    timeout = (upperbound+130) / 1000;
-                    LOG(INFO) << "Using average RTT from TCP connection as election timeout: " << timeout << " Seconds";
+        auto key = std::make_pair(self_ip, current_leader_ip);
+        
+        auto it = tcp_stat_manager.connectionStats.find(key);
+        if (it != tcp_stat_manager.connectionStats.end()) {
+            const TcpConnectionStats& stats = it->second;
+            double avgRttSec = stats.meanRtt() / 1000.0; // Convert microseconds to seconds
+            if (avgRttSec > 0.0) {
+                if (election_timeout_bound == CI) {
+                    auto [lowerbound, upperbound] = stats.rttConfidenceInterval(confidence_level);
+                    LOG(INFO) << "Using " << confidence_level << "% CI upperbound for RTT as election timeout: " 
+                              << upperbound << " Milliseconds";
+                    timeout = (upperbound / 2 + heartbeat_interval_margin) / 1000;
+                    LOG(INFO) << "Using average RTT from TCP connection as election timeout: " << timeout << " Milliseconds";
+                    using_raft_timeout = false;
+                } else if (election_timeout_bound == Jacobson) {
+                    timeout = (stats.jacobsonEst() / 2 + heartbeat_interval_margin + delay_ms) / 1000;
+                    LOG(INFO) << "Using Jacobson estimation for election timeout: " << timeout << " Milliseconds, additional delay: " << delay_ms << " Milliseconds";
                     using_raft_timeout = false;
                 }
-                break;
             }
         }
     }
+
     if (using_raft_timeout) {
         LOG(INFO) << "Using Raft timeout for election timeout: " << timeout << " seconds";
     }
@@ -208,9 +254,14 @@ void Node::start_election_timeout() {
     LOG(INFO) << "Election timeout started: " << timeout << " seconds";
 }
 
+
 void Node::reset_election_timeout() {
     ev_timer_stop(loop, &election_timer);
+
+    LOG(INFO) << "resetting election timeout... the current term heartbeat count is " << heartbeat_current_term;
     start_election_timeout();
+
+    LOG(INFO) << "Election timeout restarted. the current term heartbeat count is " << heartbeat_current_term;
 }
 
 void Node::election_timeout_cb(EV_P_ ev_timer* w, int revents) {
@@ -222,7 +273,7 @@ void Node::election_timeout_cb(EV_P_ ev_timer* w, int revents) {
         LOG(INFO) << "Election timeout occurred. Suspected leader failure count: " << self->suspected_leader_failures;
     }
 
-    LOG(INFO) << "Election timeout occurred. Starting leader election and voting for myself. View number: " << self->current_term; 
+    LOG(INFO) << "Election timeout occurred. Starting leader election and voting for myself. View number: " << self->current_term << " Current term hb count " <<self->heartbeat_current_term; 
     LOG(INFO) << "The dead leader is " << self->current_leader_ip << ":" << self->current_leader_port;
 
     self->current_term++;
@@ -231,6 +282,8 @@ void Node::election_timeout_cb(EV_P_ ev_timer* w, int revents) {
     self->current_leader_port = -1;
     self->voted_for = self->self_ip + ":" + std::to_string(self->port);
     self->votes_received = 0; // Vote for self later when it receives its own message
+
+    self->heartbeat_current_term = 0;
 
     self->start_election_timeout();
     self->send_request_vote();
@@ -314,7 +367,7 @@ void Node::recv_cb(EV_P_ ev_io* w, int revents) {
                     return;
                 }
                 self->handle_append_entries(append_entries, sender_addr);
-                LOG(INFO) << "Received append entries message.";
+                // LOG(INFO) << "Received append entries message.";
                 break;
             }
             default:
@@ -466,6 +519,7 @@ void Node::send_heartbeat() {
     raft::leader_election::AppendEntries append_entries;
     append_entries.set_term(current_term);
     append_entries.set_leader_id(self_ip + ":" + std::to_string(port));
+    append_entries.set_id(++heartbeat_count);
 
     // wrap around:
     raft::leader_election::MessageWrapper wrapper;
@@ -493,7 +547,7 @@ void Node::send_heartbeat() {
         }
     }
 
-    heartbeat_count++;
+    // heartbeat_count++;
     LOG(INFO) << "[LEADER] Sent heartbeat " << heartbeat_count << " for term " << current_term;
 
     if (failure_leader) {
@@ -527,18 +581,22 @@ void Node::failure_cb(EV_P_ ev_timer* w, int revents) {
 void Node::handle_append_entries(const raft::leader_election::AppendEntries& append_entries, const sockaddr_in& sender_addr) {
     int received_term = append_entries.term();
     std::string leader_id = append_entries.leader_id();
+    int id = append_entries.id();   
 
     if (received_term < current_term) {
         raft::leader_election::AppendEntriesResponse response;
         response.set_term(current_term);
         response.set_success(false);
 
+        LOG(INFO) << "Received Stale AppendEntries from " << leader_id << " for term " << received_term << " with id " << id;
+
         send_append_entries_response(response, sender_addr);
         return;
     }
 
     if (received_term > current_term && ev_is_active(&heartbeat_timer)) {
-        LOG(INFO) << "Got a heartbeat from another leader with bigger term";
+        LOG(INFO) << "Got a heartbeat from another leader with bigger term, resetting current heartbeat count...";
+        heartbeat_current_term = 0;
         ev_timer_stop(loop, &heartbeat_timer);
     }
 
@@ -547,10 +605,19 @@ void Node::handle_append_entries(const raft::leader_election::AppendEntries& app
         return;
     }
 
+
+    LOG(INFO) << "Received AppendEntries from " << leader_id << " for term " << received_term << " with id " << id;
+
+    // if (id != heartbeat_current_term + 1) {
+    //     LOG(INFO) << "Received out of order heartbeat. Expected id: " << heartbeat_current_term << ", received id: " << id;
+    //     return;
+    // }
+    heartbeat_current_term++;
+
     if (check_false_positive) {
         recv_heartbeat_count++;
         LOG(INFO) << "Heartbeat received from leader " << leader_id << " for term " << received_term
-                  << ". False positive check mode is active, resetting election timeout. " << suspected_leader_failures << " failures out of " << recv_heartbeat_count; 
+                  << ". HB count for this term is: "<< heartbeat_current_term <<". False positive check mode is active, resetting election timeout. " << suspected_leader_failures << " failures out of " << recv_heartbeat_count; 
     }
 
     // If term is newer or equal, update current_term and leader info
@@ -559,10 +626,10 @@ void Node::handle_append_entries(const raft::leader_election::AppendEntries& app
     current_leader_ip = leader_id.substr(0, leader_id.find(':'));
     current_leader_port = std::stoi(leader_id.substr(leader_id.find(':') + 1));
     voted_for = ""; // Reset voted_for in the new term
-
+    LOG(INFO) << "resetting election timeout... the current term is " << current_term << " and the current leader is " << current_leader_ip << ":" << current_leader_port;
     reset_election_timeout(); // Reset election timeout upon receiving heartbeat
-
     // Assuming logs are consistent for simplicity
+    LOG(INFO) << "DONE resetting election timeout... the current term is " << current_term << " and the current leader is " << current_leader_ip << ":" << current_leader_port;
 
     raft::leader_election::AppendEntriesResponse response;
     response.set_term(current_term);
@@ -570,7 +637,7 @@ void Node::handle_append_entries(const raft::leader_election::AppendEntries& app
 
     send_append_entries_response(response, sender_addr);
 
-    LOG(INFO) << "Received heartbeat (AppendEntries) from leader " << leader_id << " for term " << received_term;
+    // LOG(INFO) << "Received heartbeat (AppendEntries) from leader " << leader_id << " for term " << received_term;
 }
 
 void Node::send_append_entries_response(const raft::leader_election::AppendEntriesResponse& response, const sockaddr_in& recipient_addr) {

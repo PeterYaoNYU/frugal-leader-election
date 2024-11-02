@@ -1,15 +1,28 @@
-import argparse
 from fabric import Connection
 import threading
 
 # Define node connection details
+
+# for vms 
+# nodes = [
+#     # {"host": "c240g5-110103.wisc.cloudlab.us", "port": 26010},
+#     {"host": "c240g5-110103.wisc.cloudlab.us", "port": 26011},
+#     {"host": "c240g5-110103.wisc.cloudlab.us", "port": 26012},
+#     {"host": "c240g5-110103.wisc.cloudlab.us", "port": 26013},
+#     {"host": "c240g5-110103.wisc.cloudlab.us", "port": 26014},
+#     {"host": "c240g5-110103.wisc.cloudlab.us", "port": 26015},
+# ]
+
+
+
 nodes = [
-    {"host": "c240g5-110103.wisc.cloudlab.us", "port": 26011},
-    {"host": "c240g5-110103.wisc.cloudlab.us", "port": 26012},
-    {"host": "c240g5-110103.wisc.cloudlab.us", "port": 26013},
-    {"host": "c240g5-110103.wisc.cloudlab.us", "port": 26014},
-    {"host": "c240g5-110103.wisc.cloudlab.us", "port": 26015},
+    {"host": "c220g2-011125.wisc.cloudlab.us", "port": 26610},
+    {"host": "c220g2-011125.wisc.cloudlab.us", "port": 26611},
+    {"host": "c220g2-011125.wisc.cloudlab.us", "port": 26612},
+    {"host": "c220g2-011125.wisc.cloudlab.us", "port": 26613},
+    {"host": "c220g2-011125.wisc.cloudlab.us", "port": 26614},
 ]
+
 
 # SSH username
 username = "PeterYao"
@@ -20,37 +33,36 @@ repo_url = "https://github.com/PeterYaoNYU/frugal-leader-election.git"
 # Python script to run after cloning
 target_script = "~/frugal-leader-election/scripts/background_tcp_simulation/tcp_sim.py"
 
-def execute_on_node(node, id, port, duration):
+def execute_on_node(node, id):
     try:
         # Establish SSH connection
         conn = Connection(host=node["host"], user=username, port=node["port"])
         
+        # conn.run(f"rm -rf frugal-leader-election", hide=True)
+        
+        # Clone the repository
+        # conn.run(f"git clone {repo_url}", hide=True)
+        # print(f"Repository cloned on {node['host']}:{node['port']}")
+        
+        # Run the target Python script
+        # conn.run(f"python3 {target_script} {id} 7777", hide=True)
+        
         # Run the target Python script without waiting for it to finish
-        conn.run(f"nohup python3 {target_script} {id} {port} {duration} &", hide=True, warn=True, asynchronous=True)
-        # conn.run(f"python3 {target_script} {id} {port} {duration}", hide=True, warn=True)
-        print(f"Script executed on {node['host']}:{node['port']} with port {port} and duration {duration}")
+        conn.run(f"nohup python3 {target_script} {id} 7123 &", hide=True, warn=True, asynchronous=True)
+        
+        print(f"Script executed on {node['host']}:{node['port']}")
     except Exception as e:
         print(f"Failed on {node['host']}:{node['port']} - {e}")
 
-def main(port, duration):
-    # Start threads to connect to each node and perform the actions
-    threads = []
-    for id, node in enumerate(nodes):
-        thread = threading.Thread(target=execute_on_node, args=(node, id + 1, port, duration))
-        thread.start()
-        threads.append(thread)
+# Start threads to connect to each node and perform the actions
+threads = []
+for id, node in enumerate(nodes):
+    thread = threading.Thread(target=execute_on_node, args=(node, id+1,))
+    thread.start()
+    threads.append(thread)
 
-    # Wait for all threads to complete
-    for thread in threads:
-        thread.join()
+# Wait for all threads to complete
+for thread in threads:
+    thread.join()
 
-    print("All tasks completed.")
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Run TCP simulations on remote nodes.")
-    parser.add_argument("port", type=int, help="Port to use for the TCP connections")
-    parser.add_argument("duration", type=int, help="Duration of the TCP connections in seconds")
-
-    args = parser.parse_args()
-
-    main(args.port, args.duration)
+print("All tasks completed.")

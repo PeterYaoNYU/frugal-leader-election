@@ -1,22 +1,22 @@
 replica:
   ips: 
-  - "127.0.0.2"
-  - "127.0.0.3"
-  - "127.0.0.4"
-  - "127.0.0.5"
-  - "127.0.0.6"
-  runtimeSeconds: 300
+  - "10.0.1.2"
+  - "10.0.2.2"
+  - "10.0.3.2"
+  - "10.0.4.2"
+  - "10.0.5.2"
+  runtimeSeconds: 500
   timeoutLowerBound: 150
   timeoutUpperBound: 300
   failureLeader: false
   # if the failureLeader is true, after maxHeartbeats number of heartbeats, the leader will fail
   maxHeartbeats: 30
-  port: 7859
+  port: 7912
   delayLowerBound: 10
   delayUpperBound: 250
   useSimulatedLinks: false
-  linkLossRate: 0.1
+  linkLossRate: 0
   checkFalsePositiveRate: true
-  tcp_monitor: yes
+  tcp_monitor: true
   confidenceLevel: 0.95
   heartbeatIntervalMargin: 85
