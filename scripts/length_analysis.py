@@ -104,7 +104,8 @@ def bulk_process_logs(log_dir, start_idx, end_idx, output_dir="plots"):
         output_dir (str): Directory where the plots should be saved.
     """
     for idx in range(start_idx, end_idx + 1):
-        log_file = Path(log_dir) / f"node_1_run_{idx}.log"  # Adjust node and filename pattern as needed
+        # log_file = Path(log_dir) / f"node_1_run_{idx}.log"  # Adjust node and filename pattern as needed
+        log_file = Path(log_dir) / f"node_{idx}.log"
         if log_file.exists():
             print(f"\nProcessing {log_file}")
             plot_heartbeat_lengths(log_file, output_dir=output_dir)
@@ -115,5 +116,5 @@ def bulk_process_logs(log_dir, start_idx, end_idx, output_dir="plots"):
 # plot_heartbeat_lengths("./downloaded_logs/remote/node_5_run_1.log", output_dir="custom_plots")
 
 # Example usage for bulk processing
-# bulk_process_logs("./downloaded_logs/20241101_101049/node_1.log", start_idx=1, end_idx=1, output_dir="jaconbson-aggressive")
-plot_heartbeat_lengths("./downloaded_logs/20241102_124047/node_1.log", output_dir="jacobson6_variation_try7_1200s_4rttvar+random")
+bulk_process_logs("./downloaded_logs/20241102_130839", start_idx=1, end_idx=5, output_dir="jacobson6_variation_try8_500s_4rttvar+random")
+# plot_heartbeat_lengths("./downloaded_logs/20241102_130839/node_.log", output_dir="jacobson6_variation_try8_500s_4rttvar+random")
