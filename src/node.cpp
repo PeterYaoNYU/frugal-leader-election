@@ -585,6 +585,8 @@ void Node::handle_append_entries(const raft::leader_election::AppendEntries& app
         response.set_term(current_term);
         response.set_success(false);
 
+        LOG(INFO) << "Received Stale AppendEntries from " << leader_id << " for term " << received_term << " with id " << id;
+
         send_append_entries_response(response, sender_addr);
         return;
     }

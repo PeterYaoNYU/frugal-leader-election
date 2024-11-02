@@ -15,7 +15,7 @@ def plot_heartbeat_lengths(log_file, output_dir="plots"):
         output_dir (str): Directory where the plot should be saved.
     """
     # Regular expressions to detect heartbeat patterns
-    follower_pattern = r"Received heartbeat \(AppendEntries\) from leader ([\d\.]+):\d+ for term (\d+)"
+    follower_pattern = r"Received AppendEntries from ([\d\.]+):\d+ for term (\d+) with id (\d+)"
     leader_pattern = r"\[LEADER\] Sent heartbeat (\d+) for term (\d+)"
     
     # Dictionary to store heartbeat counts for each term by leader
@@ -116,4 +116,4 @@ def bulk_process_logs(log_dir, start_idx, end_idx, output_dir="plots"):
 
 # Example usage for bulk processing
 # bulk_process_logs("./downloaded_logs/20241101_101049/node_1.log", start_idx=1, end_idx=1, output_dir="jaconbson-aggressive")
-plot_heartbeat_lengths("./downloaded_logs/20241102_105021/node_1.log", output_dir="jacobson6_variation_try4")
+plot_heartbeat_lengths("./downloaded_logs/20241102_110220/node_5.log", output_dir="jacobson6_variation_try5_4rttvar+random")
