@@ -7,7 +7,7 @@ import time
 active_sockets = []
 active_sockets_lock = threading.Lock()
 
-def start_tcp_connection(target_ip, target_port, duration=50000, message_size=64, send_interval=1.5):
+def start_tcp_connection(target_ip, target_port, duration=50000, message_size=64, send_interval=0.1):
     """
     Creates a persistent TCP connection with the specified target and sends messages at a frequent interval.
 

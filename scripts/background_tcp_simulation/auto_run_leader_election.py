@@ -47,7 +47,7 @@ def build_install_bazel(conn):
     
     
     
-def execute_on_node(node, id, build_bazel=True, build_invoke=True, build_fabric=True):
+def execute_on_node(node, id, build_bazel=False, build_invoke=False, build_fabric=False):
     try:
         # Establish SSH connection
         conn = Connection(host=node["host"], user=username, port=node["port"])
@@ -67,10 +67,10 @@ def execute_on_node(node, id, build_bazel=True, build_invoke=True, build_fabric=
         # conn.run(f"rm -rf frugal-leader-election", hide=True)
         
         # # Clone the repository
-        conn.run(f"git clone {repo_url}", hide=True)
+        # conn.run(f"git clone {repo_url}", hide=True)
         # print(f"Repository cloned on {node['host']}:{node['port']}")
         
-        conn.run(f"cd frugal-leader-election && git pull  && git checkout old && bazel build //:leader_election")
+        conn.run(f"cd frugal-leader-election && git pull  && git checkout main && git pull && bazel build //:leader_election")
         
         # conn.run("cd frugal-leader-election && git pull")
 
