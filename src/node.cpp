@@ -214,7 +214,7 @@ void Node::start_election_timeout() {
     //     delay_ms = self_id * 20;  // Use self_id if dead leader ID is unknown
     // }
 
-    int delay_ms = (rand() % 101);
+    int delay_ms = (rand() % 31);
 
     // Check if there is an existing TCP connection with the leader
     if (tcp_monitor && election_timeout_bound != raft) {
