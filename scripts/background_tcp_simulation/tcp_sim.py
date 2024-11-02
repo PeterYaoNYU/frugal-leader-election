@@ -16,7 +16,6 @@ def start_tcp_connection(target_ip, target_port, duration=50000, message_size=64
         target_port (int): Port number of the target node.
         duration (int): Duration to keep the connection open (in seconds).
         message_size (int): Size of each message to send (in bytes).
-        send_interval (float): Interval between messages (in seconds).
     """
     start_time = time.time()
     message = b"X" * message_size  # Increase message size by repeating 'X' character
