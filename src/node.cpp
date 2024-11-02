@@ -233,7 +233,7 @@ void Node::start_election_timeout() {
                     auto [lowerbound, upperbound] = stats.rttConfidenceInterval(confidence_level);
                     LOG(INFO) << "Using " << confidence_level << "% CI upperbound for RTT as election timeout: " 
                               << upperbound << " Milliseconds";
-                    timeout = (upperbound / 2 + heartbeat_interval_margin) / 1000;
+                    timeout = (upperbound / 2 + heartbeat_interval_margin + delay_ms) / 1000;
                     LOG(INFO) << "Using average RTT from TCP connection as election timeout: " << timeout << " Milliseconds";
                     using_raft_timeout = false;
                 } else if (election_timeout_bound == Jacobson) {

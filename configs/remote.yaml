@@ -19,4 +19,4 @@ replica:
   checkFalsePositiveRate: true
   tcp_monitor: true
   confidenceLevel: 0.999
-  heartbeatIntervalMargin: 76
+  heartbeatIntervalMargin: 75
