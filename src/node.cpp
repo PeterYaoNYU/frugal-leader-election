@@ -234,12 +234,13 @@ void Node::start_election_timeout() {
                 return a.second < b.second;
             });
 
-    // find my rank:
+        // find my rank:
         for (int i = 0; i < penalty_scores_sorted.size(); i++) {
             if (penalty_scores_sorted[i].first == self_ip+":"+std::to_string(port)) {
                 LOG(INFO) << "My rank is: " << i;
-                break;
+                // break;
             }
+            LOG(INFO) << "The rank of " << penalty_scores_sorted[i].first << " is: " << i << " with penalty score: " << penalty_scores_sorted[i].second;
         }
 
 

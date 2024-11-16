@@ -6,6 +6,8 @@ bazel build //:leader_election
 
 ### How to run?
 
+> To reproduce, you should only run on the Wisconsin Cluster of CloudLab. Emulab has known issue to delay messages without conforming to the predetermined distribution, causing inferior performance. 
+
 I use the ```invoke``` library for running the process. The script is in the subdirectory ```scripts```.
 ```bash
 cd scripts
