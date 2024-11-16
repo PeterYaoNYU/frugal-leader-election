@@ -38,12 +38,20 @@ processes = {}
 #     {"host": "c220g2-011125.wisc.cloudlab.us", "port": 26614},
 # ]
 
+# nodes = [
+#     {"host": "pc605.emulab.net", "port": 29442},
+#     {"host": "pc604.emulab.net", "port": 29442},
+#     {"host": "pc605.emulab.net", "port": 29443},
+#     {"host": "pc606.emulab.net", "port": 29442},
+#     {"host": "pc603.emulab.net", "port": 29442},
+# ]
+
 nodes = [
-    {"host": "pc605.emulab.net", "port": 29442},
-    {"host": "pc604.emulab.net", "port": 29442},
-    {"host": "pc605.emulab.net", "port": 29443},
-    {"host": "pc606.emulab.net", "port": 29442},
-    {"host": "pc603.emulab.net", "port": 29442},
+    {"host": "c220g2-011102.wisc.cloudlab.us", "port": 25810},
+    {"host": "c220g2-011115.wisc.cloudlab.us", "port": 25810},
+    {"host": "c220g2-010627.wisc.cloudlab.us", "port": 25810},
+    {"host": "c220g2-010630.wisc.cloudlab.us", "port": 25810},
+    {"host": "c220g2-011102.wisc.cloudlab.us", "port": 25811},
 ]
 
 # SSH username

@@ -223,6 +223,26 @@ void Node::start_election_timeout() {
 
     // Check if there is an existing TCP connection with the leader
     if (tcp_monitor && election_timeout_bound != raft) {
+
+// use the penalty score to calculate:
+// 1. sort the unordered map:
+        std::vector<std::pair<std::string, double>> penalty_scores_sorted(penalty_scores.begin(), penalty_scores.end());
+
+        // sort the vec based oin the value: the order is ascending form small to big
+        std::sort(penalty_scores_sorted.begin(), penalty_scores_sorted.end(), 
+            [](const std::pair<std::string, double>& a, const std::pair<std::string, double>& b) {
+                return a.second < b.second;
+            });
+
+    // find my rank:
+        for (int i = 0; i < penalty_scores_sorted.size(); i++) {
+            if (penalty_scores_sorted[i].first == self_ip+":"+std::to_string(port)) {
+                LOG(INFO) << "My rank is: " << i;
+                break;
+            }
+        }
+
+
         std::lock_guard<std::mutex> lock(tcp_stat_manager.statsMutex);
         auto key = std::make_pair(self_ip, current_leader_ip);
         
@@ -684,6 +704,8 @@ void Node::penalty_timer_cb(EV_P_ ev_timer* w, int revents) {
 void Node::calculate_and_send_penalty_score() {
     // Calculate penalty score
     double penalty_score = compute_penalty_score();
+
+    penalty_scores[self_ip + ":" + std::to_string(port)] = penalty_score;
 
     // Create PenaltyScore message
     raft::leader_election::PenaltyScore penalty_msg;
