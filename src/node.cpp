@@ -218,7 +218,7 @@ void Node::start_election_timeout() {
 
     // int delay_ms = (rand() % 31);
 
-    std::uniform_int_distribution<int> delay_distribution(25, 35);
+    std::uniform_int_distribution<int> delay_distribution(31, 40);
     int delay_ms = delay_distribution(rng);
 
     // Check if there is an existing TCP connection with the leader
