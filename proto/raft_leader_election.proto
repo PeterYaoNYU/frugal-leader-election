@@ -29,6 +29,13 @@ message PenaltyScore {
   double penalty_score = 3;
 }
 
+message Petition {
+  int32 term = 1;
+  string current_leader = 2;      // IP:port of the current leader
+  string proposed_leader = 3;     // IP:port of the proposed new leader
+  double latency_to_leader = 4;   // Latency from sender to current leader
+}
+
 message MessageWrapper {
   enum MessageType {
     REQUEST_VOTE = 0;
