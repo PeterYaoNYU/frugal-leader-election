@@ -7,13 +7,18 @@ sudo tc qdisc add dev eth5 root netem delay 10ms 5ms distribution normal
 
 
 
-sudo tc qdisc add dev vlan1110 root netem delay 10ms 5ms distribution normal
-sudo tc qdisc add dev vlan1150 root netem delay 10ms 5ms distribution normal
-sudo tc qdisc add dev vlan1187 root netem delay 10ms 5ms distribution normal
-sudo tc qdisc add dev vlan1195 root netem delay 10ms 5ms distribution normal
-sudo tc qdisc add dev vlan1212 root netem delay 10ms 5ms distribution normal
+sudo tc qdisc add dev vlan1110 root netem delay 15ms 5ms distribution normal
+sudo tc qdisc add dev vlan1150 root netem delay 15ms 5ms distribution normal
+sudo tc qdisc add dev vlan1187 root netem delay 2ms 1ms distribution normal
+sudo tc qdisc add dev vlan1195 root netem delay 15ms 5ms distribution normal
+sudo tc qdisc add dev vlan1212 root netem delay 15ms 5ms distribution normal
 
+
+sudo tc qdisc del dev vlan1110 root
+sudo tc qdisc del dev vlan1150 root
 sudo tc qdisc del dev vlan1187 root
+sudo tc qdisc del dev vlan1195 root
+sudo tc qdisc del dev vlan1212 root
 
 sudo tc qdisc add dev vlan1187 root netem delay 2ms 1ms distribution normal
 
