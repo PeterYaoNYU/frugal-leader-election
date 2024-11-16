@@ -23,12 +23,19 @@ message AppendEntriesResponse {
   bool success = 2;
 }
 
+message PenaltyScore {
+  int32 term = 1;
+  string node_id = 2; // IP:port of the node
+  double penalty_score = 3;
+}
+
 message MessageWrapper {
   enum MessageType {
     REQUEST_VOTE = 0;
     VOTE_RESPONSE = 1;
     APPEND_ENTRIES = 2;
     APPEND_ENTRIES_RESPONSE = 3;
+    PENALTY_SCORE = 4;
   }
   MessageType type = 1;
   bytes payload = 2;

@@ -92,7 +92,13 @@ private:
     int self_id;
     std::unordered_map<std::string, int> ip_to_id;
 
-    enum bound_type {CI, Jacobson, raft} election_timeout_bound = CI;
+    enum bound_type {CI, Jacobson, raft} election_timeout_bound = Jacobson;
+
+    // New timer for penalty score exchange
+    ev_timer penalty_timer;
+
+    // Data structure to store penalty scores received from other nodes
+    std::unordered_map<std::string, double> penalty_scores; // Key: node_id, Value: penalty_score
 
     void start_election_timeout();
     void reset_election_timeout();
@@ -114,6 +120,14 @@ private:
     void handle_vote_response(const raft::leader_election::VoteResponse& response, const sockaddr_in& sender_addr);
 
     void handle_append_entries(const raft::leader_election::AppendEntries& append_entries, const sockaddr_in& sender_addr); 
+
+    // a set of penalty related functions. 
+    void start_penalty_timer();
+    static void penalty_timer_cb(EV_P_ ev_timer* w, int revents);
+    void calculate_and_send_penalty_score();
+    double compute_penalty_score();
+    double get_latency_to_peer(const std::string& peer_id);
+    void handle_penalty_score(const raft::leader_election::PenaltyScore& penalty_msg, const sockaddr_in& sender_addr);
 
     void become_leader();
     void send_heartbeat();

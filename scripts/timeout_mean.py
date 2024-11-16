@@ -42,5 +42,5 @@ def analyze_logs(folder_path):
     print(f"  Additional Delay Component: {delay_percentage:.2f}%")
 
 # Example usage
-folder_path = "./downloaded_logs/20241102_162708"  # Specify your folder path containing log files here
+folder_path = "./downloaded_logs/20241102_164547"  # Specify your folder path containing log files here
 analyze_logs(folder_path)

@@ -175,6 +175,8 @@ void Node::run() {
     shutdown_timer.data = this;
     ev_timer_start(loop, &shutdown_timer);
 
+    start_penalty_timer();
+
     // Start the event loop
     ev_run(loop, 0);
 }
@@ -368,6 +370,15 @@ void Node::recv_cb(EV_P_ ev_io* w, int revents) {
                 }
                 self->handle_append_entries(append_entries, sender_addr);
                 // LOG(INFO) << "Received append entries message.";
+                break;
+            }
+            case raft::leader_election::MessageWrapper::PENALTY_SCORE: {
+                raft::leader_election::PenaltyScore penalty_msg;
+                if (!penalty_msg.ParseFromString(wrapper.payload())) {
+                    LOG(ERROR) << "Failed to parse PenaltyScore message.";
+                    return;
+                }
+                self->handle_penalty_score(penalty_msg, sender_addr);
                 break;
             }
             default:
@@ -656,3 +667,112 @@ void Node::send_append_entries_response(const raft::leader_election::AppendEntri
                   << inet_ntoa(recipient_addr.sin_addr) << ":" << ntohs(recipient_addr.sin_port);
     }
 }
+
+void Node::start_penalty_timer() {
+    double interval = 1.0; // Interval in seconds
+    ev_timer_init(&penalty_timer, penalty_timer_cb, 0.0, interval);
+    penalty_timer.data = this;
+    ev_timer_start(loop, &penalty_timer);
+}
+
+void Node::penalty_timer_cb(EV_P_ ev_timer* w, int revents) {
+    Node* self = static_cast<Node*>(w->data);
+    self->calculate_and_send_penalty_score();
+}
+
+
+void Node::calculate_and_send_penalty_score() {
+    // Calculate penalty score
+    double penalty_score = compute_penalty_score();
+
+    // Create PenaltyScore message
+    raft::leader_election::PenaltyScore penalty_msg;
+    penalty_msg.set_term(current_term);
+    penalty_msg.set_node_id(self_ip + ":" + std::to_string(port));
+    penalty_msg.set_penalty_score(penalty_score);
+
+    // Wrap and serialize the message
+    raft::leader_election::MessageWrapper wrapper;
+    wrapper.set_type(raft::leader_election::MessageWrapper::PENALTY_SCORE);
+    wrapper.set_payload(penalty_msg.SerializeAsString());
+
+    std::string serialized_message = wrapper.SerializeAsString();
+
+    // Send the message to all peers
+    for (const auto& [ip, peer_port] : peer_addresses) {
+        sockaddr_in peer_addr{};
+        peer_addr.sin_family = AF_INET;
+        peer_addr.sin_port = htons(peer_port);
+        inet_pton(AF_INET, ip.c_str(), &peer_addr.sin_addr);
+
+        ssize_t nsend = sendto(sock_fd, serialized_message.c_str(), serialized_message.size(), 0,
+                               (sockaddr*)&peer_addr, sizeof(peer_addr));
+
+        if (nsend == -1) {
+            LOG(ERROR) << "Failed to send penalty score to " << ip << ":" << peer_port;
+        } else {
+            LOG(INFO) << "Sent penalty score to " << ip << ":" << peer_port;
+        }
+    }
+}
+
+double Node::compute_penalty_score() {
+    // make these tunable parameters from the config later. 
+    double w = 1.0;     // Weight factor
+    double T = 100.0;   // Threshold in milliseconds
+    int N = peer_addresses.size() + 1; // Total number of nodes including self
+
+    double sum = 0.0;
+    for (const auto& [ip, peer_port] : peer_addresses) {
+        std::string peer_id = ip + ":" + std::to_string(peer_port);
+
+        // Skip self
+        if (peer_id == self_ip + ":" + std::to_string(port)) {
+            continue;
+        }
+
+        // Get L_ij (latency to peer j)
+        double L_ij = get_latency_to_peer(peer_id);
+
+        double penalty = L_ij + w * std::max(0.0, L_ij - T);
+        sum += penalty;
+    }
+
+    double penalty_score = sum / (N - 1);
+    LOG(INFO) << "Calculated penalty score for myself is: " << penalty_score;
+    return penalty_score;
+}
+
+void Node::handle_penalty_score(const raft::leader_election::PenaltyScore& penalty_msg, const sockaddr_in& sender_addr) {
+    std::string node_id = penalty_msg.node_id();
+    double penalty = penalty_msg.penalty_score();
+
+    // Store the received penalty score
+    penalty_scores[node_id] = penalty;
+
+    LOG(INFO) << "Received penalty score from " << node_id << ": " << penalty;
+}
+
+
+double Node::get_latency_to_peer(const std::string& peer_id) {
+    // Use tcp_stat_manager to get RTT to peer
+    if (tcp_monitor) {
+        std::lock_guard<std::mutex> lock(tcp_stat_manager.statsMutex);
+        auto key = std::make_pair(self_ip, peer_id.substr(0, peer_id.find(':')));
+
+        auto it = tcp_stat_manager.connectionStats.find(key);
+        if (it != tcp_stat_manager.connectionStats.end()) {
+            LOG(INFO) << "RTT data is available for " << peer_id;
+            const TcpConnectionStats& stats = it->second;
+            double avgRttMs = stats.meanRtt(); // In milliseconds
+            return avgRttMs;
+        } else {
+            LOG(INFO) << "No RTT data available for " << peer_id;
+        }
+    }
+    // If no data is available, return -1 to indicate non availability
+    return -1;
+}
+
+
+

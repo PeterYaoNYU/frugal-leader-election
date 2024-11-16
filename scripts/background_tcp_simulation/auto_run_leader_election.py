@@ -11,12 +11,20 @@ import threading
 #     {"host": "c240g5-110103.wisc.cloudlab.us", "port": 26015},
 # ]
 
+# nodes = [
+#     {"host": "c220g2-011125.wisc.cloudlab.us", "port": 26610},
+#     {"host": "c220g2-011125.wisc.cloudlab.us", "port": 26611},
+#     {"host": "c220g2-011125.wisc.cloudlab.us", "port": 26612},
+#     {"host": "c220g2-011125.wisc.cloudlab.us", "port": 26613},
+#     {"host": "c220g2-011125.wisc.cloudlab.us", "port": 26614},
+# ]
+
 nodes = [
-    {"host": "c220g2-011125.wisc.cloudlab.us", "port": 26610},
-    {"host": "c220g2-011125.wisc.cloudlab.us", "port": 26611},
-    {"host": "c220g2-011125.wisc.cloudlab.us", "port": 26612},
-    {"host": "c220g2-011125.wisc.cloudlab.us", "port": 26613},
-    {"host": "c220g2-011125.wisc.cloudlab.us", "port": 26614},
+    {"host": "pc605.emulab.net", "port": 29442},
+    {"host": "pc604.emulab.net", "port": 29442},
+    {"host": "pc605.emulab.net", "port": 29443},
+    {"host": "pc606.emulab.net", "port": 29442},
+    {"host": "pc603.emulab.net", "port": 29442},
 ]
 
 # SSH username
@@ -67,7 +75,7 @@ def execute_on_node(node, id, build_bazel=False, build_invoke=False, build_fabri
         # conn.run(f"rm -rf frugal-leader-election", hide=True)
         
         # # Clone the repository
-        # conn.run(f"git clone {repo_url}", hide=True)
+        conn.run(f"git clone {repo_url}", hide=True)
         # print(f"Repository cloned on {node['host']}:{node['port']}")
         
         conn.run(f"cd frugal-leader-election && git pull  && git checkout main && git pull && bazel build //:leader_election")
