@@ -18,14 +18,14 @@ Node::Node(const ProcessConfig& config, int replicaId)
       peer_addresses(),                            // 11 (initialized in the body)
       rng(std::random_device{}()),                 // 12
       dist(150, 300),                              // 13
-      failure_leader(false),                       // 14
+      failure_leader(config.failureLeader),                       // 14
       current_leader_ip(""),                       // 15
       current_leader_port(-1),                     // 16
       view_number(0),                              // 17
       current_term(0),                             // 18
       voted_for(""),                               // 19
       votes_received(0),                           // 20
-      max_heartbeats(0),                           // 21 (set later if needed)
+      max_heartbeats(config.maxHeartbeats),                           // 21 (set later if needed)
       heartbeat_count(0),                          // 22
       use_simulated_links(config.useSimulatedLinks),                  // 23 (set later if needed)
       loss_dist(0.0, 1.0),                         // 24
@@ -76,6 +76,9 @@ Node::Node(const ProcessConfig& config, int replicaId)
 
     LOG(INFO) << "Node initialized with ID: " << self_id << ", IP: " << self_ip << ", port: " << port;
 
+    if (failure_leader) {
+        LOG(INFO) << "Failure leader mode enabled. Leader will fail after " << max_heartbeats << " heartbeats.";
+    }
 
 }
 
@@ -607,7 +610,7 @@ void Node::send_heartbeat() {
         failure_timer.data = this;
         ev_timer_start(loop, &failure_timer);
 
-        LOG(INFO) << "Leader will simulate failure after " << random_delay << " seconds.";
+        LOG(INFO) << "[Scheduled Failure Pending] Leader will simulate failure after " << random_delay << " seconds.";
     }
 }
 
