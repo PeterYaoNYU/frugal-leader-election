@@ -757,6 +757,8 @@ double Node::compute_penalty_score() {
         // Get L_ij (latency to peer j)
         double L_ij = get_latency_to_peer(peer_id);
 
+        LOG(INFO) << "Latency to " << peer_id << " is: " << L_ij;
+
         double penalty = L_ij + w * std::max(0.0, L_ij - T);
         sum += penalty;
     }
