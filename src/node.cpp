@@ -218,8 +218,8 @@ void Node::start_election_timeout() {
 
     // int delay_ms = (rand() % 31);
 
-    std::uniform_int_distribution<int> delay_distribution(31, 40);
-    int delay_ms = delay_distribution(rng);
+    // std::uniform_int_distribution<int> delay_distribution(20, 40);
+    // int delay_ms = delay_distribution(rng);
 
     // Check if there is an existing TCP connection with the leader
     if (tcp_monitor && election_timeout_bound != raft) {
@@ -234,15 +234,28 @@ void Node::start_election_timeout() {
                 return a.second < b.second;
             });
 
+        int my_rank;
         // find my rank:
         for (int i = 0; i < penalty_scores_sorted.size(); i++) {
             if (penalty_scores_sorted[i].first == self_ip+":"+std::to_string(port)) {
                 LOG(INFO) << "My rank is: " << i;
                 // break;
+                my_rank = i;
             }
             LOG(INFO) << "The rank of " << penalty_scores_sorted[i].first << " is: " << i << " with penalty score: " << penalty_scores_sorted[i].second;
         }
 
+        // find the number of all peers including myself in the membership group:
+        int total_peers = peer_addresses.size();
+
+        // make these numbers configurable later:
+        int lower_bound = 20 + 4 * my_rank;
+        int upper_bound = 20 + 4 * (my_rank + 1);
+
+        std::uniform_int_distribution<int> delay_distribution(lower_bound, upper_bound);
+        int delay_ms = delay_distribution(rng);
+
+        LOG(INFO) << "The safety margin for the election timeout is: " << delay_ms << " Milliseconds, lowerbound: " << lower_bound << " upperbound: " << upper_bound;
 
         std::lock_guard<std::mutex> lock(tcp_stat_manager.statsMutex);
         auto key = std::make_pair(self_ip, current_leader_ip);
