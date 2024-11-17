@@ -311,6 +311,7 @@ void Node::reset_election_timeout() {
 }
 
 void Node::election_timeout_cb(EV_P_ ev_timer* w, int revents) {
+    LOG(INFO) << "Inside election timeout callback";
     Node* self = static_cast<Node*>(w->data);
 
     if (self->check_false_positive) {
@@ -981,12 +982,6 @@ void Node::handle_petition(const raft::leader_election::Petition& petition_msg, 
             }
         } else {
             LOG(INFO) << "Petition failed. Not changing leader.";
-        }
-
-        // Clear the petition count after handling
-        {
-            std::lock_guard<std::mutex> lock(petition_mutex);
-            petition_count = 0;
         }
     }
 }
