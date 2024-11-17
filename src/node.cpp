@@ -953,7 +953,10 @@ void Node::handle_petition(const raft::leader_election::Petition& petition_msg, 
             LOG(INFO) << "Latency to leader " << sender_id << ": " << latency << " ms";
             auto my_latency = get_latency_to_peer(sender_id);
             LOG(INFO) << "My latency to peer " << sender_id << ": " << my_latency << " ms";
-            if (my_latency > latency) {
+
+            // TODO: Remove the 20 ms margin
+            // the 20 is for testing purposes, and should be removed later.
+            if (my_latency > latency + 20) {
                 petition_succeed = false;
                 break;
             }
@@ -965,6 +968,8 @@ void Node::handle_petition(const raft::leader_election::Petition& petition_msg, 
             role = Role::CANDIDATE;
             voted_for = self_ip + ":" + std::to_string(port);
             votes_received = 0;
+
+            // LOG(INFO) << "[petition] Petition Succeed!";
 
             start_election_timeout();
             send_request_vote();
