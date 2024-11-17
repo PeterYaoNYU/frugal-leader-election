@@ -965,6 +965,22 @@ void Node::handle_petition(const raft::leader_election::Petition& petition_msg, 
 
         if (petition_succeed) {
             LOG(INFO) << "Petition succeeded. Changing leader to " << proposed_leader;
+
+            current_term++;
+            role = Role::CANDIDATE;
+            current_leader_ip = "";  
+            current_leader_port = -1;
+            voted_for = self_ip + ":" + std::to_string(port);
+            votes_received = 0; // Vote for self later when it receives its own message
+
+            latency_to_leader.clear(); 
+
+            petition_count = 0;
+
+            heartbeat_current_term = 0;
+
+            start_election_timeout();
+            send_request_vote();
         //     current_term++;
         //     role = Role::CANDIDATE;
         //     voted_for = self_ip + ":" + std::to_string(port);
@@ -980,7 +996,7 @@ void Node::handle_petition(const raft::leader_election::Petition& petition_msg, 
         //         petition_count = 0;
         //         latency_to_leader.clear();
         //     }
-        // } else {
+        } else {
             LOG(INFO) << "Petition failed. Not changing leader.";
         }
     }
