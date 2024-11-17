@@ -1,0 +1,6 @@
+the commands for testing the new network latency module:
+```bash
+g++ -c net_latency_controller.cpp -o NetLatencyController.o
+g++ -c test_net_latency_controller.cpp -o main.o
+g++ NetLatencyController.o main.o -o net_latency_controller
+```
