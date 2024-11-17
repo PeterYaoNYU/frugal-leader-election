@@ -36,7 +36,11 @@ Node::Node(const ProcessConfig& config, int replicaId)
       confidence_level(config.confidenceLevel),
       heartbeat_interval_margin(config.heartbeatIntervalMargin),
       heartbeat_current_term(0),
-      self_id(replicaId)
+      self_id(replicaId),
+      penalty_scores(),  // Initialize the penalty_scores map
+      petition_count(),  // Initialize the petition_count map
+      latency_threshold(200.0), // Set your desired latency threshold
+      majority_count((config.peerIPs.size() + 1) / 2 + 1) // Calculate majority count
 {
     election_timer.data = this;
     heartbeat_timer.data = this;
@@ -322,6 +326,10 @@ void Node::election_timeout_cb(EV_P_ ev_timer* w, int revents) {
     self->voted_for = self->self_ip + ":" + std::to_string(self->port);
     self->votes_received = 0; // Vote for self later when it receives its own message
 
+    self->latency_to_leader.clear(); 
+
+    self->petition_count = 0;
+
     self->heartbeat_current_term = 0;
 
     self->start_election_timeout();
@@ -418,6 +426,15 @@ void Node::recv_cb(EV_P_ ev_io* w, int revents) {
                 self->handle_penalty_score(penalty_msg, sender_addr);
                 break;
             }
+            case raft::leader_election::MessageWrapper::PETITION: {
+                raft::leader_election::Petition petition_msg;
+                if (!petition_msg.ParseFromString(wrapper.payload())) {
+                    LOG(ERROR) << "Failed to parse Petition message.";
+                    return;
+                }
+                self->handle_petition(petition_msg, sender_addr);
+                break;
+            }
             default:
                 LOG(ERROR) << "Unknown message type.";
         }
@@ -444,6 +461,8 @@ void Node::handle_request_vote(const raft::leader_election::RequestVote& request
         if (role == Role::LEADER) {
             ev_timer_stop(loop, &heartbeat_timer);
         }
+        latency_to_leader.clear();
+        petition_count = 0;
         role = Role::FOLLOWER;
         voted_for = ""; 
     }
@@ -505,6 +524,8 @@ void Node::handle_vote_response(const raft::leader_election::VoteResponse& respo
                   << ". Reverting back to follower.";
         current_term = response.term();
         role = Role::FOLLOWER;
+        latency_to_leader.clear();
+        petition_count = 0;
         voted_for = "";
         return;
     }
@@ -669,6 +690,10 @@ void Node::handle_append_entries(const raft::leader_election::AppendEntries& app
     }
 
     // If term is newer or equal, update current_term and leader info
+    if (received_term > current_term) {
+        latency_to_leader.clear();
+        petition_count = 0;
+    }
     current_term = received_term;
     role = Role::FOLLOWER;
     current_leader_ip = leader_id.substr(0, leader_id.find(':'));
@@ -781,8 +806,74 @@ double Node::compute_penalty_score() {
 
     double penalty_score = sum / (N - 1);
     LOG(INFO) << "Calculated penalty score for myself is: " << penalty_score;
+
+    // Get latency to current leader
+    double latency_to_leader = get_latency_to_peer(current_leader_ip + ":" + std::to_string(current_leader_port));
+
+    LOG(INFO) << "Latency to leader " << current_leader_ip << ":" << current_leader_port << " is: " << latency_to_leader << " ms";
+
+    // Check if latency exceeds threshold
+    if (latency_to_leader > latency_threshold && role != Role::LEADER) {
+        LOG(INFO) << "Latency to leader exceeds threshold. Initiating petition process.";
+
+        // Find the node with the lowest penalty score (excluding the leader)
+        std::string proposed_leader = "";
+        double lowest_penalty = std::numeric_limits<double>::max();
+
+        for (const auto& [node_id, penalty] : penalty_scores) {
+            if (node_id != current_leader_ip + ":" + std::to_string(current_leader_port)) {
+                if (penalty < lowest_penalty) {
+                    lowest_penalty = penalty;
+                    proposed_leader = node_id;
+                }
+            }
+        }
+
+        // Send a petition to the proposed leader
+        if (!proposed_leader.empty() && proposed_leader != self_ip + ":" + std::to_string(port)) {
+            send_petition(proposed_leader, latency_to_leader);
+        }
+    }
+
     return penalty_score;
 }
+
+
+void Node::send_petition(const std::string& proposed_leader, double latency_to_leader) {
+    // Create Petition message
+    raft::leader_election::Petition petition_msg;
+    petition_msg.set_term(current_term);
+    petition_msg.set_current_leader(current_leader_ip + ":" + std::to_string(current_leader_port));
+    petition_msg.set_proposed_leader(proposed_leader);
+    petition_msg.set_latency_to_leader(latency_to_leader);
+    petition_msg.set_sender_id(self_ip + ":" + std::to_string(port));
+
+    // Wrap and serialize the message
+    raft::leader_election::MessageWrapper wrapper;
+    wrapper.set_type(raft::leader_election::MessageWrapper::PETITION);
+    wrapper.set_payload(petition_msg.SerializeAsString());
+
+    std::string serialized_message = wrapper.SerializeAsString();
+
+    // Send the petition to the proposed leader
+    std::string proposed_leader_ip = proposed_leader.substr(0, proposed_leader.find(':'));
+    int proposed_leader_port = std::stoi(proposed_leader.substr(proposed_leader.find(':') + 1));
+
+    sockaddr_in peer_addr{};
+    peer_addr.sin_family = AF_INET;
+    peer_addr.sin_port = htons(proposed_leader_port);
+    inet_pton(AF_INET, proposed_leader_ip.c_str(), &peer_addr.sin_addr);
+
+    ssize_t nsend = sendto(sock_fd, serialized_message.c_str(), serialized_message.size(), 0,
+                           (sockaddr*)&peer_addr, sizeof(peer_addr));
+
+    if (nsend == -1) {
+        LOG(ERROR) << "Failed to send petition to " << proposed_leader;
+    } else {
+        LOG(INFO) << "Sent petition to " << proposed_leader;
+    }
+}
+
 
 void Node::handle_penalty_score(const raft::leader_election::PenaltyScore& penalty_msg, const sockaddr_in& sender_addr) {
     std::string node_id = penalty_msg.node_id();
@@ -816,4 +907,79 @@ double Node::get_latency_to_peer(const std::string& peer_id) {
 }
 
 
+void Node::handle_petition(const raft::leader_election::Petition& petition_msg, const sockaddr_in& sender_addr) {
+    std::string proposed_leader = petition_msg.proposed_leader();
+    double reported_latency = petition_msg.latency_to_leader();
+    std::string sender_id = petition_msg.sender_id();
+
+    int received_term = petition_msg.term();
+    std::string current_leader = petition_msg.current_leader();
+    if (received_term != current_term) {
+        LOG(INFO) << "Received stale petition for term " << received_term << " while current term is " << current_term;
+        return;
+    }
+
+    if (current_leader != current_leader_ip + ":" + std::to_string(current_leader_port)) {
+        LOG(INFO) << "Received petition from " << sockaddr_to_string(sender_addr) << " for stale leader " << current_leader;
+        return;
+    }
+
+    if (proposed_leader != self_ip + ":" + std::to_string(port)) {
+        LOG(INFO) << "Received petition for another node. Ignoring.";
+        return;
+    }
+
+    latency_to_leader[sender_id] = reported_latency;
+
+    LOG(INFO) << "Received petition from " << sockaddr_to_string(sender_addr)
+              << " proposing leader " << proposed_leader
+              << " due to high latency to current leader (" << reported_latency << " ms)";
+
+    // Update petition count
+    {
+        std::lock_guard<std::mutex> lock(petition_mutex);
+        petition_count++;
+    }
+
+
+    if (petition_count >= majority_count) {
+        LOG(INFO) << "Received petitions from majority for proposed leader " << proposed_leader;
+        bool petition_succeed = true;
+
+        for (const auto& [sender_id, latency] : latency_to_leader) {
+            LOG(INFO) << "Latency to leader " << sender_id << ": " << latency << " ms";
+            auto my_latency = get_latency_to_peer(sender_id);
+            LOG(INFO) << "My latency to peer " << sender_id << ": " << my_latency << " ms";
+            if (my_latency > latency) {
+                petition_succeed = false;
+                break;
+            }
+        }
+
+        if (petition_succeed) {
+            LOG(INFO) << "Petition succeeded. Changing leader to " << proposed_leader;
+            current_term++;
+            role = Role::CANDIDATE;
+            voted_for = self_ip + ":" + std::to_string(port);
+            votes_received = 0;
+
+            start_election_timeout();
+            send_request_vote();
+            // Reset the petition count after handling
+            {
+                std::lock_guard<std::mutex> lock(petition_mutex);
+                petition_count = 0;
+                latency_to_leader.clear();
+            }
+        } else {
+            LOG(INFO) << "Petition failed. Not changing leader.";
+        }
+
+        // Clear the petition count after handling
+        {
+            std::lock_guard<std::mutex> lock(petition_mutex);
+            petition_count = 0;
+        }
+    }
+}
 

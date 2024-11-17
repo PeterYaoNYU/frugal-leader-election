@@ -34,7 +34,10 @@ message Petition {
   string current_leader = 2;      // IP:port of the current leader
   string proposed_leader = 3;     // IP:port of the proposed new leader
   double latency_to_leader = 4;   // Latency from sender to current leader
+  string sender_id = 5;           // IP:port of the sender
 }
+
+
 
 message MessageWrapper {
   enum MessageType {
@@ -43,6 +46,7 @@ message MessageWrapper {
     APPEND_ENTRIES = 2;
     APPEND_ENTRIES_RESPONSE = 3;
     PENALTY_SCORE = 4;
+    PETITION = 5;
   }
   MessageType type = 1;
   bytes payload = 2;

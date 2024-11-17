@@ -100,6 +100,17 @@ private:
     // Data structure to store penalty scores received from other nodes
     std::unordered_map<std::string, double> penalty_scores; // Key: node_id, Value: penalty_score
 
+    // Data structures for petition handling
+    int petition_count = 0; // Count of petitions received  
+    // std::unordered_map<std::string, int> petition_count; // Key: proposed_leader_id, Value: count of petitions received
+    // also for petition purposes   
+    std::unordered_map<std::string, double> latency_to_leader; // Key: peer_id, Value: latency in millisecon`
+    std::mutex petition_mutex; // To protect access to petition_count
+
+    // Thresholds and configurations
+    double latency_threshold = 75.0; // Threshold in milliseconds
+    int majority_count; // Number of nodes required for majority
+
     void start_election_timeout();
     void reset_election_timeout();
     static void election_timeout_cb(EV_P_ ev_timer* w, int revents);
@@ -128,6 +139,12 @@ private:
     double compute_penalty_score();
     double get_latency_to_peer(const std::string& peer_id);
     void handle_penalty_score(const raft::leader_election::PenaltyScore& penalty_msg, const sockaddr_in& sender_addr);
+
+    // Methods for petition handling
+    void send_petition(const std::string& proposed_leader, double latency_to_leader);
+    void handle_petition(const raft::leader_election::Petition& petition_msg, const sockaddr_in& sender_addr);
+    void check_and_initiate_leader_election(const std::string& proposed_leader, double proposed_latency);
+
 
     void become_leader();
     void send_heartbeat();
