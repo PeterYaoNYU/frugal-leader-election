@@ -35,3 +35,5 @@ the command to generate a smooth tcp traffic:
 ```bash
 iperf3 -c 10.0.1.2 -t 0 -b 100K -l 1K
 ```
+
+Maybe the tcp traffic monitor should use weighted mean rtt instead of just RTT? So that it can adapt. 
