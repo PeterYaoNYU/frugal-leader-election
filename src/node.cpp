@@ -39,7 +39,7 @@ Node::Node(const ProcessConfig& config, int replicaId)
       self_id(replicaId),
       penalty_scores(),  // Initialize the penalty_scores map
       petition_count(),  // Initialize the petition_count map
-      latency_threshold(200.0), // Set your desired latency threshold
+      latency_threshold(100.0), // Set your desired latency threshold
       majority_count((config.peerIPs.size() + 1) / 2 + 1) // Calculate majority count
 {
     election_timer.data = this;
@@ -83,6 +83,9 @@ Node::Node(const ProcessConfig& config, int replicaId)
     if (failure_leader) {
         LOG(INFO) << "Failure leader mode enabled. Leader will fail after " << max_heartbeats << " heartbeats.";
     }
+
+    network_interface = config.interfaces[replicaId];
+    LOG(INFO) << "Network interface for the node is: " << network_interface << " according to the provided config.";
 
 }
 

@@ -23,3 +23,19 @@ cc_library(
     ],
     visibility = ["//visibility:public"],
 )
+
+cc_library(
+    name = "net_latency_controller",
+    srcs = ["net_latency_controller.cpp"],
+    hdrs = [
+        "net_latency_controller.h",
+    ],
+    deps = [
+        "@com_github_google_glog//:glog",
+    ],
+    copts = [
+        "-std=c++17",
+        # Add other compiler options here
+    ],
+    visibility = ["//visibility:public"],
+)

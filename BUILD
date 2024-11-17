@@ -17,6 +17,7 @@ cc_library(
         "//proto:raft_leader_election_cc_proto",
         "//lib:utils",  
         "//lib:tcp_stat_manager",
+        "//lib:net_latency_controller",
     ],
     visibility = ["//visibility:public"],  # Make this library available to other rules.
     copts = ["-std=c++17"], 

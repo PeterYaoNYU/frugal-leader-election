@@ -5,6 +5,12 @@ replica:
   - "127.0.0.4"
   - "127.0.0.5"
   - "127.0.0.6"
+  interfaces:
+  - "eth1"
+  - "eth1"
+  - "eth1"
+  - "eth1"
+  - "eth1"
   runtimeSeconds: 300
   timeoutLowerBound: 150
   timeoutUpperBound: 300
@@ -14,9 +20,10 @@ replica:
   port: 7859
   delayLowerBound: 10
   delayUpperBound: 250
-  useSimulatedLinks: false
-  linkLossRate: 0.1
+  useSimulatedLinks: true
+  linkLossRate: 0.0
   checkFalsePositiveRate: true
   tcp_monitor: true
   confidenceLevel: 0.95
   heartbeatIntervalMargin: 85
+  testPetition: true

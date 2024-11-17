@@ -23,6 +23,7 @@ public:
 
 struct ProcessConfig {
     std::vector<std::string> peerIPs;
+    std::vector<std::string> interfaces;
     int port;
     // after this many seconds, stop running the process
     int runtimeSeconds;
@@ -96,6 +97,7 @@ struct ProcessConfig {
 
         try {
             parseStringVector(peerIPs, replicaNode, "ips");
+            parseStringVector(interfaces, replicaNode, "interfaces");
             port = parseField<int>(replicaNode, "port");
             runtimeSeconds = parseField<int>(replicaNode, "runtimeSeconds");
 

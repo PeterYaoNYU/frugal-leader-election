@@ -21,6 +21,8 @@
 #include "lib/utils.h"
 
 #include "lib/tcp_stat_manager.h"
+
+#include "lib/net_latency_controller.h"
 class Node {
 public:
     // Node(int port, const std::string& peers);
@@ -110,6 +112,10 @@ private:
     // Thresholds and configurations
     double latency_threshold = 75.0; // Threshold in milliseconds
     int majority_count; // Number of nodes required for majority
+
+    std::string network_interface;
+
+    NetLatencyController net_latency_controller;
 
     void start_election_timeout();
     void reset_election_timeout();
