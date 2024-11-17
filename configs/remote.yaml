@@ -5,6 +5,12 @@ replica:
   - "10.0.3.2"
   - "10.0.4.2"
   - "10.0.5.2"
+  interfaces:
+  - "eth1"
+  - "eth1"
+  - "eth1"
+  - "eth1"
+  - "eth1"
   runtimeSeconds: 1200
   timeoutLowerBound: 150
   timeoutUpperBound: 300
