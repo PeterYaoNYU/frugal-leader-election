@@ -33,11 +33,11 @@ import threading
 # ]
 
 nodes = [
-    {"host": "c220g2-011102.wisc.cloudlab.us", "port": 25810},
-    {"host": "c220g2-011115.wisc.cloudlab.us", "port": 25810},
-    {"host": "c220g2-010627.wisc.cloudlab.us", "port": 25810},
-    {"host": "c220g2-010630.wisc.cloudlab.us", "port": 25810},
-    {"host": "c220g2-011102.wisc.cloudlab.us", "port": 25811},
+    {"host": "c220g5-111203.wisc.cloudlab.us", "port": 32810},
+    {"host": "c220g5-111203.wisc.cloudlab.us", "port": 32811},
+    {"host": "c220g5-111203.wisc.cloudlab.us", "port": 32812},
+    {"host": "c220g5-111203.wisc.cloudlab.us", "port": 32813},
+    {"host": "c220g5-111203.wisc.cloudlab.us", "port": 32814},
 ]
 
 # SSH username
