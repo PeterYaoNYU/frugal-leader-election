@@ -12,11 +12,11 @@ import threading
 # ]
 
 nodes = [
-    {"host": "c220g5-111203.wisc.cloudlab.us", "port": 32810},
-    {"host": "c220g5-111203.wisc.cloudlab.us", "port": 32811},
-    {"host": "c220g5-111203.wisc.cloudlab.us", "port": 32812},
-    {"host": "c220g5-111203.wisc.cloudlab.us", "port": 32813},
-    {"host": "c220g5-111203.wisc.cloudlab.us", "port": 32814},
+    {"host": "c220g2-010805.wisc.cloudlab.us", "port": 22},
+    {"host": "c220g2-010803.wisc.cloudlab.us", "port": 22},
+    {"host": "c220g2-010812.wisc.cloudlab.us", "port": 22},
+    {"host": "c220g2-010809.wisc.cloudlab.us", "port": 22},
+    {"host": "c220g2-010802.wisc.cloudlab.us", "port": 22},
 ]
 
 # nodes = [
@@ -75,8 +75,8 @@ def execute_on_node(node, id, build_bazel=False, build_invoke=False, build_fabri
         # conn.run(f"rm -rf frugal-leader-election", hide=True)
         
         # # Clone the repository
-        # conn.run(f"git clone {repo_url}", hide=True)
-        # print(f"Repository cloned on {node['host']}:{node['port']}")
+        conn.run(f"git clone {repo_url}", hide=True)
+        print(f"Repository cloned on {node['host']}:{node['port']}")
         
         conn.run(f"cd frugal-leader-election && git checkout main && git pull && bazel build //:leader_election")
         
