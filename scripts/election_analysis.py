@@ -165,7 +165,7 @@ def main():
         print("No leader term data found in the logs.")
     else:
         # Calculate number of terms where 10.10.4.2:7912 was the leader
-        target_leader = '10.10.4.2:7912'
+        target_leader = '10.0.4.2:7912'
         leader_count = sum(1 for leader in term_leaders.values() if leader == target_leader)
         total_terms = len(term_leaders)
         proportion_leader = (leader_count / total_terms) * 100 if total_terms > 0 else 0

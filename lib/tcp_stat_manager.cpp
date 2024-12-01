@@ -377,6 +377,20 @@ bool convertIpToInAddr(const std::string& ipStr, struct in_addr& addr) {
 
 
 void TcpStatManager::readTcpStats(const std::string& filterIp, bool filterBySource) {
+    auto now = std::chrono::steady_clock::now();
+    {
+        std::lock_guard<std::mutex> lock(statsMutex);
+        for (auto it = connectionStats.begin(); it != connectionStats.end();) {
+            if (std::chrono::duration_cast<std::chrono::seconds>(now - it->second.lastUpdated).count() > 3) {
+                it = connectionStats.erase(it); // Remove outdated entry
+            } else {
+                ++it;
+            }
+        }
+    }
+
+
+
     // LOG(INFO) << "Reading TCP stats using Netlink socket";
     int sock = socket(AF_NETLINK, SOCK_RAW, NETLINK_INET_DIAG);
     if (sock < 0) {
@@ -533,6 +547,8 @@ void TcpStatManager::processNetlinkResponse(const char* buffer, int len) {
 
         // LOG(INFO) << "Raw tcpi_rttvar: " << rtt_var;
 
+        auto now = std::chrono::steady_clock::now(); 
+
         // Convert RTT and RTT variance to milliseconds
         double rtt_ms = rtt / 1000.0;
         double rtt_var_ms = rtt_var / 1000.0;
@@ -541,13 +557,13 @@ void TcpStatManager::processNetlinkResponse(const char* buffer, int len) {
                   << ", RTT: " << rtt_ms << " ms, RTT Variance: " << rtt_var_ms << " ms, Retransmissions: " << retrans;
 
         // Aggregate stats
-        aggregateTcpStats(src_ip, dst_ip, rtt_ms, rtt_var_ms, retrans);
+        aggregateTcpStats(src_ip, dst_ip, rtt_ms, rtt_var_ms, retrans, now);
     }
 
     // LOG(INFO) << "DONE Processed Netlink response";
 }
 
-void TcpStatManager::aggregateTcpStats(const std::string& src_ip, const std::string& dst_ip, double rtt, double rttVar, uint32_t retransmissions) {
+void TcpStatManager::aggregateTcpStats(const std::string& src_ip, const std::string& dst_ip, double rtt, double rttVar, uint32_t retransmissions, std::chrono::steady_clock::time_point now) {
     std::lock_guard<std::mutex> lock(statsMutex); 
     
     auto key = std::make_pair(src_ip, dst_ip);
@@ -559,6 +575,7 @@ void TcpStatManager::aggregateTcpStats(const std::string& src_ip, const std::str
         stats.retransmissions = retransmissions;
         stats.count = 1;
         connectionStats[key] = stats;
+        stats.lastUpdated = now;
         // LOG(INFO) << "Added stats for new connection: " << src_ip << " -> " << dst_ip
         //           << ", RTT: " << rtt << " ms, rttvat: " << rttVar;
     } else {
@@ -571,6 +588,7 @@ void TcpStatManager::aggregateTcpStats(const std::string& src_ip, const std::str
         stats.rttVarSamples.push_back(rttVar);
         stats.retransmissions += retransmissions;
         stats.count++;
+        stats.lastUpdated = now;
         // LOG(INFO) << "Added stats for connection: " << src_ip << " -> " << dst_ip
         //           << ", RTT: " << rtt << " ms, rttvar: " << rttVar;
     }

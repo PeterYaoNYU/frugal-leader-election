@@ -66,6 +66,7 @@ struct TcpConnectionStats {
     double meanRttVar() const;
     std::pair<double, double> rttConfidenceInterval(double confidenceLevel) const;
     double jacobsonEst() const;
+    std::chrono::steady_clock::time_point lastUpdated;
 };
 
 class TcpStatManager {
@@ -90,7 +91,7 @@ private:
     void readTcpStats(const std::string& filterIp, bool filterBySource);
 
     void processNetlinkResponse(const char* buffer, int len);
-    void aggregateTcpStats(const std::string& src_ip, const std::string& dst_ip, double rtt,double rttVar, uint32_t  retransmissions);
+    void aggregateTcpStats(const std::string& src_ip, const std::string& dst_ip, double rtt,double rttVar, uint32_t  retransmissions, std::chrono::steady_clock::time_point now);
 
     void initializeThreadPool(size_t numThreads);
     void shutdownThreadPool();
