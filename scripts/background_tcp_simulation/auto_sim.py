@@ -32,13 +32,24 @@ import threading
 #     {"host": "pc603.emulab.net", "port": 29442},
 # ]
 
+
+# VERY IMPORTANT!
+# the order should reeally match the ip list
 nodes = [
-    {"host": "c220g2-010805.wisc.cloudlab.us", "port": 22},
-    {"host": "c220g2-010803.wisc.cloudlab.us", "port": 22},
-    {"host": "c220g2-010812.wisc.cloudlab.us", "port": 22},
-    {"host": "c220g2-010809.wisc.cloudlab.us", "port": 22},
-    {"host": "c220g2-010802.wisc.cloudlab.us", "port": 22},
+    {"host": "c220g1-031113.wisc.cloudlab.us", "port": 22},
+    {"host": "c220g1-031130.wisc.cloudlab.us", "port": 22},
+    {"host": "c220g1-031108.wisc.cloudlab.us", "port": 22},
+    {"host": "c220g1-031125.wisc.cloudlab.us", "port": 22},
+    {"host": "c220g1-031129.wisc.cloudlab.us", "port": 22},
 ]
+
+# nodes = [
+#     {"host": "c220g2-010808.wisc.cloudlab.us", "port": 22},
+#     {"host": "c220g2-010608.wisc.cloudlab.us", "port": 22},
+#     {"host": "c220g2-010804.wisc.cloudlab.us", "port": 22},
+#     {"host": "c220g2-010813.wisc.cloudlab.us", "port": 22},
+#     {"host": "c220g2-010604.wisc.cloudlab.us", "port": 22},
+# ]
 
 # SSH username
 username = "PeterYao"
@@ -64,7 +75,7 @@ def execute_on_node(node, id):
         # conn.run(f"python3 {target_script} {id} 7777", hide=True)
         
         # Run the target Python script without waiting for it to finish
-        conn.run(f"nohup python3 {target_script} {id} 7123 &", hide=True, warn=True, asynchronous=True)
+        conn.run(f"nohup python3 {target_script} {id} 7899 &", hide=False, warn=True, asynchronous=True)
         
         print(f"Script executed on {node['host']}:{node['port']}")
     except Exception as e:

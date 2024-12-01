@@ -47,11 +47,11 @@ processes = {}
 # ]
 
 nodes = [
-    {"host": "c220g2-010805.wisc.cloudlab.us", "port": 22},
-    {"host": "c220g2-010803.wisc.cloudlab.us", "port": 22},
-    {"host": "c220g2-010812.wisc.cloudlab.us", "port": 22},
-    {"host": "c220g2-010809.wisc.cloudlab.us", "port": 22},
-    {"host": "c220g2-010802.wisc.cloudlab.us", "port": 22},
+    {"host": "c220g1-031113.wisc.cloudlab.us", "port": 22},
+    {"host": "c220g1-031130.wisc.cloudlab.us", "port": 22},
+    {"host": "c220g1-031108.wisc.cloudlab.us", "port": 22},
+    {"host": "c220g1-031125.wisc.cloudlab.us", "port": 22},
+    {"host": "c220g1-031129.wisc.cloudlab.us", "port": 22},
 ]
 
 
