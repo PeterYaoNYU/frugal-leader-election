@@ -528,6 +528,8 @@ void TcpStatManager::processNetlinkResponse(const char* buffer, int len) {
         uint32_t retrans = 0;
         uint32_t lastsnd = 0;
 
+        bool discardMessage = false;
+
         struct rtattr *attr = (struct rtattr *)(diag_msg + 1);
         int rta_len = nlh->nlmsg_len - NLMSG_LENGTH(sizeof(*diag_msg));
 
@@ -541,9 +543,14 @@ void TcpStatManager::processNetlinkResponse(const char* buffer, int len) {
 
                 if (lastsnd > 600) {
                     LOG(INFO) << "Last send time: " << lastsnd << " which is too far back into history, DISCARDING";
-                    continue;
+                    discardMessage = true;
+                    break;
                 }
             }
+        }
+
+        if (discardMessage) {
+            continue;
         }
 
         // LOG(INFO) << "Raw tcpi_rttvar: " << rtt_var;
