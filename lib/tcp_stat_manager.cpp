@@ -377,18 +377,18 @@ bool convertIpToInAddr(const std::string& ipStr, struct in_addr& addr) {
 
 
 void TcpStatManager::readTcpStats(const std::string& filterIp, bool filterBySource) {
-    auto now = std::chrono::steady_clock::now();
-    {
-        std::lock_guard<std::mutex> lock(statsMutex);
-        for (auto it = connectionStats.begin(); it != connectionStats.end();) {
-            if (std::chrono::duration_cast<std::chrono::seconds>(now - it->second.lastUpdated).count() > 3) {
-                it = connectionStats.erase(it); // Remove outdated entry
-                LOG(INFO) << "Removed outdated connection stats: " << it->first.first << " -> " << it->first.second << " time since last update(seconds): " << std::chrono::duration_cast<std::chrono::seconds>(now - it->second.lastUpdated).count();
-            } else {
-                ++it;
-            }
-        }
-    }
+    // auto now = std::chrono::steady_clock::now();
+    // {
+    //     std::lock_guard<std::mutex> lock(statsMutex);
+    //     for (auto it = connectionStats.begin(); it != connectionStats.end();) {
+    //         if (std::chrono::duration_cast<std::chrono::seconds>(now - it->second.lastUpdated).count() > 3) {
+    //             it = connectionStats.erase(it); // Remove outdated entry
+    //             LOG(INFO) << "Removed outdated connection stats: " << it->first.first << " -> " << it->first.second << " time since last update(seconds): " << std::chrono::duration_cast<std::chrono::seconds>(now - it->second.lastUpdated).count();
+    //         } else {
+    //             ++it;
+    //         }
+    //     }
+    // }
 
 
 
