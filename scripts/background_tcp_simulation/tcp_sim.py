@@ -7,7 +7,7 @@ import time
 active_sockets = []
 active_sockets_lock = threading.Lock()
 
-def start_tcp_connection(target_ip, target_port, duration=50000, message_size=64, send_interval=0.5):
+def start_tcp_connection(target_ip, target_port, source_ip, duration=50000, message_size=64, send_interval=0.5):
     """
     Creates a persistent TCP connection with the specified target and sends messages at a frequent interval.
 
@@ -35,7 +35,11 @@ def start_tcp_connection(target_ip, target_port, duration=50000, message_size=64
                 s.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 5)
             elif sys.platform == 'darwin':  # macOS
                 s.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPALIVE, 60)
-            
+                
+            # Bind to a specific source IP address (if available)
+            if source_ip:
+                s.bind((source_ip, 0))
+                
             s.connect((target_ip, target_port))
             with active_sockets_lock:
                 active_sockets.append(s)
@@ -142,7 +146,7 @@ def main(node_id, central_port):
         # target_ip = node_ip_format.format(target_id)
         target_ip = node_ip_list[target_id - 1]
         for i in range(1):  # Start 10 TCP connections to the target node
-            thread = threading.Thread(target=start_tcp_connection, args=(target_ip, central_port))
+            thread = threading.Thread(target=start_tcp_connection, args=(target_ip, central_port, listen_ip))
             thread.start()
             threads.append(thread)
             time.sleep(0.1)  # Small delay to avoid overwhelming the target
