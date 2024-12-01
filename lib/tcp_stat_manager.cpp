@@ -383,6 +383,7 @@ void TcpStatManager::readTcpStats(const std::string& filterIp, bool filterBySour
         for (auto it = connectionStats.begin(); it != connectionStats.end();) {
             if (std::chrono::duration_cast<std::chrono::seconds>(now - it->second.lastUpdated).count() > 3) {
                 it = connectionStats.erase(it); // Remove outdated entry
+                LOG(INFO) << "Removed outdated connection stats: " << it->first.first << " -> " << it->first.second << " time since last update(seconds): " << std::chrono::duration_cast<std::chrono::seconds>(now - it->second.lastUpdated).count();
             } else {
                 ++it;
             }
@@ -538,7 +539,7 @@ void TcpStatManager::processNetlinkResponse(const char* buffer, int len) {
                 retrans = tcpi->tcpi_total_retrans;
                 lastsnd = tcpi->tcpi_last_data_sent;
 
-                if (lastsnd > 1000) {
+                if (lastsnd > 600) {
                     LOG(INFO) << "Last send time: " << lastsnd << " which is too far back into history, DISCARDING";
                     continue;
                 }
@@ -553,8 +554,8 @@ void TcpStatManager::processNetlinkResponse(const char* buffer, int len) {
         double rtt_ms = rtt / 1000.0;
         double rtt_var_ms = rtt_var / 1000.0;
 
-        LOG(INFO) << "Netlink INFO: " << src_ip << " -> " << dst_ip
-                  << ", RTT: " << rtt_ms << " ms, RTT Variance: " << rtt_var_ms << " ms, Retransmissions: " << retrans;
+        LOG(INFO) << "Registering Netlink INFO: " << src_ip << " -> " << dst_ip
+                  << ", RTT: " << rtt_ms << " ms, RTT Variance: " << rtt_var_ms << " ms, Retransmissions: " << retrans << ", Last Send: " << lastsnd;
 
         // Aggregate stats
         aggregateTcpStats(src_ip, dst_ip, rtt_ms, rtt_var_ms, retrans, now);
