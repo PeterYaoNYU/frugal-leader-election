@@ -259,8 +259,8 @@ void Node::start_election_timeout() {
         int total_peers = peer_addresses.size();
 
         // make these numbers configurable later:
-        int lower_bound = 20 + 4 * my_rank;
-        int upper_bound = 20 + 4 * (my_rank + 1);
+        int lower_bound = 30 + 4 * my_rank;
+        int upper_bound = 30 + 4 * (my_rank + 1);
 
         std::uniform_int_distribution<int> delay_distribution(lower_bound, upper_bound);
         int delay_ms = delay_distribution(rng);

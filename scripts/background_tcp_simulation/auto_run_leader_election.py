@@ -89,7 +89,7 @@ def execute_on_node(node, id, build_bazel=False, build_invoke=False, build_fabri
             conn.run(f"git clone {repo_url}", hide=True)
         # print(f"Repository cloned on {node['host']}:{node['port']}")
         
-        conn.run(f"cd frugal-leader-election && git checkout main && git pull && bazel build //:leader_election")
+        conn.run(f"cd frugal-leader-election && git checkout main && git stash save && git pull && bazel build //:leader_election")
         
         # conn.run("cd frugal-leader-election && git pull")
 
