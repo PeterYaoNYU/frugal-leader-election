@@ -35,13 +35,24 @@ import threading
 
 # VERY IMPORTANT!
 # the order should reeally match the ip list
+
 nodes = [
-    {"host": "c220g1-031113.wisc.cloudlab.us", "port": 22},
-    {"host": "c220g1-031130.wisc.cloudlab.us", "port": 22},
-    {"host": "c220g1-031108.wisc.cloudlab.us", "port": 22},
-    {"host": "c220g1-031125.wisc.cloudlab.us", "port": 22},
-    {"host": "c220g1-031129.wisc.cloudlab.us", "port": 22},
+    {"host": "c220g2-010828.wisc.cloudlab.us", "port": 26610},
+    {"host": "c220g2-010823.wisc.cloudlab.us", "port": 26610},
+    {"host": "c220g2-010823.wisc.cloudlab.us", "port": 26611},
+    {"host": "c220g2-010828.wisc.cloudlab.us", "port": 26611},
+    {"host": "c220g2-010823.wisc.cloudlab.us", "port": 26612},
+    # {"host": "c240g5-110103.wisc.cloudlab.us", "port": 26612},
 ]
+
+
+# nodes = [
+#     {"host": "c220g1-031113.wisc.cloudlab.us", "port": 22},
+#     {"host": "c220g1-031130.wisc.cloudlab.us", "port": 22},
+#     {"host": "c220g1-031108.wisc.cloudlab.us", "port": 22},
+#     {"host": "c220g1-031125.wisc.cloudlab.us", "port": 22},
+#     {"host": "c220g1-031129.wisc.cloudlab.us", "port": 22},
+# ]
 
 # nodes = [
 #     {"host": "c220g2-010808.wisc.cloudlab.us", "port": 22},

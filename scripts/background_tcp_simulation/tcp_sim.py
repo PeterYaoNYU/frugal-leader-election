@@ -119,9 +119,9 @@ def main(node_id, central_port):
     
     # node_ip_list = ["10.0.2.1", "10.0.1.2", "10.0.3.2", "10.0.4.2", "10.0.5.2"]
     
-    node_ip_list = ["10.0.4.2", "10.0.2.1", "10.0.2.2", "10.0.3.2", "10.0.5.2"]
+    # node_ip_list = ["10.0.4.2", "10.0.2.1", "10.0.2.2", "10.0.3.2", "10.0.5.2"]
     
-
+    node_ip_list = ["10.0.1.2", "10.0.2.2", "10.0.3.2", "10.0.4.2", "10.0.5.2"]
     # Validate the node ID
     if node_id < 1 or node_id > 5:
         print("Node ID must be between 1 and 5.")
