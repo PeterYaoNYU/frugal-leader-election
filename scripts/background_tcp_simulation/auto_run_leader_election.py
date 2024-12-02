@@ -11,13 +11,23 @@ import threading
 #     {"host": "c240g5-110103.wisc.cloudlab.us", "port": 26015},
 # ]
 
+
 nodes = [
-    {"host": "c220g1-031113.wisc.cloudlab.us", "port": 22},
-    {"host": "c220g1-031130.wisc.cloudlab.us", "port": 22},
-    {"host": "c220g1-031108.wisc.cloudlab.us", "port": 22},
-    {"host": "c220g1-031125.wisc.cloudlab.us", "port": 22},
-    {"host": "c220g1-031129.wisc.cloudlab.us", "port": 22},
+    {"host": "c220g2-010828.wisc.cloudlab.us", "port": 26610},
+    {"host": "c220g2-010823.wisc.cloudlab.us", "port": 26610},
+    {"host": "c220g2-010823.wisc.cloudlab.us", "port": 26611},
+    {"host": "c220g2-010828.wisc.cloudlab.us", "port": 26611},
+    {"host": "c220g2-010823.wisc.cloudlab.us", "port": 26612},
+    # {"host": "c240g5-110103.wisc.cloudlab.us", "port": 26612},
 ]
+
+# nodes = [
+#     {"host": "c220g1-031113.wisc.cloudlab.us", "port": 22},
+#     {"host": "c220g1-031130.wisc.cloudlab.us", "port": 22},
+#     {"host": "c220g1-031108.wisc.cloudlab.us", "port": 22},
+#     {"host": "c220g1-031125.wisc.cloudlab.us", "port": 22},
+#     {"host": "c220g1-031129.wisc.cloudlab.us", "port": 22},
+# ]
 
 # nodes = [
 #     {"host": "pc605.emulab.net", "port": 29442},
@@ -54,8 +64,8 @@ def build_install_bazel(conn):
         print(f"Failed to install Bazel on {conn.host}:{conn.port} - {e}")
     
     
-def execute_on_node(node, id, build_bazel=False, build_invoke=False, build_fabric=False):    
-# def execute_on_node(node, id, build_bazel=True, build_invoke=True, build_fabric=True):
+# def execute_on_node(node, id, build_bazel=False, build_invoke=False, build_fabric=False):    
+def execute_on_node(node, id, build_bazel=True, build_invoke=True, build_fabric=True):
     try:
         # Establish SSH connection
         conn = Connection(host=node["host"], user=username, port=node["port"])
