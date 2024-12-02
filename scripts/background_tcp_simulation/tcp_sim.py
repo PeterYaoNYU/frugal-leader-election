@@ -128,8 +128,8 @@ def main(node_id, central_port):
         sys.exit(1)
 
     # Start listening for incoming connections
-    # listen_ip = node_ip_format.format(node_id)
-    listen_ip = node_ip_list[node_id - 1]
+    listen_ip = node_ip_format.format(node_id)
+    # listen_ip = node_ip_list[node_id - 1]
     listen_thread = threading.Thread(target=listen_for_connections, args=(listen_ip, central_port))
     listen_thread.start()
     
@@ -143,8 +143,8 @@ def main(node_id, central_port):
         if target_id == node_id:
             continue  # Skip connecting to itself
 
-        # target_ip = node_ip_format.format(target_id)
-        target_ip = node_ip_list[target_id - 1]
+        target_ip = node_ip_format.format(target_id)
+        # target_ip = node_ip_list[target_id - 1]
         for i in range(1):  # Start 10 TCP connections to the target node
             thread = threading.Thread(target=start_tcp_connection, args=(target_ip, central_port, listen_ip))
             thread.start()
