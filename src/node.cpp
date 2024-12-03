@@ -40,7 +40,9 @@ Node::Node(const ProcessConfig& config, int replicaId)
       penalty_scores(),  // Initialize the penalty_scores map
       petition_count(),  // Initialize the petition_count map
       latency_threshold(100.0), // Set your desired latency threshold
-      majority_count((config.peerIPs.size() + 1) / 2 + 1) // Calculate majority count
+      majority_count((config.peerIPs.size() + 1) / 2 + 1), // Calculate majority count
+      safety_margin_lower_bound(config.safetyMarginLowerBound),
+      safety_margin_step_size(config.safetyMarginStepSize)
 {
     election_timer.data = this;
     heartbeat_timer.data = this;
@@ -259,8 +261,8 @@ void Node::start_election_timeout() {
         int total_peers = peer_addresses.size();
 
         // make these numbers configurable later:
-        int lower_bound = 10 + 4 * my_rank;
-        int upper_bound = 10 + 4 * (my_rank + 1);
+        int lower_bound = safety_margin_lower_bound + safety_margin_step_size * my_rank;
+        int upper_bound = safety_margin_lower_bound + safety_margin_step_size * (my_rank + 1);
 
         std::uniform_int_distribution<int> delay_distribution(lower_bound, upper_bound);
         int delay_ms = delay_distribution(rng);

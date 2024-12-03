@@ -117,6 +117,9 @@ private:
 
     NetLatencyController net_latency_controller;
 
+    int safety_margin_lower_bound;
+    int safety_margin_step_size;
+
     void start_election_timeout();
     void reset_election_timeout();
     static void election_timeout_cb(EV_P_ ev_timer* w, int revents);

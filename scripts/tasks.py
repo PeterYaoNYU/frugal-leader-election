@@ -562,5 +562,6 @@ def automate_exp(c, config_files):
         
         # Run multiple experiments with the current config file
         run_multiple_experiments(c, config_file=config_file, times=5, wait_time=530)
+        download_logs_default(c)
 
     print("\nAll automated experiments completed.")

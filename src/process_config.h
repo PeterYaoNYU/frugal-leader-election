@@ -47,6 +47,8 @@ struct ProcessConfig {
     double confidenceLevel;
     int heartbeatIntervalMargin;
 
+    int safetyMarginLowerBound;
+    int safetyMarginStepSize;
 
 
     template <class T> T parseField(const YAML::Node &parent, const std::string &key)
@@ -115,6 +117,8 @@ struct ProcessConfig {
             confidenceLevel = parseField<double>(replicaNode, "confidenceLevel");
             heartbeatIntervalMargin = parseField<int>(replicaNode, "heartbeatIntervalMargin");
 
+            safetyMarginLowerBound = parseField<int>(replicaNode, "safetyMarginLowerBound");
+            safetyMarginStepSize = parseField<int>(replicaNode, "safetyMarginStepSize");
         } catch (const ConfigParseException &e) {
             throw ConfigParseException("Error parsing replica " + std::string(e.what()));
         }
