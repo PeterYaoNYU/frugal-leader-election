@@ -68,7 +68,7 @@ double TcpConnectionStats::jacobsonEst() const {
     double rto = srtt + 4 * rttvar;
 
     // Ensure RTO is at least a minimum threshold, in our case 300ms
-    const double max_RTO = 300;
+    const double max_RTO = 800;
     return std::min(rto, max_RTO);
 }
 
