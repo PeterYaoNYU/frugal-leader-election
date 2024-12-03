@@ -17,8 +17,8 @@ replica:
   - "eth1"
   - "eth1"
   runtimeSeconds: 240
-  timeoutLowerBound: 150
-  timeoutUpperBound: 300
+  timeoutLowerBound: 500
+  timeoutUpperBound: 900
   failureLeader: false
   # if the failureLeader is true, after maxHeartbeats number of heartbeats, the leader will fail
   maxHeartbeats: 100

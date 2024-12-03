@@ -17,7 +17,7 @@ Node::Node(const ProcessConfig& config, int replicaId)
       port(config.port),                                  // 10
       peer_addresses(),                            // 11 (initialized in the body)
       rng(std::random_device{}()),                 // 12
-      dist(150, 300),                              // 13
+      dist(config.timeoutLowerBound, config.timeoutUpperBound),                              // 13
       election_dist(500, 900),
       failure_leader(config.failureLeader),                       // 14
       current_leader_ip(""),                       // 15
@@ -40,7 +40,7 @@ Node::Node(const ProcessConfig& config, int replicaId)
       self_id(replicaId),
       penalty_scores(),  // Initialize the penalty_scores map
       petition_count(),  // Initialize the petition_count map
-      latency_threshold(100.0), // Set your desired latency threshold
+      latency_threshold(1000.0), // Set your desired latency threshold
       majority_count((config.peerIPs.size() + 1) / 2 + 1), // Calculate majority count
       safety_margin_lower_bound(config.safetyMarginLowerBound),
       safety_margin_step_size(config.safetyMarginStepSize)
@@ -208,7 +208,7 @@ void Node::shutdown_cb(EV_P_ ev_timer* w, int revents) {
 }
 
 void Node::start_election_timeout(bool double_time, bool force_raft) {
-    double timeout = election_dist(rng) / 1000.0; // Convert ms to seconds
+    double timeout = dist(rng) / 1000.0; // Convert ms to seconds
 
     bool using_raft_timeout = true;
 
