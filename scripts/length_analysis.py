@@ -4,6 +4,32 @@ from collections import defaultdict
 from pathlib import Path
 import numpy as np
 
+
+import os
+import argparse
+import re
+
+def find_largest_folder(base_dir):
+    """
+    Finds the largest subfolder within the base_dir based on the number of files.
+    
+    Args:
+        base_dir (str): The base directory to search within.
+    
+    Returns:
+        str: The path to the largest subfolder.
+    """
+    subfolders = [f.path for f in os.scandir(base_dir) if f.is_dir()]
+    if not subfolders:
+        return None
+    
+    print(subfolders)
+    
+    # Find the subfolder with the maximum number of files
+    largest_folder = max(subfolders)
+    return largest_folder
+
+
 def plot_heartbeat_lengths(log_file, output_dir="plots"):
     """
     Parses the log file to determine the length of each term in heartbeats
@@ -114,7 +140,18 @@ def bulk_process_logs(log_dir, start_idx, end_idx, output_dir="plots"):
 
 # Example usage for a single file
 # plot_heartbeat_lengths("./downloaded_logs/remote/node_5_run_1.log", output_dir="custom_plots")
+parser = argparse.ArgumentParser(description='Process log files to calculate rank 0 proportions.')
+parser.add_argument('--base_dir', default='./downloaded_logs/', help='Base directory containing log folders.')
+args = parser.parse_args()
 
+base_dir = args.base_dir
+
+# Find the largest folder in the base_dir
+largest_folder = find_largest_folder(base_dir)
+if not largest_folder:
+    print(f"No subfolders found in '{base_dir}'. Exiting.")
+
+print(f"Largest folder found: {largest_folder}")
 # Example usage for bulk processing
-bulk_process_logs("./downloaded_logs/20241202_201932", start_idx=1, end_idx=5, output_dir="jacobson_variation_try13_300s_4rttvar+10-20random")
+bulk_process_logs(largest_folder, start_idx=1, end_idx=1, output_dir="jacobson_variation_try13_300s_4rttvar+10-20random")
 # plot_heartbeat_lengths("./downloaded_logs/20241102_130839/node_.log", output_dir="jacobson6_variation_try8_500s_4rttvar+random")
