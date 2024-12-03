@@ -40,7 +40,7 @@ def parse_election_timeouts(log_dir):
 
     # Define the regex pattern to match the election timeout lines
     pattern = r"Using Jacobson estimation for election timeout: ([\d\.]+) Milliseconds, additional delay: (\d+) Milliseconds"
-
+    pattern = r"Using Raft timeout for election timeout: ([\d\.]+) seconds"
     # Get all files in the directory
     for filename in os.listdir(log_dir):
         filepath = os.path.join(log_dir, filename)
@@ -50,23 +50,23 @@ def parse_election_timeouts(log_dir):
                     match = re.search(pattern, line)
                     if match:
                         election_timeout_value = float(match.group(1))
-                        additional_delay = int(match.group(2))
+                        # additional_delay = int(match.group(2))
                         # Convert election_timeout_value to milliseconds
                         election_timeout_ms = election_timeout_value * 1000
                         # Total election timeout
-                        total_election_timeout_ms = election_timeout_ms + additional_delay
+                        total_election_timeout_ms = election_timeout_ms
                         election_timeouts[filename].append(total_election_timeout_ms)
 
     return election_timeouts
 
-def process_election_timeouts(base_dir):
+def process_election_timeouts(base_dir, largets_folder):
     # Find the largest folder in the base_dir
-    largest_folder = find_largest_folder(base_dir)
-    if not largest_folder:
-        print(f"No subfolders found in '{base_dir}'. Exiting.")
-        return
+    # largest_folder = find_largest_folder(base_dir)
+    # if not largest_folder:
+    #     print(f"No subfolders found in '{base_dir}'. Exiting.")
+    #     return
 
-    print(f"Largest folder found: {largest_folder}")
+    # print(f"Largest folder found: {largest_folder}")
 
     # Parse the election timeouts from the logs in the largest folder
     election_timeouts = parse_election_timeouts(largest_folder)
@@ -108,4 +108,5 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     base_dir = args.base_dir
-    process_election_timeouts(base_dir)
+    largest_folder = "./downloaded_logs/100ms 100ms normal raft"
+    process_election_timeouts(base_dir, largest_folder)

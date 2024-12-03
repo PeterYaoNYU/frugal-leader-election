@@ -1,8 +1,8 @@
-sudo tc qdisc add dev vlan1140 root netem delay 200ms 10ms distribution normal
-sudo tc qdisc add dev vlan1159 root netem delay 200ms 10ms distribution normal
-sudo tc qdisc add dev vlan1191 root netem delay 200ms 10ms distribution normal
-sudo tc qdisc add dev vlan1213 root netem delay 200ms 10ms distribution normal
-sudo tc qdisc add dev vlan1221 root netem delay 200ms 10ms distribution normal
+sudo tc qdisc add dev vlan1140 root netem delay 100ms 175ms distribution normal
+sudo tc qdisc add dev vlan1159 root netem delay 100ms 175ms distribution normal
+sudo tc qdisc add dev vlan1191 root netem delay 100ms 175ms distribution normal
+sudo tc qdisc add dev vlan1213 root netem delay 100ms 175ms distribution normal
+sudo tc qdisc add dev vlan1221 root netem delay 100ms 175ms distribution normal
 
 
 

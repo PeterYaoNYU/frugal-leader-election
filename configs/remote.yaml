@@ -16,7 +16,7 @@ replica:
   - "eth1"
   - "eth1"
   - "eth1"
-  runtimeSeconds: 240
+  runtimeSeconds: 300
   timeoutLowerBound: 150
   timeoutUpperBound: 300
   failureLeader: false
