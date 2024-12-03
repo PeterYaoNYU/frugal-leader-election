@@ -18,6 +18,7 @@ Node::Node(const ProcessConfig& config, int replicaId)
       peer_addresses(),                            // 11 (initialized in the body)
       rng(std::random_device{}()),                 // 12
       dist(150, 300),                              // 13
+      election_dist(500, 600),
       failure_leader(config.failureLeader),                       // 14
       current_leader_ip(""),                       // 15
       current_leader_port(-1),                     // 16
@@ -207,7 +208,7 @@ void Node::shutdown_cb(EV_P_ ev_timer* w, int revents) {
 }
 
 void Node::start_election_timeout() {
-    double timeout = dist(rng) / 1000.0; // Convert ms to seconds
+    double timeout = election_dist(rng) / 1000.0; // Convert ms to seconds
 
     bool using_raft_timeout = true;
 

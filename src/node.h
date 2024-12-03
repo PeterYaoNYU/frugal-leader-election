@@ -68,6 +68,8 @@ private:
     // for now, we use uniform distribution, to be changed later to poisson. 
     std::uniform_real_distribution<double> loss_dist;
     std::uniform_real_distribution<double> delay_dist;
+    std::uniform_real_distribution<double> election_dist;
+
     enum Role {FOLLOWER, CANDIDATE, LEADER} role;    
 
     double link_loss_rate;
