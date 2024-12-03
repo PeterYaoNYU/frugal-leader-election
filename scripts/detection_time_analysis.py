@@ -108,5 +108,5 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     base_dir = args.base_dir
-    largest_folder = "./downloaded_logs/100ms 100ms normal raft"
+    largest_folder = "./downloaded_logs/100ms 100ms Jacobson"
     process_election_timeouts(base_dir, largest_folder)

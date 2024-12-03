@@ -119,17 +119,17 @@ def main(node_id, central_port):
     
     # node_ip_list = ["10.0.2.1", "10.0.1.2", "10.0.3.2", "10.0.4.2", "10.0.5.2"]
     
-    # node_ip_list = ["10.0.4.2", "10.0.2.1", "10.0.2.2", "10.0.3.2", "10.0.5.2"]
+    node_ip_list = ["10.10.4.2", "10.10.2.1", "10.10.2.2", "10.10.3.2", "10.10.5.2"]
     
-    node_ip_list = ["10.0.1.2", "10.0.2.2", "10.0.3.2", "10.0.4.2", "10.0.5.2"]
+    # node_ip_list = ["10.0.1.2", "10.0.2.2", "10.0.3.2", "10.0.4.2", "10.0.5.2"]
     # Validate the node ID
     if node_id < 1 or node_id > 5:
         print("Node ID must be between 1 and 5.")
         sys.exit(1)
 
     # Start listening for incoming connections
-    listen_ip = node_ip_format.format(node_id)
-    # listen_ip = node_ip_list[node_id - 1]
+    # listen_ip = node_ip_format.format(node_id)
+    listen_ip = node_ip_list[node_id - 1]
     listen_thread = threading.Thread(target=listen_for_connections, args=(listen_ip, central_port))
     listen_thread.start()
     
@@ -143,8 +143,8 @@ def main(node_id, central_port):
         if target_id == node_id:
             continue  # Skip connecting to itself
 
-        target_ip = node_ip_format.format(target_id)
-        # target_ip = node_ip_list[target_id - 1]
+        # target_ip = node_ip_format.format(target_id)
+        target_ip = node_ip_list[target_id - 1]
         for i in range(1):  # Start 10 TCP connections to the target node
             thread = threading.Thread(target=start_tcp_connection, args=(target_ip, central_port, listen_ip))
             thread.start()
