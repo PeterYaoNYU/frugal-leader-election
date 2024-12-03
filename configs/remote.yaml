@@ -16,7 +16,7 @@ replica:
   - "eth1"
   - "eth1"
   - "eth1"
-  runtimeSeconds: 600
+  runtimeSeconds: 240
   timeoutLowerBound: 150
   timeoutUpperBound: 300
   failureLeader: false
@@ -31,5 +31,5 @@ replica:
   tcp_monitor: true
   confidenceLevel: 0.999
   heartbeatIntervalMargin: 75
-  safetyMarginLowerBound: 10
+  safetyMarginLowerBound: 16
   safetyMarginStepSize: 4
