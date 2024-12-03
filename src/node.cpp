@@ -18,7 +18,7 @@ Node::Node(const ProcessConfig& config, int replicaId)
       peer_addresses(),                            // 11 (initialized in the body)
       rng(std::random_device{}()),                 // 12
       dist(150, 300),                              // 13
-      election_dist(500, 600),
+      election_dist(500, 900),
       failure_leader(config.failureLeader),                       // 14
       current_leader_ip(""),                       // 15
       current_leader_port(-1),                     // 16
