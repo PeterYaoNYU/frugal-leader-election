@@ -153,6 +153,6 @@ def bulk_process_logs(log_dir, start_idx, end_idx, output_dir="plots"):
 
 # print(f"Largest folder found: {largest_folder}")
 # Example usage for bulk processing
-largest_folder = "./downloaded_logs/20241203_150514/"
+largest_folder = "./downloaded_logs/20241203_183205/"
 bulk_process_logs(largest_folder, start_idx=1, end_idx=1, output_dir="jacobson_variation_try13_300s_4rttvar+10-20random")
 # plot_heartbeat_lengths("./downloaded_logs/20241102_130839/node_.log", output_dir="jacobson6_variation_try8_500s_4rttvar+random")
