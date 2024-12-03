@@ -53,6 +53,8 @@ def main():
         return
 
     print(f"Largest folder found: {largest_folder}")
+    
+    largest_folder = "./downloaded_logs/20241203_222726"
 
     # Get the list of files in the largest folder
     try:
