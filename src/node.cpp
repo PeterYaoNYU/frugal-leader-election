@@ -207,7 +207,7 @@ void Node::shutdown_cb(EV_P_ ev_timer* w, int revents) {
     ev_break(EV_A_ EVBREAK_ALL);
 }
 
-void Node::start_election_timeout() {
+void Node::start_election_timeout(bool double_time, bool force_raft) {
     double timeout = election_dist(rng) / 1000.0; // Convert ms to seconds
 
     bool using_raft_timeout = true;
@@ -235,7 +235,7 @@ void Node::start_election_timeout() {
     // int delay_ms = delay_distribution(rng);
 
     // Check if there is an existing TCP connection with the leader
-    if (tcp_monitor && election_timeout_bound != raft) {
+    if (tcp_monitor && election_timeout_bound != raft && !force_raft) {
 
 // use the penalty score to calculate:
 // 1. sort the unordered map:
@@ -282,11 +282,19 @@ void Node::start_election_timeout() {
                     auto [lowerbound, upperbound] = stats.rttConfidenceInterval(confidence_level);
                     LOG(INFO) << "Using " << confidence_level << "% CI upperbound for RTT as election timeout: " 
                               << upperbound << " Milliseconds";
-                    timeout = (upperbound / 2 + heartbeat_interval_margin + delay_ms) / 1000;
+                    if (!double_time) {
+                        timeout = (upperbound / 2 + heartbeat_interval_margin + delay_ms) / 1000;
+                    } else {
+                        timeout = (upperbound + heartbeat_interval_margin + delay_ms) / 1000;
+                    }
                     LOG(INFO) << "Using average RTT from TCP connection as election timeout: " << timeout << " Milliseconds";
                     using_raft_timeout = false;
                 } else if (election_timeout_bound == Jacobson) {
-                    timeout = (stats.jacobsonEst() / 2 + heartbeat_interval_margin + delay_ms) / 1000;
+                    if (!double_time) {
+                        timeout = (stats.jacobsonEst() / 2 + heartbeat_interval_margin + delay_ms) / 1000;
+                    } else {
+                        timeout = (stats.jacobsonEst() + heartbeat_interval_margin + delay_ms) / 1000;
+                    }
                     LOG(INFO) << "Using Jacobson estimation for election timeout: " << timeout *1000 << " Milliseconds, additional delay: " << delay_ms << " Milliseconds " << " jacob: " << stats.jacobsonEst()/2 << " heartbeat: " << heartbeat_interval_margin;
                     using_raft_timeout = false;
                 }
@@ -304,11 +312,15 @@ void Node::start_election_timeout() {
 }
 
 
-void Node::reset_election_timeout() {
+void Node::reset_election_timeout(bool double_time, bool force_raft) {
     ev_timer_stop(loop, &election_timer);
 
     LOG(INFO) << "resetting election timeout... the current term heartbeat count is " << heartbeat_current_term;
-    start_election_timeout();
+    if (double_time) {
+        start_election_timeout(true, force_raft);
+    } else {
+        start_election_timeout(false, force_raft);
+    }
 
     LOG(INFO) << "Election timeout restarted. the current term heartbeat count is " << heartbeat_current_term;
 }
@@ -479,7 +491,7 @@ void Node::handle_request_vote(const raft::leader_election::RequestVote& request
     if (voted_for.empty() || voted_for == candidate_id) {
         vote_granted = true;
         voted_for = candidate_id;
-        reset_election_timeout();
+        reset_election_timeout(true, false);
     }
 
     raft::leader_election::VoteResponse response;

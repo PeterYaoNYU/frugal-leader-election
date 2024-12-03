@@ -23,6 +23,8 @@
 #include "lib/tcp_stat_manager.h"
 
 #include "lib/net_latency_controller.h"
+
+
 class Node {
 public:
     // Node(int port, const std::string& peers);
@@ -122,8 +124,8 @@ private:
     int safety_margin_lower_bound;
     int safety_margin_step_size;
 
-    void start_election_timeout();
-    void reset_election_timeout();
+    void start_election_timeout(bool double_time=false, bool force_raft=false);
+    void reset_election_timeout(bool double_time=false, bool force_raft=false);
     static void election_timeout_cb(EV_P_ ev_timer* w, int revents);
     static void heartbeat_cb(EV_P_ ev_timer* w, int revents);
 
