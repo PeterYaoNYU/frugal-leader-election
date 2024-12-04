@@ -22,11 +22,11 @@ import threading
 # ]
 
 nodes = [
-    {"host": "c220g2-011027.wisc.cloudlab.us", "port": 28810},
-    {"host": "c220g2-011027.wisc.cloudlab.us", "port": 28811},
-    {"host": "c220g2-011027.wisc.cloudlab.us", "port": 28812},
-    {"host": "c220g2-011027.wisc.cloudlab.us", "port": 28813},
-    {"host": "c220g2-011027.wisc.cloudlab.us", "port": 28814},
+    {"host": "c220g1-030822.wisc.cloudlab.us", "port": 28010},
+    {"host": "c220g1-030822.wisc.cloudlab.us", "port": 28011},
+    {"host": "c220g1-030822.wisc.cloudlab.us", "port": 28012},
+    {"host": "c220g1-030822.wisc.cloudlab.us", "port": 28013},
+    {"host": "c220g1-030822.wisc.cloudlab.us", "port": 28014},
 ]
 
 # nodes = [
@@ -72,8 +72,8 @@ def build_install_bazel(conn):
         print(f"Failed to install Bazel on {conn.host}:{conn.port} - {e}")
     
     
-def execute_on_node(node, id, build_bazel=False, build_invoke=False, build_fabric=False):    
-# def execute_on_node(node, id, build_bazel=True, build_invoke=True, build_fabric=True):
+# def execute_on_node(node, id, build_bazel=False, build_invoke=False, build_fabric=False):    
+def execute_on_node(node, id, build_bazel=True, build_invoke=True, build_fabric=True):
     try:
         # Establish SSH connection
         conn = Connection(host=node["host"], user=username, port=node["port"])

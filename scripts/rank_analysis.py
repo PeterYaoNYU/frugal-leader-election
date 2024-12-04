@@ -24,20 +24,6 @@ def find_largest_folder(base_dir):
     largest_folder = max(subfolders)
     return largest_folder
 
-def annotate_bars(ax, rects, counts):
-    """
-    Annotates each bar with its count value.
-    
-    Args:
-        ax (matplotlib.axes.Axes): The axes to annotate.
-        rects (list): The bar containers.
-        counts (list): The counts corresponding to each bar.
-    """
-    for rect, count in zip(rects, counts):
-        height = rect.get_height()
-        ax.text(rect.get_x() + rect.get_width() / 2, height, f'{count}', 
-                ha='center', va='bottom', fontsize=9, fontweight='bold')
-
 def main():
     # Parse command line arguments
     parser = argparse.ArgumentParser(description='Process log files to calculate rank 0 proportions.')
@@ -52,10 +38,10 @@ def main():
         print(f"No subfolders found in '{base_dir}'. Exiting.")
         return
 
+    largest_folder = "./downloaded_logs/20241203_223802"
+
     print(f"Largest folder found: {largest_folder}")
     
-    largest_folder = "./downloaded_logs/20241203_222726"
-
     # Get the list of files in the largest folder
     try:
         file_list = os.listdir(largest_folder)
@@ -63,7 +49,7 @@ def main():
         print(f"Error: Folder '{largest_folder}' not found.")
         return
 
-    # Filter the files to process (node_1.log to node_5.log)
+    # Filter the files to process (e.g., node_0.log to node_4.log)
     files_to_process = [f for f in file_list if f.startswith('node_') and f.endswith('.log')]
 
     if not files_to_process:
@@ -71,6 +57,10 @@ def main():
         return
 
     counts = defaultdict(int)
+
+    # Define the mapping from node indices to IPs
+    node_ip_list = ["10.10.4.2", "10.10.2.1", "10.10.2.2", "10.10.3.2", "10.10.5.2"]
+    ip_to_node = {ip: f'node_{idx}' for idx, ip in enumerate(node_ip_list)}
 
     # Process each file
     for filename in files_to_process:
@@ -90,9 +80,13 @@ def main():
                         match = re.search(pattern, line)
                         if match:
                             ip_port = match.group(1)
+                            # Extract IP part (remove port if present)
+                            ip = ip_port.split(':')[0]
                             rank = int(match.group(2))
                             if rank == 0:
-                                counts[ip_port] += 1
+                                # Map IP to node name
+                                node_name = ip_to_node.get(ip, ip)
+                                counts[node_name] += 1
         except StopIteration:
             print(f"File '{filename}' has less than 1800 lines. Skipping.")
             continue
@@ -106,41 +100,26 @@ def main():
         return
 
     # Prepare data for plotting
-    ips = list(counts.keys())
-    counts_list = [counts[ip] for ip in ips]
+    node_names = list(counts.keys())
+    counts_list = [counts[node_name] for node_name in node_names]
     total_counts = sum(counts_list)
     proportions = [count / total_counts * 100 for count in counts_list]
 
     # Print counts
-    print("\nCounts of rank 0 for each IP:")
-    for ip_port, count in counts.items():
-        print(f"{ip_port}: {count}")
-
-    # Plot bar chart with annotations
-    plt.figure(figsize=(10,6))
-    bars = plt.bar(ips, counts_list, color='skyblue')
-    plt.xlabel('IP Address')
-    plt.ylabel('Number of times ranked 0')
-    plt.title('Number of Times Each IP Was Ranked 0')
-    plt.xticks(rotation=45, ha='right')
-    plt.tight_layout()
-
-    # Annotate bars with counts
-    ax = plt.gca()
-    annotate_bars(ax, bars, counts_list)
-
-    # Save bar chart
-    bar_chart_path = os.path.join(largest_folder, 'rank0_bar_chart.png')
-    plt.savefig(bar_chart_path)
-    print(f"Bar chart saved as '{bar_chart_path}'.")
-
-    # Clear the current figure
-    plt.clf()
+    print("\nCounts of rank 0 for each node:")
+    for node_name, count in counts.items():
+        print(f"{node_name}: {count}")
 
     # Plot pie chart
     plt.figure(figsize=(8,8))
-    plt.pie(counts_list, labels=ips, autopct='%1.1f%%', startangle=140, colors=plt.cm.Paired.colors)
-    plt.title('Proportion of Times Each IP Was Ranked 0')
+    plt.pie(
+        counts_list, 
+        labels=node_names, 
+        autopct='%1.1f%%', 
+        startangle=140, 
+        colors=plt.cm.Paired.colors
+    )
+    plt.title('Proportion of Times Each Node Was Ranked 0')
     plt.tight_layout()
     
     # Save pie chart
@@ -150,3 +129,6 @@ def main():
 
 if __name__ == '__main__':
     main()
+
+
+
