@@ -22,12 +22,13 @@ import threading
 # ]
 
 nodes = [
-    {"host": "c220g1-030822.wisc.cloudlab.us", "port": 28010},
-    {"host": "c220g1-030822.wisc.cloudlab.us", "port": 28011},
-    {"host": "c220g1-030822.wisc.cloudlab.us", "port": 28012},
-    {"host": "c220g1-030822.wisc.cloudlab.us", "port": 28013},
-    {"host": "c220g1-030822.wisc.cloudlab.us", "port": 28014},
+    {"host": "c220g5-111004.wisc.cloudlab.us", "port": 32410},
+    {"host": "c220g5-111012.wisc.cloudlab.us", "port": 32410},
+    {"host": "c220g5-111004.wisc.cloudlab.us", "port": 32411},
+    {"host": "c220g5-111004.wisc.cloudlab.us", "port": 32412},
+    {"host": "c220g5-111012.wisc.cloudlab.us", "port": 32411},
 ]
+
 
 # nodes = [
 #     {"host": "c220g1-031113.wisc.cloudlab.us", "port": 22},
@@ -59,14 +60,15 @@ def build_install_bazel(conn):
     try:
         # conn.run("sudo apt update && sudo apt install -y openjdk-11-jdk", hide=True)
         # Add Bazel Distribution URI and keys
+        conn.run("sudo apt purge bazel -y")
         conn.run("sudo apt install apt-transport-https curl gnupg -y")
         conn.run("curl -fsSL https://bazel.build/bazel-release.pub.gpg | gpg --dearmor > bazel-archive-keyring.gpg")
         conn.run("sudo mv bazel-archive-keyring.gpg /usr/share/keyrings/bazel-archive-keyring.gpg")
         conn.run("echo 'deb [signed-by=/usr/share/keyrings/bazel-archive-keyring.gpg] https://storage.googleapis.com/bazel-apt stable jdk1.8' | sudo tee /etc/apt/sources.list.d/bazel.list")
         # Update and install Bazel
-        conn.run("sudo apt update && sudo apt install -y bazel")
+        conn.run("sudo apt update && sudo apt install -y bazel-7.5.0")
         # Confirm Bazel installation
-        conn.run("bazel --version")
+        # conn.run("bazel --version")
         print(f"Bazel installed successfully on {conn.host}:{conn.port}")
     except Exception as e:
         print(f"Failed to install Bazel on {conn.host}:{conn.port} - {e}")
@@ -93,11 +95,11 @@ def execute_on_node(node, id, build_bazel=False, build_invoke=False, build_fabri
         # conn.run(f"rm -rf frugal-leader-election", hide=True)
         
         # # Clone the repository
-        if build_bazel:
-            conn.run(f"git clone {repo_url}", hide=True)
+        # if build_bazel:
+        #     conn.run(f"git clone {repo_url}", hide=True)
         # print(f"Repository cloned on {node['host']}:{node['port']}")
         
-        conn.run(f"cd frugal-leader-election && git checkout main && git stash save && git pull && bazel build //:leader_election")
+        conn.run(f"cd frugal-leader-election && git checkout main && git stash save && git pull && bazel-7.5.0 build //:leader_election")
         
         # conn.run("cd frugal-leader-election && git pull")
 

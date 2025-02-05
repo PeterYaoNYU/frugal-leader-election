@@ -47,11 +47,11 @@ import threading
 
 
 nodes = [
-    {"host": "c220g1-030822.wisc.cloudlab.us", "port": 28010},
-    {"host": "c220g1-030822.wisc.cloudlab.us", "port": 28011},
-    {"host": "c220g1-030822.wisc.cloudlab.us", "port": 28012},
-    {"host": "c220g1-030822.wisc.cloudlab.us", "port": 28013},
-    {"host": "c220g1-030822.wisc.cloudlab.us", "port": 28014},
+    {"host": "c220g5-111004.wisc.cloudlab.us", "port": 32410},
+    {"host": "c220g5-111012.wisc.cloudlab.us", "port": 32410},
+    {"host": "c220g5-111004.wisc.cloudlab.us", "port": 32411},
+    {"host": "c220g5-111004.wisc.cloudlab.us", "port": 32412},
+    {"host": "c220g5-111012.wisc.cloudlab.us", "port": 32411},
 ]
 
 # nodes = [
