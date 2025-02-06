@@ -36,4 +36,17 @@ the command to generate a smooth tcp traffic:
 iperf3 -c 10.0.1.2 -t 0 -b 100K -l 1K
 ```
 
-Maybe the tcp traffic monitor should use weighted mean rtt instead of just RTT? So that it can adapt. 
+### Cloudlab Experiment Instructions
+
+To compile and/or install the build system (Bazel 7), or to fetch the latest changes from Github, use the script, which probably has pretty bad naming:
+```
+cd scripts
+python3 background_tcp_simulation/auto_run_leader_election.py 
+```
+
+To initiate background traffic, run the script:
+```
+python3 background_tcp_simulation/auto_sim.py
+```
+> The node sequence in auto_sim.py should really match the IP order in tcp_sim.py
+
