@@ -203,6 +203,22 @@ def start_remote_default(c):
     """
     config_path = "../configs/remote.yaml"
     remote_config_path = "configs/remote.yaml"
+    
+    full_remote_config_path = f"~/frugal-leader-election/configs"
+    
+    # put the local remote.yaml file to the remote nodes
+    for replica_id, node in enumerate(nodes):
+        replica_ip = node["host"]
+        replica_port = node["port"]
+        print(f"putting remote config file to remote node {replica_id} on remote node {replica_ip} with port {replica_port}")
+
+        try:
+            # Establish connection to the remote node
+            conn = Connection(host=replica_ip, user=username, port=node["port"])
+            conn.put(config_path, remote_config_path)
+        except Exception as e:
+            print(f"Failed to put remote config file to replica {replica_id} on {replica_ip}: {e}")
+            continue
 
     # Ensure the binary path is defined
     binary_path = "bazel-bin/leader_election"

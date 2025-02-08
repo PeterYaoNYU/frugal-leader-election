@@ -37,5 +37,5 @@ replica:
   tcp_monitor: true
   confidenceLevel: 0.999
   heartbeatIntervalMargin: 75
-  safetyMarginLowerBound: 16
-  safetyMarginStepSize: 4
+  safetyMarginLowerBound: 25
+  safetyMarginStepSize: 5
