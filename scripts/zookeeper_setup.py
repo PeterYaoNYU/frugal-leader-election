@@ -1,15 +1,28 @@
+# the command to check that zookeeper is running correctly on the remote:
+# ./zkServer.sh status
+
 from fabric import Connection, Config, ThreadingGroup
+from time import sleep
 
 # List of nodes (replace with actual hostnames or IPs)
 nodes = [
-    "PeterYao@c220g5-120103.wisc.cloudlab.us",
-    "PeterYao@c220g5-120101.wisc.cloudlab.us",
-    "PeterYao@c220g5-120102.wisc.cloudlab.us",
-    "PeterYao@c220g5-120108.wisc.cloudlab.us",
-    "PeterYao@c220g5-120104.wisc.cloudlab.us",
+    "PeterYao@c220g1-031111.wisc.cloudlab.us",
+    "PeterYao@c220g1-031117.wisc.cloudlab.us",
+    "PeterYao@c220g1-031130.wisc.cloudlab.us",
+    "PeterYao@c220g1-031119.wisc.cloudlab.us",
+    "PeterYao@c220g1-031105.wisc.cloudlab.us",
 ]
 
 nodes_id_correspondence = [0, 2, 1, 3, 4]
+
+
+def check_leader_node(group):
+    for conn in group:
+        try:
+            print(conn)
+            conn.run("/users/PeterYao/apache-zookeeper-3.8.4-bin/bin/zkServer.sh status")
+        except Exception as e:
+            print(f"Error checking Zookeeper process stauts on {conn.host}: {e}")
 
 def kill_running_zk(group):
     for conn in group:
@@ -23,18 +36,31 @@ def kill_running_zk(group):
             print(f"Error killing Zookeeper process on {conn.host}: {e}")
 
 def start_zookeeper_server(group):
-    for conn in group:
+    for conn in (list(group)):
         try:
             conn.sudo("~/apache-zookeeper-3.8.4-bin/bin/zkServer.sh start", hide=True)
             print(f"Zookeeper server started on {conn}")
         except Exception as e:
             print(f"Error starting Zookeeper server on {conn}: {e}")
-    
+            
+def start_zk_ensemble_with_designated_leader(group, leader):
+    group_list = list(group)
+    idx = nodes_id_correspondence.index(leader)
+    for i in range(len(group_list)):
+        conn = group_list[(idx + i) % len(group_list)]
+        print("Init ZK on ", conn)
+        try:
+            conn.sudo("~/apache-zookeeper-3.8.4-bin/bin/zkServer.sh start", hide=True)
+            print(f"Zookeeper server started on {conn}")
+            sleep(1)
+        except Exception as e:
+            print(f"Error starting Zookeeper server on {conn}: {e}")
 
 def create_my_id(group):
     for id, conn in enumerate(group):
         # conn.sudo("mkdir -p /var/lib/zookeeper", hide=True)
         # conn.sudo("touch /var/lib/zookeeper/myid", hide=True)
+        conn.run("mkdir -p /users/PeterYao/apache-zookeeper-3.8.4-bin/data", hide=True)
         myid= nodes_id_correspondence[id] + 1
         conn.run(f"echo {myid} | sudo tee /users/PeterYao/apache-zookeeper-3.8.4-bin/data/myid", hide=True)
         print(f"myid file created on {conn}")
@@ -71,10 +97,12 @@ def setup_java(host):
 # Execute setup on all nodes concurrently
 if __name__ == "__main__":
     group = ThreadingGroup(*nodes)
-    for connection in group:
+    # for connection in group:
     #     connection.run("sudo apt update && sudo apt install -y default-jdk && java -version")
     #     download_zookeeper(connection)
-        upload_zoo_cfg(connection)   
-    create_my_id(group)     
-    kill_running_zk(group)
-    start_zookeeper_server(group)
+    #     upload_zoo_cfg(connection)   
+    # create_my_id(group)     
+    # kill_running_zk(group)
+    # start_zookeeper_server(group)
+    check_leader_node(group)
+    # start_zk_ensemble_with_designated_leader(group, 0)
