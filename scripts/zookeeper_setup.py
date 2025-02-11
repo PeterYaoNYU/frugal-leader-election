@@ -16,6 +16,19 @@ nodes = [
 nodes_id_correspondence = [0, 2, 1, 3, 4]
 
 
+def get_leader(group):
+    leader_conn = None
+    for id, conn in enumerate(group):
+        node_id = nodes_id_correspondence[id]
+        result = conn.run("/users/PeterYao/apache-zookeeper-3.8.4-bin/bin/zkServer.sh status", hide=True)
+        if "leader" in result.stdout:
+            print(f"Leader found: Node {node_id} is the current leader in the ZK ensemble")
+            leader_conn = conn
+        elif "follower" in result.stdout:
+            print(f"Node {node_id} is the follower")
+    return leader_conn
+
+
 def check_leader_node(group):
     for conn in group:
         try:
@@ -104,5 +117,6 @@ if __name__ == "__main__":
     # create_my_id(group)     
     # kill_running_zk(group)
     # start_zookeeper_server(group)
-    check_leader_node(group)
+    # check_leader_node(group)
     # start_zk_ensemble_with_designated_leader(group, 0)
+    get_leader(group)
