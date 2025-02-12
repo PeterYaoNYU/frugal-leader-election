@@ -15,18 +15,24 @@ nodes = [
 
 nodes_id_correspondence = [0, 2, 1, 3, 4]
 
+# kill the current leader and reinstantiate the node after a while, so that a new leader will be selected
+# by the ZK ensemble. 
 
+
+# return the current leader node id along with the connection itself.
 def get_leader(group):
     leader_conn = None
+    leader_node_id = None
     for id, conn in enumerate(group):
         node_id = nodes_id_correspondence[id]
         result = conn.run("/users/PeterYao/apache-zookeeper-3.8.4-bin/bin/zkServer.sh status", hide=True)
         if "leader" in result.stdout:
             print(f"Leader found: Node {node_id} is the current leader in the ZK ensemble")
             leader_conn = conn
+            leader_node_id = node_id
         elif "follower" in result.stdout:
             print(f"Node {node_id} is the follower")
-    return leader_conn
+    return leader_node_id, leader_conn
 
 
 def check_leader_node(group):
