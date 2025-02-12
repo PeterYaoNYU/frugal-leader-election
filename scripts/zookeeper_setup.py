@@ -17,6 +17,21 @@ nodes_id_correspondence = [0, 2, 1, 3, 4]
 
 # kill the current leader and reinstantiate the node after a while, so that a new leader will be selected
 # by the ZK ensemble. 
+def kill_leader_then_reinstatiate():
+    leader_node_id, conn = get_leader(group)
+    seq = nodes_id_correspondence.index(leader_node_id)
+    leader_conn = group[seq]
+    try:
+        leader_conn.sudo("~/apache-zookeeper-3.8.4-bin/bin/zkServer.sh stop", hide=True)
+        print(f"Leader node {leader_node_id} killed")
+        sleep(5)
+        leader_conn.sudo("~/apache-zookeeper-3.8.4-bin/bin/zkServer.sh start", hide=True)
+        print(f"Leader node {leader_node_id} reinstated")
+        leader_node_id, conn = get_leader(group) 
+        print(f"New leader is now node {leader_node_id}")
+    except Exception as e:
+        print(f"Error killing/reinstating leader node {leader_node_id}: {e}")
+            
 
 
 # return the current leader node id along with the connection itself.
@@ -123,6 +138,6 @@ if __name__ == "__main__":
     # create_my_id(group)     
     # kill_running_zk(group)
     # start_zookeeper_server(group)
-    # check_leader_node(group)
     # start_zk_ensemble_with_designated_leader(group, 0)
-    get_leader(group)
+    # get_leader(group)
+    kill_leader_then_reinstatiate()
