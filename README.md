@@ -107,7 +107,7 @@ Test the performance with a write heavy situation:
 ```bash
 cd ~/YCSB
 ./bin/ycsb run zookeeper -threads 1 -P workloads/workloadb \
-  -p zookeeper.connectString=10.0.3.1:2181/benchmark \
+  -p zookeeper.connectString=10.0.5.2:2181/benchmark \
   -p readproportion=0.1 -p updateproportion=0.9 \
   -p hdrhistogram.percentiles=10,25,50,75,90,95,99,99.9 \
   -p histogram.buckets=500 > outputHist7.txt
@@ -166,7 +166,7 @@ Output saved to outputHist2.txt and outputHist3.txt
 [UPDATE], 99.9PercentileLatency(us), 115327
 [UPDATE], Return=OK, 906
 
-node 0 serves as the client, connecting to node 1, node 1 is the leader, closer to everyone else. 
+node 0 serves as the client, connecting to node 4, node 4 is the leader. 
 Output saved to outputHist4.txt and outputHist5.txt
 
 [OVERALL], Throughput(ops/sec), 33.67003367003367

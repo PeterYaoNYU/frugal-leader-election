@@ -3,6 +3,7 @@
 
 from fabric import Connection, Config, ThreadingGroup
 from time import sleep
+import yaml
 
 # List of nodes (replace with actual hostnames or IPs)
 nodes = [
@@ -14,6 +15,51 @@ nodes = [
 ]
 
 nodes_id_correspondence = [0, 2, 1, 3, 4]
+
+connections = {}
+
+def load_connections(yaml_file):
+    with open(yaml_file, 'r') as f:
+        data = yaml.safe_load(f)
+
+    # print(data)
+    
+    for node in data.get("nodes", []):
+        node_id = node["id"]    
+        conn_str = node["connection"]
+        port = node.get("port", 22)
+        if "@" in conn_str:
+            user, host = conn_str.split("@", 1)
+        else:
+            user = None
+            host = conn_str
+        
+        if user:
+            conn = Connection(host=host, user=user, port=port)
+        else:
+            conn = Connection(host=host, port=port)
+        connections[node_id] = conn
+    
+    return connections
+
+# setup ycsb on the specified node
+def setup_ycsb(node_id_list, install_maven=True):
+    for node_id in node_id_list:
+        try:
+            conn = connections.get(node_id)
+            if conn is None:
+                print(f"Node {node_id} not found in connections.")
+                return
+            if install_maven:
+                conn.run("sudo apt update && sudo apt install -y maven", hide=True)
+            conn.run("git clone http://github.com/brianfrankcooper/YCSB.git", hide=True)
+            conn.run("cd YCSB && mvn -pl site.ycsb:zookeeper-binding -am clean package -DskipTests", hide=True)
+            
+            print(f"YCSB setup completed on Node {node_id}")
+        except Exception as e:
+            print(f"Failed to setup YCSB on Node {node_id}: {e}")
+    
+    
 
 # kill the current leader and reinstantiate the node after a while, so that a new leader will be selected
 # by the ZK ensemble. 
@@ -131,6 +177,8 @@ def setup_java(host):
 # Execute setup on all nodes concurrently
 if __name__ == "__main__":
     group = ThreadingGroup(*nodes)
+    load_connections("nodes.yaml")
+    setup_ycsb([1, 2, 3, 4])
     # for connection in group:
     #     connection.run("sudo apt update && sudo apt install -y default-jdk && java -version")
     #     download_zookeeper(connection)
@@ -140,4 +188,4 @@ if __name__ == "__main__":
     # start_zookeeper_server(group)
     # start_zk_ensemble_with_designated_leader(group, 0)
     # get_leader(group)
-    kill_leader_then_reinstatiate()
+    # kill_leader_then_reinstatiate()
