@@ -115,6 +115,7 @@ cd ~/YCSB
 
 node 0 serves as the client, without adding additional delay. 
 When node 2 is the leader, connecting to node 2 (fairly far from everyone else):
+```
 [OVERALL], Throughput(ops/sec), 100.54293183189222 
 [UPDATE], Operations, 891
 [UPDATE], AverageLatency(us), 10721.777777777777
@@ -129,11 +130,13 @@ When node 2 is the leader, connecting to node 2 (fairly far from everyone else):
 [UPDATE], 99thPercentileLatency(us), 21375
 [UPDATE], 99.9PercentileLatency(us), 85887
 [UPDATE], Return=OK, 891
+```
 Results stored in outputHist7.txt
 
 
 node 0 serves as the client, connecting to node 1, node 1 is the leader, closer to everyone else. 
 Output saved to outputHist0.txt and outputHist1.txt
+```
 [OVERALL], Throughput(ops/sec), 97.03085581214826
 [UPDATE], Operations, 923
 [UPDATE], AverageLatency(us), 10790.535211267606
@@ -147,11 +150,12 @@ Output saved to outputHist0.txt and outputHist1.txt
 [UPDATE], 95thPercentileLatency(us), 18319
 [UPDATE], 99thPercentileLatency(us), 21583
 [UPDATE], 99.9PercentileLatency(us), 82495
-
+```
 
 ### Adding a delay of pareto delay 3ms 3ms. 
 node 0 serves as the client, connecting to node 1, node 1 is the leader, closer to everyone else. 
 Output saved to outputHist2.txt and outputHist3.txt
+```
 [OVERALL], Throughput(ops/sec), 37.931950081553694
 [UPDATE], AverageLatency(us), 28063.593818984547
 [UPDATE], MinLatency(us), 14440
@@ -165,10 +169,10 @@ Output saved to outputHist2.txt and outputHist3.txt
 [UPDATE], 99thPercentileLatency(us), 51007
 [UPDATE], 99.9PercentileLatency(us), 115327
 [UPDATE], Return=OK, 906
-
+```
 node 0 serves as the client, connecting to node 4, node 4 is the leader. 
 Output saved to outputHist4.txt and outputHist5.txt
-
+```
 [OVERALL], Throughput(ops/sec), 33.67003367003367
 [UPDATE], Operations, 891
 [UPDATE], AverageLatency(us), 32042.666666666668
@@ -183,7 +187,7 @@ Output saved to outputHist4.txt and outputHist5.txt
 [UPDATE], 99thPercentileLatency(us), 48671
 [UPDATE], 99.9PercentileLatency(us), 64767
 [UPDATE], Return=OK, 891
-
+```
 This is probably a bad example, the thp is not that dramatically different. The reason being that:
 1. the client, node 0, is connecting to the leader, node 1 and node 4 respectively, for benchmark test, Both are 1 hop away. 
 2. for write heavy queries, to collect a quorum in a 5-node system, need 3 ACKs. Node 4 can contact node 0, 1, 3, with a max topological distance of 2 hops. Node 1 can contact node 0, 2, 3/4 for quorum, also with a max topo hop of 2. 
@@ -191,7 +195,7 @@ This is probably a bad example, the thp is not that dramatically different. The 
 Thinking about increasing the delay between node 0 and node 3. 
 
 Also, where you submit the requests make a big difference. When node 4 is still the leader, submitting the requests from node 0 to node 1 instead of node 4, and the same benchmark gives this, saved to outputHist6.txt and outputHist8.txt.
-
+```
 [OVERALL], RunTime(ms), 41533
 [OVERALL], Throughput(ops/sec), 24.077239785231022
 [UPDATE], Operations, 911
@@ -207,3 +211,4 @@ Also, where you submit the requests make a big difference. When node 4 is still 
 [UPDATE], 99thPercentileLatency(us), 68351
 [UPDATE], 99.9PercentileLatency(us), 141567
 [UPDATE], Return=OK, 911
+```

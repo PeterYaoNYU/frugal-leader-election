@@ -60,6 +60,70 @@ def setup_ycsb(node_id_list, install_maven=True):
             print(f"Failed to setup YCSB on Node {node_id}: {e}")
     
     
+def run_ycsb_workload_from_node(client_node_id, server_node_id, output_file_name="zkProfile.txt", contact_leader=True):
+    # load the yaml file:
+    with open("nodes.yaml", 'r') as f:
+        data = yaml.safe_load(f)
+    if contact_leader:
+        # this means that both the client and the ZK server is ont he leadeer node, basically we neglect client_node_id and server_node_id in this case
+        leader_node_id, conn = get_leader(group)
+        if leader_node_id is None:
+            print("No leader found in the ZK ensemble")
+            return
+        # instantiate the zookeeper test on the leader.
+        # first get the leader ip address running zookeeper from the yaml file:
+        for node in data.get("nodes", []):
+            if node["id"] == leader_node_id:
+                leader_zk_connection_ip = node["zk_ip_addr"]
+                break   
+        # run the ycsb workload on the leader node
+        ycsb_command = f'''
+            cd ~/YCSB
+            ./bin/ycsb run zookeeper -threads 1 -P workloads/workloadb \
+            -p zookeeper.connectString={leader_zk_connection_ip}:2181/benchmark \
+            -p readproportion=0.1 -p updateproportion=0.9 \
+            -p hdrhistogram.percentiles=10,25,50,75,90,95,99,99.9 \
+            -p histogram.buckets=500 > {output_file_name}
+        '''
+        conn.run(ycsb_command)
+        # download the file from the remote node to local for analysis:
+        remote_path = f"/users/PeterYao/YCSB/{output_file_name}"
+        try:
+            conn.get(remote_path, output_file_name)
+        except Exception as e:
+            print(f"Failed to download {output_file_name} from Node {leader_node_id}: {e}")
+    elif not contact_leader:
+        # get the connection for the client and server of zookeeper respectively
+        client_conn = connections.get(client_node_id)
+        server_conn = connections.get(server_node_id)
+        
+        # get the server address of the zookeeper from the yaml file
+        for node in data.get("nodes", []):
+            if node["id"] == server_node_id:
+                server_zk_connection_ip = node["zk_ip_addr"]
+        
+        # after loading the connection, check if the connection is valid, if not, warn and return
+        if client_conn is None or server_conn is None:
+            print(f"Node {client_node_id} or {server_node_id} not found in connections.")
+            return
+        # if the ip addresses are valid, then run the ycsb workload on the client node
+        ycsb_command = f'''
+            cd ~/YCSB
+            ./bin/ycsb run zookeeper -threads 1 -P workloads/workloadb \
+            -p zookeeper.connectString={server_zk_connection_ip}:2181/benchmark \
+            -p readproportion=0.1 -p updateproportion=0.9 \
+            -p hdrhistogram.percentiles=10,25,50,75,90,95,99,99.9 \
+            -p histogram.buckets=500 > {output_file_name}
+        '''
+        
+        client_conn.run(ycsb_command)
+        # download the file from the remote node to local for analysis:
+        remote_path = f"/users/PeterYao/YCSB/{output_file_name}"
+        try:
+            client_conn.get(remote_path, output_file_name)
+        except Exception as e:
+            print(f"Failed to download {output_file_name} from Node {client_node_id}: {e}")
+        
 
 # kill the current leader and reinstantiate the node after a while, so that a new leader will be selected
 # by the ZK ensemble. 
@@ -178,7 +242,7 @@ def setup_java(host):
 if __name__ == "__main__":
     group = ThreadingGroup(*nodes)
     load_connections("nodes.yaml")
-    setup_ycsb([1, 2, 3, 4])
+    # setup_ycsb([1, 2, 3, 4])
     # for connection in group:
     #     connection.run("sudo apt update && sudo apt install -y default-jdk && java -version")
     #     download_zookeeper(connection)
@@ -189,3 +253,4 @@ if __name__ == "__main__":
     # start_zk_ensemble_with_designated_leader(group, 0)
     # get_leader(group)
     # kill_leader_then_reinstatiate()
+    run_ycsb_workload_from_node(0, 0, "zkProfile1.txt", contact_leader=True)

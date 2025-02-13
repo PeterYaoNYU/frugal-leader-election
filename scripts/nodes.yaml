@@ -2,15 +2,20 @@ nodes:
   - id: 0
     connection: "PeterYao@c220g1-031111.wisc.cloudlab.us"
     port: 22
+    zk_ip_addr: "10.0.4.2"
   - id: 2
     connection: "PeterYao@c220g1-031117.wisc.cloudlab.us"
     port: 22
+    zk_ip_addr: "10.0.2.2"
   - id: 1
     connection: "PeterYao@c220g1-031130.wisc.cloudlab.us"
     port: 22
+    zk_ip_addr: "10.0.2.1"
   - id: 3
     connection: "PeterYao@c220g1-031119.wisc.cloudlab.us"
     port: 22
+    zk_ip_addr: "10.0.3.2"
   - id: 4
     connection: "PeterYao@c220g1-031105.wisc.cloudlab.us"
+    zk_ip_addr: "10.0.5.2"
 
