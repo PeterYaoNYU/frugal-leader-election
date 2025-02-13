@@ -1,0 +1,16 @@
+nodes:
+  - id: 0
+    connection: "PeterYao@c220g1-031111.wisc.cloudlab.us"
+    port: 22
+  - id: 2
+    connection: "PeterYao@c220g1-031117.wisc.cloudlab.us"
+    port: 22
+  - id: 1
+    connection: "PeterYao@c220g1-031130.wisc.cloudlab.us"
+    port: 22
+  - id: 3
+    connection: "PeterYao@c220g1-031119.wisc.cloudlab.us"
+    port: 22
+  - id: 4
+    connection: "PeterYao@c220g1-031105.wisc.cloudlab.us"
+
