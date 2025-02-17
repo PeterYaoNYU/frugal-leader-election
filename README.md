@@ -113,6 +113,17 @@ cd ~/YCSB
   -p histogram.buckets=500 > outputHist7.txt
 ```
 
+to change the weight/latency of a specific link:
+```bash
+sudo tc qdisc del dev enp129s0f0 root
+sudo tc qdisc add dev enp129s0f0 root netem delay 6ms 3ms distribution pareto
+```
+
+enp129s0f0
+---
+
+
+
 node 0 serves as the client, without adding additional delay. 
 When node 2 is the leader, connecting to node 2 (fairly far from everyone else):
 ```

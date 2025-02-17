@@ -4,6 +4,7 @@
 from fabric import Connection, Config, ThreadingGroup
 from time import sleep
 import yaml
+from ycsb_analysis import *
 
 # List of nodes (replace with actual hostnames or IPs)
 nodes = [
@@ -58,6 +59,21 @@ def setup_ycsb(node_id_list, install_maven=True):
             print(f"YCSB setup completed on Node {node_id}")
         except Exception as e:
             print(f"Failed to setup YCSB on Node {node_id}: {e}")
+            
+            
+def vary_link_latency(node_id, interface_name, mean_delay, std_dev, dist_name):
+    conn = connections.get(node_id)
+    if conn is None:
+        print(f"Node {node_id} not found in connections.")
+        return
+    try:
+        delete_command = f"sudo tc qdisc del dev {interface_name} root || true"
+        conn.run(delete_command)
+        add_command = f"sudo tc qdisc add dev {interface_name} root netem delay {mean_delay}ms {std_dev}ms distribution {dist_name}"
+        conn.run(add_command)
+        print(f"Delay added to {interface_name} on Node {node_id} with mean {mean_delay}ms and std_dev {std_dev}ms, following {dist_name} distribution")
+    except Exception as e:
+        print(f"Error adding delay to {interface_name} on Node {node_id}: {e}")
     
     
 def run_ycsb_workload_from_node(client_node_id, server_node_id, output_file_name="zkProfile.txt", contact_leader=True):
@@ -82,7 +98,7 @@ def run_ycsb_workload_from_node(client_node_id, server_node_id, output_file_name
             ./bin/ycsb run zookeeper -threads 1 -P workloads/workloadb \
             -p zookeeper.connectString={leader_zk_connection_ip}:2181/benchmark \
             -p readproportion=0.1 -p updateproportion=0.9 \
-            -p hdrhistogram.percentiles=10,25,50,75,90,95,99,99.9 \
+            -p hdrhistogram.percentiles=10,25,50,75,90,95,99,99.5 \
             -p histogram.buckets=500 > {output_file_name}
         '''
         conn.run(ycsb_command)
@@ -112,7 +128,7 @@ def run_ycsb_workload_from_node(client_node_id, server_node_id, output_file_name
             ./bin/ycsb run zookeeper -threads 1 -P workloads/workloadb \
             -p zookeeper.connectString={server_zk_connection_ip}:2181/benchmark \
             -p readproportion=0.1 -p updateproportion=0.9 \
-            -p hdrhistogram.percentiles=10,25,50,75,90,95,99,99.9 \
+            -p hdrhistogram.percentiles=10,25,50,75,90,95,99,99.5 \
             -p histogram.buckets=500 > {output_file_name}
         '''
         
@@ -123,6 +139,7 @@ def run_ycsb_workload_from_node(client_node_id, server_node_id, output_file_name
             client_conn.get(remote_path, output_file_name)
         except Exception as e:
             print(f"Failed to download {output_file_name} from Node {client_node_id}: {e}")
+    print(f"YCSB workload completed, saved to {output_file_name}")
         
 
 # kill the current leader and reinstantiate the node after a while, so that a new leader will be selected
@@ -134,7 +151,7 @@ def kill_leader_then_reinstatiate():
     try:
         leader_conn.sudo("~/apache-zookeeper-3.8.4-bin/bin/zkServer.sh stop", hide=True)
         print(f"Leader node {leader_node_id} killed")
-        sleep(5)
+        sleep(4)
         leader_conn.sudo("~/apache-zookeeper-3.8.4-bin/bin/zkServer.sh start", hide=True)
         print(f"Leader node {leader_node_id} reinstated")
         leader_node_id, conn = get_leader(group) 
@@ -142,6 +159,28 @@ def kill_leader_then_reinstatiate():
     except Exception as e:
         print(f"Error killing/reinstating leader node {leader_node_id}: {e}")
             
+def kill_node(node_id):
+    conn = connections.get(node_id)
+    if conn is None:
+        print(f"Node {node_id} not found in connections.")
+        return
+    try:
+        conn.sudo("~/apache-zookeeper-3.8.4-bin/bin/zkServer.sh stop", hide=True)
+        print(f"Node {node_id} killed")
+    except Exception as e:
+        print(f"Error killing node {node_id}: {e}")
+        
+def start_node(node_id):
+    conn = connections.get(node_id)
+    if conn is None:
+        print(f"Node {node_id} not found in connections.")
+        return
+    try:
+        conn.sudo("~/apache-zookeeper-3.8.4-bin/bin/zkServer.sh start", hide=True)
+        print(f"Node {node_id} started")
+    except Exception as e:
+        print(f"Error starting node {node_id}: {e}")
+        
 
 
 # return the current leader node id along with the connection itself.
@@ -252,5 +291,21 @@ if __name__ == "__main__":
     # start_zookeeper_server(group)
     # start_zk_ensemble_with_designated_leader(group, 0)
     # get_leader(group)
+    # run_ycsb_workload_from_node(1, 1, "zkProfile13.txt", contact_leader=False)
+    
     # kill_leader_then_reinstatiate()
-    run_ycsb_workload_from_node(0, 0, "zkProfile1.txt", contact_leader=True)
+    kill_node(3)
+    kill_node(2)   
+    kill_node(4) 
+    sleep(10)
+    start_node(3)
+    start_node(2)
+    start_node(4)
+    
+    get_leader(group)
+    # plot_ycsb_profile("zkProfile13.txt")
+    # lat = [1, 2, 4, 6, 8]
+    # for i in range(5):
+    #     vary_link_latency(4, "enp129s0f0", lat[i] , 1, "pareto")
+    #     run_ycsb_workload_from_node(4, 4, f"zk_different_rack_lat_{lat[i]}ms.txt", contact_leader=True)
+    #     plot_ycsb_profile(f"zk_client_{i}_to_server.txt")

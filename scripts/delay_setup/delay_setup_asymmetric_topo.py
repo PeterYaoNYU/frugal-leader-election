@@ -57,7 +57,7 @@ def add_delay(connection, hostname, interfaces):
             
             # Then, add the new delay rule
             add_command = (
-                f"sudo tc qdisc add dev {interface} root netem delay 3ms 3ms distribution pareto"
+                f"sudo tc qdisc add dev {interface} root netem delay 1ms 1ms distribution pareto"
                 # f"sudo tc qdisc add dev {interface} root netem delay 0.5ms distribution exponential"
                 # f"sudo tc qdisc add dev {interface} root netem delay 0.1ms 5ms distribution exponential"
             )
