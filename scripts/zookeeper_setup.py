@@ -199,6 +199,15 @@ def get_leader(group):
     return leader_node_id, leader_conn
 
 
+# designate node_id as the leader of the ZK ensemble
+def designate_leader(node_id):
+    # get the current leader:
+    leader_node_id, leader_conn = get_leader(group)
+    # do not stop the while loop until the current leader is the 
+    while (leader_node_id != node_id):
+        
+
+
 def check_leader_node(group):
     for conn in group:
         try:
