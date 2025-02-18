@@ -66,9 +66,49 @@ def add_delay(connection, hostname, interfaces):
         print(f"Delay added successfully on {hostname}!")
     except Exception as e:
         print(f"Error configuring tc delay on {hostname}: {e}")
+        
+# Function to add delay to specified interfaces, with high level of customization
+# delay mean and delay std dev are in milliseconds
+# delay distribution can be "pareto" or "normal"
+def add_delay_to_node(node_id, delay_mean, delay_std_dev, delay_distribution, connections):
+    try:
+        print(f"Configuring tc delay on node{node_id}...")
+        interfaces = node_interfaces.get(f"node{node_id}")
+        hostname = f"node{node_id}"
+        for interface in interfaces:
+            delete_command = f"sudo tc qdisc del dev {interface} root || true"
+            connections.get(node_id).run(delete_command, hide=True)
+            
+            # Then, add the new delay rule
+            add_command = (
+                f"sudo tc qdisc add dev {interface} root netem delay {delay_mean}ms {delay_std_dev}ms distribution {delay_distribution}"
+            )
+            connections.get(node_id).run(add_command)
+            
+        print(f"Delay added successfully on {hostname}!")
+    except Exception as e:
+        print(f"Error configuring tc delay on {hostname}: {e}")
+        
+def add_delay_to_all_nodes(delay_mean, delay_std_dev, delay_distribution, connections):
+    try:
+        for node_id, v in connections.items():
+            hostname = f"node{node_id}"
+            if hostname in node_interfaces.keys():
+                print(f"Configuring tc delay on {hostname}...")
+                add_delay_to_node(node_id, delay_mean, delay_std_dev, delay_distribution, connections)
+    except Exception as e:
+        print(f"Error configuring tc delay on all nodes: {e}")
+    # double check by priniting the netem delay on all nodes.
+    for node_id, v in connections.items():
+        hostname = f"node{node_id}"
+        if hostname in node_interfaces.keys():
+            for interface in node_interfaces[hostname]:
+                print(f"Checking delay on {interface} on {hostname}...")
+                connections.get(node_id).run(f"sudo tc qdisc show dev {interface}")
 
 # Apply delay to relevant interfaces for all nodes
-for idx, conn in enumerate(connections):
-    hostname = f"node{idx}"
-    if hostname in node_interfaces:
-        add_delay(conn, hostname, node_interfaces[hostname])
+if __name__ == "__main__":
+    for idx, conn in enumerate(connections):
+        hostname = f"node{idx}"
+        if hostname in node_interfaces:
+            add_delay(conn, hostname, node_interfaces[hostname])

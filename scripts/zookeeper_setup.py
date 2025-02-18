@@ -5,6 +5,7 @@ from fabric import Connection, Config, ThreadingGroup
 from time import sleep
 import yaml
 from ycsb_analysis import *
+from delay_setup.delay_setup_asymmetric_topo import *
 
 # List of nodes (replace with actual hostnames or IPs)
 nodes = [
@@ -200,11 +201,70 @@ def get_leader(group):
 
 
 # designate node_id as the leader of the ZK ensemble
-def designate_leader(node_id):
+def designate_leader(node_id, node_id_list):
     # get the current leader:
     leader_node_id, leader_conn = get_leader(group)
     # do not stop the while loop until the current leader is the 
     while (leader_node_id != node_id):
+        # kill the other nodes, and sleep, and then restart. 
+        temp_node_list = node_id_list.copy()
+        temp_node_list.remove(node_id)
+        for node in temp_node_list:
+            kill_node(node)
+        sleep(6)
+        for node in temp_node_list:
+            start_node(node)
+        leader_node_id, leader_conn = get_leader(group)
+    print(f"Node {node_id} is now the leader of the ZK ensemble")
+    
+# comprehensive experiment. 
+# once we have designated a leader, need to run a comprehensive set of experiments, 
+# varying the  read-write ratio, and the latency of each individual link.
+def comprehensive_exp(latency_mean, latencystd_dev, dist_name, client_node, server_node, run_from_leader=True):
+    # 1. setup the latency on all the links. 
+    add_delay_to_all_nodes(latency_mean, latencystd_dev, dist_name, connections)
+    print("[INFO] done adding delay to all nodes!")
+    # load the yaml file:
+    with open("nodes.yaml", 'r') as f:
+        data = yaml.safe_load(f)
+    # 2. run comprehensive experiments, vary the read-write ratio
+    if not run_from_leader:
+        print("not supported: run_from_leader=False")
+    for i in range(1, 10):
+        if run_from_leader:
+            # this means that both the client and the ZK server is ont he leadeer node, basically we neglect client_node_id and server_node_id in this case
+            leader_node_id, conn = get_leader(group)
+            if leader_node_id is None:
+                print("No leader found in the ZK ensemble")
+                return
+            # instantiate the zookeeper test on the leader.
+            # first get the leader ip address running zookeeper from the yaml file:
+            for node in data.get("nodes", []):
+                if node["id"] == leader_node_id:
+                    leader_zk_connection_ip = node["zk_ip_addr"]
+                    break   
+            read_ratio = 0.1 * i
+            write_ratio = 1.0 - read_ratio
+            output_file_name = f"zk_lat_leader_node{leader_node_id}_{latency_mean}_{latencystd_dev}_{dist_name}_read_{read_ratio:.1f}_write_{write_ratio:.1f}.txt"
+            # run the ycsb workload on the leader node
+            ycsb_command = f'''
+                cd ~/YCSB
+                ./bin/ycsb run zookeeper -threads 1 -P workloads/workloadb \
+                -p zookeeper.connectString={leader_zk_connection_ip}:2181/benchmark \
+                -p readproportion={read_ratio} -p updateproportion={write_ratio} \
+                -p hdrhistogram.percentiles=10,25,50,75,90,95,99,99.5 \
+                -p histogram.buckets=500 > {output_file_name}
+            '''
+            conn.run(ycsb_command)
+            conn.get(f"/users/PeterYao/YCSB/{output_file_name}", output_file_name)
+        else:
+            pass
+        
+def varying_leader_exp():
+    for i in range(5):
+        designate_leader(i, [0, 1, 2, 3, 4])
+        for lat in range(1, 6, 2):
+            comprehensive_exp(lat, 2, "pareto", i, i, run_from_leader=True)
         
 
 
@@ -299,19 +359,15 @@ if __name__ == "__main__":
     # kill_running_zk(group)
     # start_zookeeper_server(group)
     # start_zk_ensemble_with_designated_leader(group, 0)
-    # get_leader(group)
     # run_ycsb_workload_from_node(1, 1, "zkProfile13.txt", contact_leader=False)
     
     # kill_leader_then_reinstatiate()
-    kill_node(3)
-    kill_node(2)   
-    kill_node(4) 
-    sleep(10)
-    start_node(3)
-    start_node(2)
-    start_node(4)
+    # designate_leader(1, [0, 1, 2, 3, 4])
+    # get_leader(group)
     
-    get_leader(group)
+    # comprehensive_exp(1, 1, "pareto", 0.1, 0.9)
+    varying_leader_exp()
+    
     # plot_ycsb_profile("zkProfile13.txt")
     # lat = [1, 2, 4, 6, 8]
     # for i in range(5):
