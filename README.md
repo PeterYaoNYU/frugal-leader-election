@@ -103,12 +103,30 @@ Verify that the data entries have been inserted already. Should see that there a
 ls /benchmark
 ```
 
+To remove the already loaded data in zookeeper and to load new data into it:
+```
+cd ~/{apache_directory}/bin
+./zkCli.sh -server 10.0.3.1:2181
+[zk: 10.0.3.1:2181(CONNECTED) 0] deleteall /benchmark
+```
+
+to localize the effect of latency performance to network latency and leader selection only, reduce the number of bytes in each field. 
+
+
+```
+cd ~/YCSB
+./bin/ycsb load zookeeper -s -P workloads/workloadb \
+  -p zookeeper.connectString=10.0.3.1:2181/benchmark \
+  -p recordcount=10000 -p fieldlength=1
+```
+
 Test the performance with a write heavy situation:
 ```bash
 cd ~/YCSB
 ./bin/ycsb run zookeeper -threads 1 -P workloads/workloadb \
   -p zookeeper.connectString=10.0.5.2:2181/benchmark \
   -p readproportion=0.1 -p updateproportion=0.9 \
+  -p operationcoun=1000000 \
   -p hdrhistogram.percentiles=10,25,50,75,90,95,99,99.9 \
   -p histogram.buckets=500 > outputHist7.txt
 ```

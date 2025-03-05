@@ -77,7 +77,7 @@ def vary_link_latency(node_id, interface_name, mean_delay, std_dev, dist_name):
         print(f"Error adding delay to {interface_name} on Node {node_id}: {e}")
     
     
-def run_ycsb_workload_from_node(client_node_id, server_node_id, output_file_name="zkProfile.txt", contact_leader=True):
+def run_ycsb_workload_from_node(client_node_id, server_node_id, output_file_name="zkProfile.txt", contact_leader=True, threads_count=3, num_operations=5000):
     # load the yaml file:
     with open("nodes.yaml", 'r') as f:
         data = yaml.safe_load(f)
@@ -96,9 +96,10 @@ def run_ycsb_workload_from_node(client_node_id, server_node_id, output_file_name
         # run the ycsb workload on the leader node
         ycsb_command = f'''
             cd ~/YCSB
-            ./bin/ycsb run zookeeper -threads 1 -P workloads/workloadb \
+            ./bin/ycsb run zookeeper -threads {threads_count} -P workloads/workloadb \
             -p zookeeper.connectString={leader_zk_connection_ip}:2181/benchmark \
-            -p readproportion=0.1 -p updateproportion=0.9 \
+            -p readproportion=0.0 -p updateproportion=1.0 \
+            -p operationcount={num_operations} \
             -p hdrhistogram.percentiles=10,25,50,75,90,95,99,99.5 \
             -p histogram.buckets=500 > {output_file_name}
         '''
@@ -126,9 +127,11 @@ def run_ycsb_workload_from_node(client_node_id, server_node_id, output_file_name
         # if the ip addresses are valid, then run the ycsb workload on the client node
         ycsb_command = f'''
             cd ~/YCSB
-            ./bin/ycsb run zookeeper -threads 1 -P workloads/workloadb \
-            -p zookeeper.connectString={server_zk_connection_ip}:2181/benchmark \
-            -p readproportion=0.1 -p updateproportion=0.9 \
+            ./bin/ycsb run zookeeper -threads {threads_count} -P workloads/workloadb \
+            -p zookeeper.connectString={leader_zk_connection_ip}:2181/benchmark \
+            -p readproportion=0.3 -p updateproportion=0.7 \
+            -p insertorder=HASHED -p requestdistribution=uniform \
+            -p operationcount={num_operations} \
             -p hdrhistogram.percentiles=10,25,50,75,90,95,99,99.5 \
             -p histogram.buckets=500 > {output_file_name}
         '''
@@ -190,7 +193,11 @@ def get_leader(group):
     leader_node_id = None
     for id, conn in enumerate(group):
         node_id = nodes_id_correspondence[id]
-        result = conn.run("/users/PeterYao/apache-zookeeper-3.8.4-bin/bin/zkServer.sh status", hide=True)
+        try:
+            result = conn.run("/users/PeterYao/apache-zookeeper-3.8.4-bin/bin/zkServer.sh status", hide=True)
+        except Exception as e:
+            print(f"Error checking Zookeeper process stauts on {conn.host}: {e}")
+            continue
         if "leader" in result.stdout:
             print(f"Leader found: Node {node_id} is the current leader in the ZK ensemble")
             leader_conn = conn
@@ -210,7 +217,10 @@ def designate_leader(node_id, node_id_list):
         temp_node_list = node_id_list.copy()
         temp_node_list.remove(node_id)
         for node in temp_node_list:
-            kill_node(node)
+            try:
+                kill_node(node)
+            except Exception as e:
+                print(f"Error killing node {node}, maybe already killed: {e}")
         sleep(6)
         for node in temp_node_list:
             start_node(node)
@@ -252,6 +262,7 @@ def comprehensive_exp(latency_mean, latencystd_dev, dist_name, client_node, serv
                 ./bin/ycsb run zookeeper -threads 1 -P workloads/workloadb \
                 -p zookeeper.connectString={leader_zk_connection_ip}:2181/benchmark \
                 -p readproportion={read_ratio} -p updateproportion={write_ratio} \
+                -p operationcount=1000000 \
                 -p hdrhistogram.percentiles=10,25,50,75,90,95,99,99.5 \
                 -p histogram.buckets=500 > {output_file_name}
             '''
@@ -261,11 +272,28 @@ def comprehensive_exp(latency_mean, latencystd_dev, dist_name, client_node, serv
             pass
         
 def varying_leader_exp():
-    for i in range(5):
-        designate_leader(i, [0, 1, 2, 3, 4])
-        for lat in range(1, 6, 2):
-            comprehensive_exp(lat, 2, "pareto", i, i, run_from_leader=True)
-        
+    # for i in range(5):
+    #     designate_leader(i, [0, 1, 2, 3, 4])
+    #     for lat in [7, 9]:
+    #         comprehensive_exp(lat, 2, "pareto", i, i, run_from_leader=True)
+    # designate_leader(4, [0, 1, 2, 3, 4])
+    # for lat in range(8, 9):
+    #     add_delay_to_node(4, lat, 1, "pareto", connections)
+    #     for thd_cnt in range(18, 36, 2):
+    #         run_ycsb_workload_from_node(4, 4, f"zk_leader_node4_{lat}ms_{thd_cnt}threads.txt", contact_leader=True, threads_count=thd_cnt, num_operations=3000)
+    node_id = 1
+    clear_all_weights()
+    designate_leader(node_id, [0, 1, 2, 3, 4])
+    base_delay = 0
+    for lat in range(8, 9):
+        if lat != 0:
+            # add_delay_to_node(1, 2 * lat, 1, "constant", connections, interface_list=["enp6s0f1"])
+            add_delay_to_node(1, lat, 1, "constant", connections)
+            # add_delay_to_node(0, lat, 1, "constant", connections, interface_list=["enp129s0f1"])
+        thd_cnt = 20
+        for j in range(0, 5):
+            run_ycsb_workload_from_node(0, 0, f"zk_leader_node{node_id}_{lat}ms_{thd_cnt}threads_base_delay_{base_delay}_ms_run{j}.txt", contact_leader=True, threads_count=thd_cnt, num_operations=10000)
+
 
 
 def check_leader_node(group):
