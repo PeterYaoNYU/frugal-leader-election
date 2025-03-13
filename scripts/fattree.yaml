@@ -1,0 +1,51 @@
+nodes:
+  - id: 0
+    connection: "PeterYao@c220g5-111215.wisc.cloudlab.us"
+    port: 25810
+    zk_ip_addr: "10.0.0.2"
+
+  - id: 1
+    connection: "PeterYao@c220g5-111215.wisc.cloudlab.us"
+    port: 25811
+    zk_ip_addr: "10.0.0.3"
+
+  - id: 2
+    connection: "PeterYao@c220g5-111215.wisc.cloudlab.us"
+    port: 25812
+    zk_ip_addr: "10.0.4.2"
+
+  - id: 3
+    connection: "PeterYao@c220g5-111215.wisc.cloudlab.us"
+    port: 25813
+    zk_ip_addr: "10.0.1.2"
+
+  - id: 4
+    connection: "PeterYao@c220g5-111215.wisc.cloudlab.us"
+    port: 25814
+    zk_ip_addr: "10.0.1.3"
+
+switches:
+  - id: 1
+    connection: "PeterYao@c220g5-111207.wisc.cloudlab.us"
+    interfaces:
+      enp94s0f0: "10.0.3.2"
+      vlan1172: "10.0.0.1"
+
+  - id: 2
+    connection: "PeterYao@c220g5-111208.wisc.cloudlab.us"
+    interfaces:
+      enp94s0f0: "10.0.3.1"
+      enp94s0f1: "10.0.2.1"
+
+  - id: 3
+    connection: "PeterYao@c220g5-111205.wisc.cloudlab.us"
+    interfaces:
+      enp94s0f1: "10.0.2.2"
+      vlan1132: "10.0.4.1"
+
+  - id: 4
+    connection: "PeterYao@c220g5-111232.wisc.cloudlab.us"
+    interfaces:
+      enp94s0f1: "10.0.2.3"
+      vlan1182: "10.0.1.1"
+    

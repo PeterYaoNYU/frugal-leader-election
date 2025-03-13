@@ -94,12 +94,12 @@ load the data:
 ```bash
 # -p recordcount,the count of records/paths you want to insert
 cd ~/YCSB
-./bin/ycsb load zookeeper -s -P workloads/workloadb -p zookeeper.connectString=10.0.3.1:2181/benchmark -p recordcount=10000 > outputLoad.txt
+./bin/ycsb load zookeeper -s -P workloads/workloadb -p zookeeper.connectString=10.0.0.3:2181/benchmark -p recordcount=10000 > outputLoad.txt
 ```
 
 Verify that the data entries have been inserted already. Should see that there are a lot of entries in that znode.  
 ```bash
-./bin/zkCli.sh -server 10.0.3.1:2181
+./bin/zkCli.sh -server 10.0.0.3:2181
 ls /benchmark
 ```
 
