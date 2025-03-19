@@ -16,7 +16,7 @@ nodes = [
     "PeterYao@c220g1-031105.wisc.cloudlab.us",
 ]
 
-yaml_file_name = "fattree.yaml"
+yaml_file_name = "fattree_physical.yaml"
 
 nodes_id_correspondence = [0, 2, 1, 3, 4]
 
@@ -291,7 +291,7 @@ def comprehensive_exp(latency_mean, latencystd_dev, dist_name, client_node, serv
         
 def varying_thread_count_exp(learder_id, latency):
     clear_all_switch_weights()
-    # designate_leader(learder_id, [0, 1, 2, 3, 4])
+    designate_leader(learder_id, [0, 1, 2, 3, 4])
     if latency != 0:
         setup_delay_fat_tree(latency)
     for thd_cnt in range(10, 28, 2):
@@ -346,18 +346,21 @@ def varying_leader_exp():
     #     add_delay_to_node(4, lat, 1, "pareto", connections)
     #     for thd_cnt in range(18, 36, 2):
     #         run_ycsb_workload_from_node(4, 4, f"zk_leader_node4_{lat}ms_{thd_cnt}threads.txt", contact_leader=True, threads_count=thd_cnt, num_operations=3000)
-    for node_id in [0]:
+    for node_id in [0, 1]:
         clear_all_switch_weights()
         designate_leader(node_id, [0, 1, 2, 3, 4])
         base_delay = 0
-        for lat in np.arange(0, 3, 0.5):
+        for lat in [0.0, 2.0]:
             if lat != 0:
                 setup_delay_fat_tree(lat)
             thd_cnt = 20
             for j in range(0, 3):
-                run_ycsb_workload_from_node(0, 0, f"zk_leader_node{node_id}_{lat}ms_{thd_cnt}threads_base_delay_{base_delay}_ms_run{j}.txt", contact_leader=True, threads_count=thd_cnt, num_operations=10000)
+                run_ycsb_workload_from_node(0, 0, f"zk_leader_node{node_id}_{lat}ms_{thd_cnt}threads_base_delay_{base_delay}_ms_run{j}_triple.txt", contact_leader=True, threads_count=thd_cnt, num_operations=10000, read_ratio=0.1)
 
-
+def run_once(connections):
+    get_leader(connections.values())
+    run_ycsb_workload_from_node(1, 1, "logtest.txt", contact_leader=True, num_operations=5, read_ratio=0, threads_count=1)
+    kill_running_zk(connections.values())
 
 def varying_read_write_exp():
     # for i in range(5):
@@ -463,19 +466,29 @@ def setup_java(host):
         print(f"Java setup completed on {host}")
     except Exception as e:
         print(f"Error setting up Java on {host}: {e}")
+        
+def upload_new_logback_xml(connections):
+    for conn in connections.values():
+        try:
+            conn.put("logback.xml", "/users/PeterYao/apache-zookeeper-3.8.4-bin/conf")
+            print(f"logback.xml uploaded on {conn}")
+        except Exception as e:
+            print(f"Error uploading logback.xml on {conn}: {e}")
 
 # Execute setup on all nodes concurrently
 if __name__ == "__main__":
     group = ThreadingGroup(*nodes)
-    load_connections("fattree.yaml")
-    # setup_ycsb([3, 4])
+    load_connections("fattree_physical.yaml")
+    # upload_new_logback_xml(connections)
+    # setup_ycsb([1, 2, 3, 4])
     # for connection in connections.values():
     #     connection.run("sudo apt update && sudo apt install -y default-jdk && java -version")
     #     download_zookeeper(connection)
     #     upload_zoo_cfg(connection)   
     # create_my_id(connections)     
-    kill_running_zk(connections.values())
+    # kill_running_zk(connections.values())
     start_zookeeper_server(connections.values())
+    # check_leader_node(connections.values())
     # start_zk_ensemble_with_designated_leader(group, 0)
     # run_ycsb_workload_from_node(1, 1, "zkProfile13.txt", contact_leader=False)
     # setup_delay_fat_tree(1)
@@ -485,10 +498,11 @@ if __name__ == "__main__":
     # get_leader(group)
     
     # comprehensive_exp(1, 1, "pareto", 0.1, 0.9)
-    # varying_leader_exp()
+    varying_leader_exp()
+    # run_once(connections)
     # varying_read_write_exp()
     
-    varying_thread_count_exp(1, 1)
+    # varying_thread_count_exp(1, 1)
     
     # plot_ycsb_profile("zkProfile13.txt")
     # lat = [1, 2, 4, 6, 8]

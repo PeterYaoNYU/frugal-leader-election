@@ -83,7 +83,7 @@ mvn -pl site.ycsb:zookeeper-binding -am clean package -DskipTests
 Then load the data into YCSB. To do that, you need to first create the benchmark znode in the ZK distirbuted system, and then load the data into the benchmark znode. 
 ```bash
 # first connect the zookeeper with CLI, suppose that we are connecting to node 10.0.3.1
-./bin/zkCli.sh -server 10.0.3.1:2181
+./bin/zkCli.sh -server 10.0.0.3:2181
 # then we create the /benchmark node. 
 create /benchmark "" 
 # verify with the following in the client CLI interface. 
@@ -116,8 +116,8 @@ to localize the effect of latency performance to network latency and leader sele
 ```
 cd ~/YCSB
 ./bin/ycsb load zookeeper -s -P workloads/workloadb \
-  -p zookeeper.connectString=10.0.3.1:2181/benchmark \
-  -p recordcount=10000 -p fieldlength=1
+  -p zookeeper.connectString=10.0.0.2:2181/benchmark \
+  -p recordcount=5000 -p fieldlength=1
 ```
 
 Test the performance with a write heavy situation:
