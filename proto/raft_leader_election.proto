@@ -2,9 +2,18 @@ syntax = "proto3";
 
 package raft.leader_election;
 
+
+message LogEntry {
+  int32 term = 1;
+  string command = 2;
+}
+
 message RequestVote {
   int32 term = 1;
   string candidate_id = 2; // IP:port of the candidate
+  // following the spec in the paper
+  int32 last_log_index = 3;
+  int32 last_log_term = 4;
 }
 
 message VoteResponse {
@@ -12,15 +21,41 @@ message VoteResponse {
   bool vote_granted = 2;
 }
 
+// following the spec in the raft paper
 message AppendEntries {
   int32 term = 1;
   string leader_id = 2; // IP:port of the leader
-  int32 id = 3; // id of the heartbeat/log entry
+  int32 prev_log_index = 3;
+  int32 prev_log_term = 4;
+  repeated LogEntry entries = 5;
+  int32 leader_commit = 6;
+  // not in the paper but for experiment purpose
+  int32 id = 7; // id of the heartbeat/log entry
 }
 
 message AppendEntriesResponse {
   int32 term = 1;
   bool success = 2;
+  // these may not be needed, but included for now
+  int32 conflict_index = 3;
+  int32 conflict_term = 4;  
+}
+
+// InstallSnapshot RPC: used when a follower is too far behind.
+message InstallSnapshot {
+  int32 term = 1;
+  string leader_id = 2;
+  int32 last_included_index = 3;
+  int32 last_included_term = 4;
+  int32 offset = 5;
+  bytes data = 6;
+  bool done = 7;
+}
+
+
+// InstallSnapshotResponse RPC.
+message InstallSnapshotResponse {
+  int32 term = 1;
 }
 
 message PenaltyScore {
