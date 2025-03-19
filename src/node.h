@@ -18,6 +18,7 @@
 #include <unordered_map>
 #include "process_config.h"
 #include "proto/raft_leader_election.pb.h"
+#include "proto/raft_client.pb.h"
 #include "lib/utils.h"
 
 #include "lib/tcp_stat_manager.h"
@@ -25,6 +26,16 @@
 #include "lib/net_latency_controller.h"
 
 #include "raftLog.h"
+
+#include "concurrentqueue.h"
+
+// Helper: Convert our in-memory log entry to the proto LogEntry.
+inline raft::leader_election::LogEntry convertToProto(const LogEntry& entry) {
+    raft::leader_election::LogEntry protoEntry;
+    protoEntry.set_term(entry.term);
+    protoEntry.set_command(entry.command);
+    return protoEntry;
+}
 
 class Node {
 public:
@@ -176,6 +187,13 @@ private:
     void displayTrafficStats() {
         tcp_stat_manager.printStats();
     }
+
+    // Only for the leader: handle the client requests, update the followers, 
+    void handle_client_request(const raft::client::ClientRequest& request, const sockaddr_in& sender_addr);
+    void handle_append_entries_response(const raft::leader_election::AppendEntriesResponse& response, const sockaddr_in& sender_addr);
+
+    void send_client_response(const raft::client::ClientResponse& response, const sockaddr_in& recipient_addr);
+
 };
 
 

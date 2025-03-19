@@ -60,3 +60,12 @@ git_repository(
     remote = "https://github.com/protocolbuffers/protobuf",
     shallow_since = "1650589240 +0000",
 )
+
+# concurrent queue
+new_git_repository(
+    name = "com_github_cameron314_concurrentqueue",
+    build_file = "//third_party/concurrentqueue:BUILD.bazel",
+    commit = "6dd38b8a1dbaa7863aa907045f32308a56a6ff5d",
+    shallow_since = "1686439287 -0400",
+    remote = "https://github.com/cameron314/concurrentqueue.git",
+)

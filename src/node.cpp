@@ -985,6 +985,65 @@ double Node::get_latency_to_peer(const std::string& peer_id) {
     return -1;
 }
 
+void Node::handle_client_request(const raft::client::ClientRequest& request, const sockaddr_in& sender_addr) {
+    if (role != Role::LEADER) {
+        auto client_id = request.client_id();
+        auto client_request_id = request.request_id();
+        LOG(INFO) << "Not a leader. Cannot handle client request.";
+        raft::client::ClientResponse response;  
+        response.set_success(false);    
+        response.set_response("Not a leader. Leader: " + current_leader_ip + ":" + std::to_string(current_leader_port));
+        response.set_client_id(client_id);
+        response.set_request_id(client_request_id);
+        send_client_response(response, sender_addr);    
+        return;
+    }
+
+    // append new command as a log entry
+    int new_log_index = raftLog.getLastLogIndex() + 1;
+    LogEntry new_entry { current_term, request.command() };
+    {
+        std::lock_guard<std::mutex> lock(raftLog.log_mutex);
+        raftLog.appendEntry(new_entry);
+    }
+
+    // communicate with the other replicas in the system
+    // first get the prev log term and prev log index, needede for append entries RPC. 
+    int prev_index = new_log_index - 1;
+    int prev_term = -1;
+    if (prev_index > 0) {
+        LogEntry prev_entry;
+        raftLog.getEntry(prev_index, prev_entry);
+        prev_term = prev_entry.term;
+    }
+    // TODO High Priority: Implement the request queue
+    // TODO: Instead of sending off the request ASA it is received. 
+    // poll from a request queue (concurrent) until it is empty
+
+    raft::leader_election::AppendEntries append_entries;
+    append_entries.set_term(current_term);  
+    append_entries.set_leader_id(self_ip + ":" + std::to_string(port));
+    append_entries.set_prev_log_index(prev_index);
+    append_entries.set_prev_log_term(prev_term);
+
+    *append_entries.add_entries() = convertToProto(new_entry);
+    append_entries.set_leader_commit(raftLog.commitIndex);
+
+}
+
+void Node::send_client_response(const raft::client::ClientResponse& response, const sockaddr_in& recipient_addr) {
+    std::string serialized_message = response.SerializeAsString();
+
+    ssize_t nsend = sendto(sock_fd, serialized_message.c_str(), serialized_message.size(), 0,
+                           (sockaddr*)&recipient_addr, sizeof(recipient_addr));
+    if (nsend == -1) {
+        LOG(ERROR) << "Failed to send client response.";
+    } else {
+        LOG(INFO) << "Sent client response to "
+                  << inet_ntoa(recipient_addr.sin_addr) << ":" << ntohs(recipient_addr.sin_port);
+    }
+}
+
 
 void Node::handle_petition(const raft::leader_election::Petition& petition_msg, const sockaddr_in& sender_addr) {
     std::string proposed_leader = petition_msg.proposed_leader();

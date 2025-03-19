@@ -17,6 +17,7 @@ cc_library(
         "@com_github_google_glog//:glog",
         "@com_github_enki_libev//:libev",
         "@com_github_jbeder_yaml_cpp//:yaml-cpp",
+        "@com_github_cameron314_concurrentqueue//:concurrentqueue",
         "//proto:raft_leader_election_cc_proto",
         "//proto:raft_client_cc_proto",
         "//lib:utils",  
