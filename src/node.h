@@ -24,6 +24,7 @@
 
 #include "lib/net_latency_controller.h"
 
+#include "raftLog.h"
 
 class Node {
 public:
@@ -123,6 +124,8 @@ private:
 
     int safety_margin_lower_bound;
     int safety_margin_step_size;
+
+    RaftLog raftLog;
 
     void start_election_timeout(bool double_time=false, bool force_raft=false);
     void reset_election_timeout(bool double_time=false, bool force_raft=false);

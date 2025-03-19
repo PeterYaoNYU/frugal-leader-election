@@ -486,9 +486,16 @@ void Node::handle_request_vote(const raft::leader_election::RequestVote& request
         voted_for = ""; 
     }
 
+    // section 5.4 of the raft paper enforces a trick that requies the leader to be up-to-date before being aboe to 
+    // take the leadership role
+    int last_log_index = raftLog.getLastLogIndex();
+    int last_log_term = raftLog.getLastLogTerm();
+    bool candidate_up_to_date = (request.last_log_term() > last_log_term) || 
+                                 (request.last_log_term() == last_log_term && request.last_log_index() >= last_log_index);
+
     // this is important, ensure that a node only votes once per term. 
     bool vote_granted = false;
-    if (voted_for.empty() || voted_for == candidate_id) {
+    if ((voted_for.empty() || voted_for == candidate_id) && candidate_up_to_date) {
         vote_granted = true;
         voted_for = candidate_id;
         reset_election_timeout(true, false);
@@ -671,6 +678,7 @@ void Node::handle_append_entries(const raft::leader_election::AppendEntries& app
     std::string leader_id = append_entries.leader_id();
     int id = append_entries.id();   
 
+    // the RPC has a smaller term number than the current one, reject on the spot. 
     if (received_term < current_term) {
         raft::leader_election::AppendEntriesResponse response;
         response.set_term(current_term);
@@ -681,13 +689,16 @@ void Node::handle_append_entries(const raft::leader_election::AppendEntries& app
         send_append_entries_response(response, sender_addr);
         return;
     }
-
+    
+    // this part is intended just for metrics of how many hertbeats have been received from the (previous) leader
+    // and maybe we should start couting afresh. 
     if (received_term > current_term && ev_is_active(&heartbeat_timer)) {
         LOG(INFO) << "Got a heartbeat from another leader with bigger term, resetting current heartbeat count...";
         heartbeat_current_term = 0;
         ev_timer_stop(loop, &heartbeat_timer);
     }
 
+    // TODO: I think this check could be forwarded to the dispatching thread, but for now, let's keep it here.
     if (sender_addr.sin_addr.s_addr == inet_addr(self_ip.c_str())) {
         // Ignore messages from self
         return;
@@ -710,9 +721,15 @@ void Node::handle_append_entries(const raft::leader_election::AppendEntries& app
 
     // If term is newer or equal, update current_term and leader info
     if (received_term > current_term) {
+        current_term = received_term;
+        // not part of the original raft specification
         latency_to_leader.clear();
         petition_count = 0;
     }
+
+    // above we eliminate cases where the newly received term number is smaller than the current term number.
+    // all below: we are in the case where the term number is the same or bigger than the current term number.
+    // should convert to folloer and acknoledge the new leader in whaever cases.  
     current_term = received_term;
     role = Role::FOLLOWER;
     current_leader_ip = leader_id.substr(0, leader_id.find(':'));
@@ -722,6 +739,48 @@ void Node::handle_append_entries(const raft::leader_election::AppendEntries& app
     reset_election_timeout(); // Reset election timeout upon receiving heartbeat
     // Assuming logs are consistent for simplicity
     LOG(INFO) << "DONE resetting election timeout... the current term is " << current_term << " and the current leader is " << current_leader_ip << ":" << current_leader_port;
+
+
+    // Begin processing for the potential new log entries. 
+    // reply false if log does not contain an entry at prevLogIndex whose term matches prevLogTerm
+    if (!raftLog.containsEntry(append_entries.prev_log_index(), append_entries.prev_log_term())) {
+        raft::leader_election::AppendEntriesResponse response;
+        response.set_term(current_term);
+        response.set_success(false);
+
+        // TODO: we can optionally include conflict information, omitted here for now
+        send_append_entries_response(response, sender_addr);
+        return;
+    }
+
+    // If an existing entry conflicts with a new one (same index but different terms), delete the existing entry and all that follow it
+    {
+        std::lock_guard<std::mutex> lock(raftLog.logMutex);
+        // this is the index that we start insering, and wiping out all inconsistent entries.
+        int insertion_index = append_entries.prev_log_index() + 1;
+        for (int i = 0; i < append_entries.entries_size(); i++) {
+            const raft::leader_election::LogEntry& new_entry = append_entries.entries(i);
+            logEntry existingEntry;
+            if (raftLog.getEntry(insertion_index, existingEntry)) {
+                if (existingEntry.term != new_entry.term()) {
+                    raftLog.deleteEntriesFrom(insertion_index);
+                    raftLog.appendEntry(new_entry.term(), new_entry.command());
+                }
+                // if matches, do nothing, and continue to the next one
+            } else {
+                // if the position is empty, just append the new entry
+                raftLog.appendEntry(new_entry.term(), new_entry.command());
+            }
+            insertion_index++;
+        }
+    }
+
+    // if leaderCommit > commitIndex, set commitIndex = min(leaderCommit, index of last new entry)
+    if (append_entries.leader_commit() > raftLog.commitIndex) {
+        std::lock_guard<std::mutex> lock(raftLog.logMutex);
+        raftLog.commitIndex = std::min(append_entries.leader_commit(), raftLog.getLastLogIndex());
+        applyCommitted_entries(); // persist the changes to the state machine
+    }
 
     raft::leader_election::AppendEntriesResponse response;
     response.set_term(current_term);
