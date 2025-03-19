@@ -14,4 +14,14 @@ cc_proto_library(
     visibility = ["//visibility:public"],
 )
 
+proto_library(
+    name = "raft_client_proto",
+    srcs = ["raft_client.proto"],
+    visibility = ["//visibility:public"],
+)
 
+cc_proto_library(
+    name = "raft_client_cc_proto",
+    deps = [":raft_client_proto"],
+    visibility = ["//visibility:public"],
+)

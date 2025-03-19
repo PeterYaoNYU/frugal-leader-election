@@ -2,10 +2,13 @@ cc_library(
     name = "node_lib",
     srcs = [
         "src/node.cpp",
+        "src/raftLog.cpp",
     ],
     hdrs = [
         "src/node.h",   
-        "src/process_config.h"
+        "src/process_config.h",
+        "src/raftLog.h",
+        "src/threadPool.h",
     ],
     includes = [
         "src",  # Include the "src" directory so node.h can be found.
@@ -15,6 +18,7 @@ cc_library(
         "@com_github_enki_libev//:libev",
         "@com_github_jbeder_yaml_cpp//:yaml-cpp",
         "//proto:raft_leader_election_cc_proto",
+        "//proto:raft_client_cc_proto",
         "//lib:utils",  
         "//lib:tcp_stat_manager",
         "//lib:net_latency_controller",

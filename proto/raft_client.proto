@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+package raft.client;
+
+message ClientRequest {
+  string command = 1;
+  int64 client_id = 2;
+  int64 request_id = 3;
+}
+
+message ClientResponse {
+  bool success = 1;
+  string response = 2;
+  int64 client_id = 3;
+  int64 request_id = 4;
+}

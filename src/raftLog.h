@@ -14,6 +14,7 @@ public:
     ~RaftLog();
 
     void appendEntry(const LogEntry& entry);
+    void appendEntry(int term, const std::string& command);
     int getLastLogIndex();
     int getLastLogTerm();
     bool getEntry(int index, LogEntry& entry);
@@ -24,9 +25,8 @@ public:
 
     int commitIndex;
     int lastApplied;
+    std::mutex log_mutex;
 
 private:
     std::vector<LogEntry> log;
-    // I choose not to expose the mutex to exernal classes
-    std::mutex log_mutex;
 };
