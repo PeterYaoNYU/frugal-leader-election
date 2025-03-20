@@ -56,3 +56,13 @@ void RaftLog::deleteEntriesStartingFrom(int index) {
 
     log.erase(log.begin() + index - 1, log.end());
 }
+
+int RaftLog::getCommitIndex() {
+    std::lock_guard<std::mutex> lock(log_mutex);
+    return commitIndex;
+}
+
+int RaftLog::getLastApplied() {
+    std::lock_guard<std::mutex> lock(log_mutex);
+    return lastApplied;
+}

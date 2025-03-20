@@ -194,6 +194,7 @@ private:
 
     void send_client_response(const raft::client::ClientResponse& response, const sockaddr_in& recipient_addr);
 
+    void send_proposals_to_followers(LogEntry& entry, int current_term, int prev_index, int prev_term, int commit_index);
 };
 
 

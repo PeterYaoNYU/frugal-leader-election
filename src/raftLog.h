@@ -23,6 +23,11 @@ public:
     // Delete all entries starting from index
     void deleteEntriesStartingFrom(int index);
 
+    int getCommitIndex();
+    int getLastApplied();
+    // void setCommitIndex(int index);
+    // void setLastApplied(int index);
+
     int commitIndex;
     int lastApplied;
     std::mutex log_mutex;

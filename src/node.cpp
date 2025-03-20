@@ -776,7 +776,7 @@ void Node::handle_append_entries(const raft::leader_election::AppendEntries& app
     }
 
     // if leaderCommit > commitIndex, set commitIndex = min(leaderCommit, index of last new entry)
-    if (append_entries.leader_commit() > raftLog.commitIndex) {
+    if (append_entries.leader_commit() > raftLog.getCommitIndex()) {
         std::lock_guard<std::mutex> lock(raftLog.log_mutex);
         raftLog.commitIndex = std::min(append_entries.leader_commit(), raftLog.getLastLogIndex());
         // TODO: Implement the persistence
@@ -1020,16 +1020,52 @@ void Node::handle_client_request(const raft::client::ClientRequest& request, con
     // TODO: Instead of sending off the request ASA it is received. 
     // poll from a request queue (concurrent) until it is empty
 
+    // this function will either dispatch immeidiately, or wait for a batch to form, more flexibility. 
+    send_proposals_to_followers(new_entry, current_term, prev_index, prev_term, raftLog.getCommitIndex());
+
+    // raft::leader_election::AppendEntries append_entries;
+    // append_entries.set_term(current_term);  
+    // append_entries.set_leader_id(self_ip + ":" + std::to_string(port));
+    // append_entries.set_prev_log_index(prev_index);
+    // append_entries.set_prev_log_term(prev_term);
+
+    // *append_entries.add_entries() = convertToProto(new_entry);
+    // append_entries.set_leader_commit(raftLog.commitIndex);
+
+}
+
+void Node::send_proposals_to_followers(LogEntry& entry, int current_term, int prev_index, int prev_term, int commit_index) {
     raft::leader_election::AppendEntries append_entries;
     append_entries.set_term(current_term);  
     append_entries.set_leader_id(self_ip + ":" + std::to_string(port));
     append_entries.set_prev_log_index(prev_index);
     append_entries.set_prev_log_term(prev_term);
 
-    *append_entries.add_entries() = convertToProto(new_entry);
-    append_entries.set_leader_commit(raftLog.commitIndex);
+    *append_entries.add_entries() = convertToProto(entry);
+    append_entries.set_leader_commit(commit_index);
 
+    raft::leader_election::MessageWrapper wrapper;
+    wrapper.set_type(raft::leader_election::MessageWrapper::APPEND_ENTRIES);
+    wrapper.set_payload(append_entries.SerializeAsString());
+
+    std::string serialized_message = wrapper.SerializeAsString();
+
+    for (const auto& [ip, peer_port] : peer_addresses) {
+        sockaddr_in peer_addr{};
+        peer_addr.sin_family = AF_INET;
+        peer_addr.sin_port = htons(peer_port);
+        inet_pton(AF_INET, ip.c_str(), &peer_addr.sin_addr);
+
+        ssize_t nsend = sendto(sock_fd, serialized_message.c_str(), serialized_message.size(), 0,
+                               (sockaddr*)&peer_addr, sizeof(peer_addr));
+        if (nsend == -1) {
+            LOG(ERROR) << "Failed to send proposal to " << ip << ":" << peer_port;
+        } else {
+            LOG(INFO) << "Sent proposal to " << ip << ":" << peer_port;
+        }
+    }
 }
+
 
 void Node::send_client_response(const raft::client::ClientResponse& response, const sockaddr_in& recipient_addr) {
     std::string serialized_message = response.SerializeAsString();
