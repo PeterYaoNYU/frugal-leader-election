@@ -138,6 +138,9 @@ private:
 
     RaftLog raftLog;
 
+    std::unordered_map<std::string, int> next_index;
+    std::unordered_map<std::string, int> match_index;
+
     void start_election_timeout(bool double_time=false, bool force_raft=false);
     void reset_election_timeout(bool double_time=false, bool force_raft=false);
     static void election_timeout_cb(EV_P_ ev_timer* w, int revents);
@@ -193,8 +196,7 @@ private:
     void handle_append_entries_response(const raft::leader_election::AppendEntriesResponse& response, const sockaddr_in& sender_addr);
 
     void send_client_response(const raft::client::ClientResponse& response, const sockaddr_in& recipient_addr);
-
-    void send_proposals_to_followers(LogEntry& entry, int current_term, int prev_index, int prev_term, int commit_index);
+    void send_proposals_to_followers(int current_term, int commit_index);
 };
 
 

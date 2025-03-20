@@ -589,6 +589,14 @@ void Node::become_leader() {
 
     LOG(INFO) << "[" << get_current_time() << "] Became leader. Starting to send heartbeats. Elected Term: " << current_term;
 
+    for (const auto& [ip, peer_port] : peer_addresses) {
+        std::string id = ip + ":" + std::to_string(peer_port);
+        if (id != self_ip + ":" + std::to_string(port)) {
+            next_index[id] = raftLog.getLastLogIndex() + 1;
+            match_index[id] = 0;
+        }
+    }
+
     // Initialize heartbeat timer
     ev_timer_init(&heartbeat_timer, heartbeat_cb, 0.0, 0.075); // 75 ms interval
     heartbeat_timer.data = this;
@@ -1021,8 +1029,7 @@ void Node::handle_client_request(const raft::client::ClientRequest& request, con
     // poll from a request queue (concurrent) until it is empty
 
     // this function will either dispatch immeidiately, or wait for a batch to form, more flexibility. 
-    send_proposals_to_followers(new_entry, current_term, prev_index, prev_term, raftLog.getCommitIndex());
-
+    send_proposals_to_followers(current_term, raftLog.commitIndex);
     // raft::leader_election::AppendEntries append_entries;
     // append_entries.set_term(current_term);  
     // append_entries.set_leader_id(self_ip + ":" + std::to_string(port));
@@ -1034,23 +1041,47 @@ void Node::handle_client_request(const raft::client::ClientRequest& request, con
 
 }
 
-void Node::send_proposals_to_followers(LogEntry& entry, int current_term, int prev_index, int prev_term, int commit_index) {
-    raft::leader_election::AppendEntries append_entries;
-    append_entries.set_term(current_term);  
-    append_entries.set_leader_id(self_ip + ":" + std::to_string(port));
-    append_entries.set_prev_log_index(prev_index);
-    append_entries.set_prev_log_term(prev_term);
-
-    *append_entries.add_entries() = convertToProto(entry);
-    append_entries.set_leader_commit(commit_index);
-
-    raft::leader_election::MessageWrapper wrapper;
-    wrapper.set_type(raft::leader_election::MessageWrapper::APPEND_ENTRIES);
-    wrapper.set_payload(append_entries.SerializeAsString());
-
-    std::string serialized_message = wrapper.SerializeAsString();
-
+void Node::send_proposals_to_followers(int current_term, int commit_index) {
+    // Iterate over each follower (skip self).
     for (const auto& [ip, peer_port] : peer_addresses) {
+        std::string follower_id = ip + ":" + std::to_string(peer_port);
+        if (follower_id == self_ip + ":" + std::to_string(port))
+            continue;
+
+        // Get the starting index for this follower.
+        int start_index = next_index[follower_id];
+
+        // Prepare an AppendEntries RPC containing log entries from start_index to the current last log index.
+        raft::leader_election::AppendEntries append_entries;
+        append_entries.set_term(current_term);
+        append_entries.set_leader_id(self_ip + ":" + std::to_string(port));
+
+        // The preceding log index/term.
+        int prev_index = start_index - 1;
+        int prev_term = 0;
+        if (prev_index > 0) {
+            LogEntry prevEntry;
+            if (raftLog.getEntry(prev_index, prevEntry))
+                prev_term = prevEntry.term;
+        }
+        append_entries.set_prev_log_index(prev_index);
+        append_entries.set_prev_log_term(prev_term);
+
+        // Add all entries from start_index onwards.
+        for (int i = start_index; i <= raftLog.getLastLogIndex(); i++) {
+            LogEntry entry;
+            if (raftLog.getEntry(i, entry)) {
+                *append_entries.add_entries() = convertToProto(entry);
+            }
+        }
+        append_entries.set_leader_commit(commit_index);
+
+        // Serialize and send this RPC to the follower.
+        raft::leader_election::MessageWrapper wrapper;
+        wrapper.set_type(raft::leader_election::MessageWrapper::APPEND_ENTRIES);
+        wrapper.set_payload(append_entries.SerializeAsString());
+        std::string serialized_message = wrapper.SerializeAsString();
+
         sockaddr_in peer_addr{};
         peer_addr.sin_family = AF_INET;
         peer_addr.sin_port = htons(peer_port);
@@ -1059,12 +1090,13 @@ void Node::send_proposals_to_followers(LogEntry& entry, int current_term, int pr
         ssize_t nsend = sendto(sock_fd, serialized_message.c_str(), serialized_message.size(), 0,
                                (sockaddr*)&peer_addr, sizeof(peer_addr));
         if (nsend == -1) {
-            LOG(ERROR) << "Failed to send proposal to " << ip << ":" << peer_port;
+            LOG(ERROR) << "Failed to send proposals to " << ip << ":" << peer_port;
         } else {
-            LOG(INFO) << "Sent proposal to " << ip << ":" << peer_port;
+            LOG(INFO) << "Sent proposals to " << ip << ":" << peer_port;
         }
     }
 }
+
 
 
 void Node::send_client_response(const raft::client::ClientResponse& response, const sockaddr_in& recipient_addr) {
