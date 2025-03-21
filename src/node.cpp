@@ -454,6 +454,15 @@ void Node::recv_cb(EV_P_ ev_io* w, int revents) {
                 self->handle_petition(petition_msg, sender_addr);
                 break;
             }
+            case raft::leader_election::AppendEntriesResponse: {
+                raft::leader_election::AppendEntriesResponse response;
+                if (!response.ParseFromString(wrapper.payload())) {
+                    LOG(ERROR) << "Failed to parse AppendEntriesResponse message.";
+                    return;
+                }
+                self->handle_append_entries_response(response, sender_addr);
+                break;
+            }
             default:
                 LOG(ERROR) << "Unknown message type.";
         }
