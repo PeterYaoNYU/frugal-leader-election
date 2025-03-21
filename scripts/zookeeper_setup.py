@@ -10,6 +10,11 @@ from delay_setup.delay_setup_asymmetric_topo import *
 import threading
 from fabric import ThreadingGroup
 
+from datetime import datetime
+from zoneinfo import ZoneInfo
+import re
+import matplotlib.pyplot as plt
+
 # List of nodes (replace with actual hostnames or IPs)
 nodes = [
     "PeterYao@c220g1-031111.wisc.cloudlab.us",
@@ -26,6 +31,131 @@ nodes_id_correspondence = [0, 2, 1, 3, 4]
 connections = {}
 
 switch_info = []
+
+
+def get_london_time():
+    """Return the current time in London time zone."""
+    return datetime.now(ZoneInfo("Europe/London"))
+
+def download_zookeeper_log(leader_node_id, conn):
+    """
+    Download the Zookeeper log file from the remote node.
+    Assumes the log is in /users/PeterYao/zookeeper/logs and that the file name starts with 'zookeeper-root-server-node-<leader>'.
+    """
+    remote_dir = "/users/PeterYao/zookeeper/logs/"
+    # Construct the expected filename.
+    file_name = f"zookeeper-root-server-node-{leader_node_id}.quorum.nyunetworks.emulab.net.out"
+    remote_file = remote_dir + file_name
+    local_file = file_name  # Save under the same name locally.
+    try:
+        conn.get(remote_file, local_file)
+        print(f"Downloaded log file: {remote_file} -> {local_file}")
+    except Exception as e:
+        print(f"Error downloading log file {remote_file} from node {leader_node_id}: {e}")
+    return local_file
+
+def parse_zookeeper_log(log_file, start_time, end_time):
+    """
+    Parse the given log file and count the occurrence of each node in the quorum.
+    Only lines with "All quorums present in synced leader tracker:" between start_time and end_time are considered.
+    """
+    counts = {i: 0 for i in range(1, 6)}  # nodes 1 to 5
+    time_format = "%Y-%m-%d %H:%M:%S,%f"
+    with open(log_file, 'r') as f:
+        for line in f:
+            if "All quorums present in synced leader tracker:" in line:
+                # Get timestamp from beginning of the line.
+                tokens = line.split()
+                if len(tokens) < 2:
+                    continue
+                timestamp_str = tokens[0] + " " + tokens[1]
+                try:
+                    # line_time = datetime.strptime(timestamp_str, time_format)
+                    line_time = datetime.strptime(timestamp_str, time_format).replace(tzinfo=ZoneInfo("Europe/London"))
+                except Exception as e:
+                    print(f"Error parsing timestamp '{timestamp_str}': {e}")
+                    continue
+                # Only consider lines within the experiment window.
+                if start_time <= line_time <= end_time:
+                    m = re.search(r"\[([0-9,\s]+)\]", line)
+                    if m:
+                        quorum_str = m.group(1)
+                        quorum_list = [int(x) for x in quorum_str.split(",") if x.strip().isdigit()]
+                        for node in quorum_list:
+                            if node in counts:
+                                counts[node] += 1
+    return counts
+
+def plot_quorum_counts(counts, experiment_info):
+    """
+    Plot a bar chart (nodes 1 to 5) of the counts.
+    """
+    nodes = sorted(counts.keys())
+    freq = [counts[node] for node in nodes]
+    plt.figure()
+    plt.bar(nodes, freq)
+    plt.xlabel("Node")
+    plt.ylabel("Count")
+    plt.title(f"Quorum Counts for {experiment_info}")
+    plt.xticks(nodes)
+    # plt.show()
+    plt.savefig(f"quorum_counts_{experiment_info}.png")
+    
+    
+def varying_leader_quorum_exp():
+    """
+    For each leader:
+      1. Run all experiments (recording the London start and end time for each).
+      2. Download the zookeeper log file from the leader only once.
+      3. For each experiment, parse the log (only considering lines between the recorded start and end time) to count quorum appearances.
+      4. Plot the resulting bar chart.
+    """
+    experiment_logs = {}  # Dictionary to store experiments per leader.
+    for node_id in [1]:
+        clear_all_switch_weights()
+        designate_leader(node_id, [0, 1, 2, 3, 4])
+        base_delay = 0
+        leader_experiments = []  # To hold experiment info tuples: (experiment_key, start_time, end_time)
+        
+        for lat in [0.5, 1.0]:
+            if lat != 0:
+                setup_delay_fat_tree(lat)
+            thd_cnt = 20
+            for j in range(0, 3):
+                experiment_key = (node_id, lat, j)
+                start_time = get_london_time()
+                print(f"Starting experiment {experiment_key} at {start_time}")
+                
+                # Run the YCSB workload experiment.
+                run_ycsb_workload_from_node(
+                    0, 0,
+                    f"zk_leader_node{node_id}_{lat}ms_{thd_cnt}threads_base_delay_{base_delay}_ms_run{j}_quorum.txt",
+                    contact_leader=True, threads_count=thd_cnt, num_operations=10000, read_ratio=0.1
+                )
+                
+                end_time = get_london_time()
+                print(f"Finished experiment {experiment_key} at {end_time}")
+                leader_experiments.append((experiment_key, start_time, end_time))
+        
+        # Save all experiments for this leader.
+        experiment_logs[node_id] = leader_experiments
+        
+        # Download the log file from the leader once.
+        leader_conn = connections.get(node_id)
+        if leader_conn is None:
+            print(f"Leader connection for node {node_id} not found.")
+            continue
+        log_file = download_zookeeper_log(node_id, leader_conn)
+        
+        # For each experiment, parse the log file and plot the quorum counts.
+        for exp_info in leader_experiments:
+            experiment_key, start_time, end_time = exp_info
+            counts = parse_zookeeper_log(log_file, start_time, end_time)
+            experiment_info = f"Leader {node_id}, latency {experiment_key[1]}ms, run {experiment_key[2]}"
+            plot_quorum_counts(counts, experiment_info)
+                
+    print("Experiment logs:", experiment_logs)
+
 
 def load_connections(yaml_file):
     with open(yaml_file, 'r') as f:
@@ -524,8 +654,8 @@ if __name__ == "__main__":
     #     download_zookeeper(connection)
         # upload_zoo_cfg(connection)   
     # create_my_id(connections)     
-    kill_running_zk(connections.values())
-    start_zookeeper_server(connections.values())
+    # kill_running_zk(connections.values())
+    # start_zookeeper_server(connections.values())
     # check_leader_node(connections.values())
     # start_zk_ensemble_with_designated_leader(group, 0)
     # run_ycsb_workload_from_node(1, 1, "zkProfile13.txt", contact_leader=False)
@@ -536,7 +666,8 @@ if __name__ == "__main__":
     # get_leader(group)
     
     # comprehensive_exp(1, 1, "pareto", 0.1, 0.9)
-    varying_leader_exp()
+    # varying_leader_exp()
+    varying_leader_quorum_exp()
     # run_once(connections)
     # varying_read_write_exp()
     
