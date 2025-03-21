@@ -7,6 +7,9 @@ import yaml
 from ycsb_analysis import *
 from delay_setup.delay_setup_asymmetric_topo import *
 
+import threading
+from fabric import ThreadingGroup
+
 # List of nodes (replace with actual hostnames or IPs)
 nodes = [
     "PeterYao@c220g1-031111.wisc.cloudlab.us",
@@ -186,7 +189,9 @@ def kill_node(node_id):
         print(f"Node {node_id} not found in connections.")
         return
     try:
-        conn.sudo("~/apache-zookeeper-3.8.4-bin/bin/zkServer.sh stop", hide=True)
+        # conn.sudo("~/apache-zookeeper-3.8.4-bin/bin/zkServer.sh stop", hide=True)
+        conn.sudo("~/zookeeper/bin/zkServer.sh stop", hide=True)
+        
         print(f"Node {node_id} killed")
     except Exception as e:
         print(f"Error killing node {node_id}: {e}")
@@ -197,7 +202,9 @@ def start_node(node_id):
         print(f"Node {node_id} not found in connections.")
         return
     try:
-        conn.sudo("~/apache-zookeeper-3.8.4-bin/bin/zkServer.sh start", hide=True)
+        # conn.sudo("~/apache-zookeeper-3.8.4-bin/bin/zkServer.sh start", hide=True)
+        conn.sudo("~/zookeeper/bin/zkServer.sh start", hide=True)
+        
         print(f"Node {node_id} started")
     except Exception as e:
         print(f"Error starting node {node_id}: {e}")
@@ -211,7 +218,9 @@ def get_leader(group):
     for id, conn in connections.items():
         node_id = id
         try:
-            result = conn.run("/users/PeterYao/apache-zookeeper-3.8.4-bin/bin/zkServer.sh status", hide=True)
+            
+            result = conn.run("/users/PeterYao/zookeeper/bin/zkServer.sh status", hide=True)
+            # result = conn.run("/users/PeterYao/apache-zookeeper-3.8.4-bin/bin/zkServer.sh status", hide=True)
         except Exception as e:
             print(f"Error checking Zookeeper process stauts on {conn.host}: {e}")
             continue
@@ -238,7 +247,7 @@ def designate_leader(node_id, node_id_list):
                 kill_node(node)
             except Exception as e:
                 print(f"Error killing node {node}, maybe already killed: {e}")
-        sleep(15)
+        sleep(25)
         for node in temp_node_list:
             start_node(node)
         leader_node_id, leader_conn = get_leader(connections)
@@ -346,11 +355,11 @@ def varying_leader_exp():
     #     add_delay_to_node(4, lat, 1, "pareto", connections)
     #     for thd_cnt in range(18, 36, 2):
     #         run_ycsb_workload_from_node(4, 4, f"zk_leader_node4_{lat}ms_{thd_cnt}threads.txt", contact_leader=True, threads_count=thd_cnt, num_operations=3000)
-    for node_id in [0, 1]:
+    for node_id in [1]:
         clear_all_switch_weights()
         designate_leader(node_id, [0, 1, 2, 3, 4])
         base_delay = 0
-        for lat in [0.0, 2.0]:
+        for lat in [0, 2.0]:
             if lat != 0:
                 setup_delay_fat_tree(lat)
             thd_cnt = 20
@@ -400,7 +409,9 @@ def kill_running_zk(group):
     for conn in group:
         try:
             # Attempt a graceful stop
-            conn.sudo("~/apache-zookeeper-3.8.4-bin/bin/zkServer.sh stop", hide=True)
+            # conn.sudo("~/apache-zookeeper-3.8.4-bin/bin/zkServer.sh stop", hide=True)
+            conn.sudo("~/zookeeper/bin/zkServer.sh stop", hide=True)
+            
             # Force-kill any remaining process (if needed)
             conn.sudo("pkill -f QuorumPeerMain", warn=True, hide=True)
             print(f"Zookeeper process killed on {conn.host}")
@@ -410,7 +421,9 @@ def kill_running_zk(group):
 def start_zookeeper_server(group):
     for conn in (list(group)):
         try:
-            conn.sudo("~/apache-zookeeper-3.8.4-bin/bin/zkServer.sh start")
+            # conn.run("sudo ~/apache-zookeeper-3.8.4-bin/bin/zkServer.sh start")
+            conn.run("sudo ~/zookeeper/bin/zkServer.sh start")
+            
             print(f"Zookeeper server started on {conn}")
         except Exception as e:
             print(f"Error starting Zookeeper server on {conn}: {e}")
@@ -432,16 +445,21 @@ def create_my_id(group_dict):
     for id, conn in group_dict.items():
         # conn.sudo("mkdir -p /var/lib/zookeeper", hide=True)
         # conn.sudo("touch /var/lib/zookeeper/myid", hide=True)
-        print()
-        conn.run("mkdir -p /users/PeterYao/apache-zookeeper-3.8.4-bin/data", hide=True)
+        # conn.run("mkdir -p /users/PeterYao/apache-zookeeper-3.8.4-bin/data", hide=True)
+        conn.run("mkdir -p /users/PeterYao/zookeeper/data", hide=True)
+        
         myid= id + 1
-        conn.run(f"echo {myid} | sudo tee /users/PeterYao/apache-zookeeper-3.8.4-bin/data/myid", hide=True)
+        # conn.run(f"echo {myid} | sudo tee /users/PeterYao/apache-zookeeper-3.8.4-bin/data/myid", hide=True)
+        conn.run(f"echo {myid} | sudo tee /users/PeterYao/zookeeper/data/myid", hide=True)
+        
         print(f"myid file created on {conn}")
         
 
 def upload_zoo_cfg(conn):
     try:
-        conn.put("zoo.cfg", "apache-zookeeper-3.8.4-bin/conf/zoo.cfg")
+        # conn.put("zoo.cfg", "apache-zookeeper-3.8.4-bin/conf/zoo.cfg")
+        conn.put("zoo.cfg", "zookeeper/conf/zoo.cfg")
+        
         print(f"zoo.cfg uploaded on {conn}")
     except Exception as e:
         print(f"Error uploading zoo.cfg on {conn}: {e}")
@@ -454,6 +472,25 @@ def download_zookeeper(conn):
         print(f"Zookeeper downloaded on {conn}")
     except Exception as e:
         print(f"Error downloading Zookeeper on {conn}: {e}")
+        
+def download_zookeeper_github(conn):
+    try:
+        # conn.run("git clone https://github.com/PeterYaoNYU/zookeeper.git", hide=True)
+        # conn.run("sudo apt update && sudo apt install openjdk-11-jdk -y")
+        # conn.run("export JAVA_HOME=/usr/lib/jvm/java-11-openjdk-amd64")
+        conn.run("export JAVA_HOME=/usr/lib/jvm/java-11-openjdk-amd64 && cd zookeeper && mvn clean install -DskipTests")
+        print(f"Zookeeper downloaded on {conn}")
+    except Exception as e:
+        print(f"Error downloading Zookeeper on {conn}: {e}")
+
+def install_zookeeper_parallel(connections):
+    threads = []
+    for conn in connections.values():
+        t = threading.Thread(target=download_zookeeper_github, args=(conn,))
+        t.start()
+        threads.append(t)
+    for t in threads:
+        t.join()
 
 # Function to set up Java
 def setup_java(host):
@@ -480,13 +517,14 @@ if __name__ == "__main__":
     group = ThreadingGroup(*nodes)
     load_connections("fattree_physical.yaml")
     # upload_new_logback_xml(connections)
-    # setup_ycsb([1, 2, 3, 4])
+    # setup_ycsb([0, 1, 2, 3, 4])
+    # install_zookeeper_parallel(connections)
     # for connection in connections.values():
     #     connection.run("sudo apt update && sudo apt install -y default-jdk && java -version")
     #     download_zookeeper(connection)
-    #     upload_zoo_cfg(connection)   
+        # upload_zoo_cfg(connection)   
     # create_my_id(connections)     
-    # kill_running_zk(connections.values())
+    kill_running_zk(connections.values())
     start_zookeeper_server(connections.values())
     # check_leader_node(connections.values())
     # start_zk_ensemble_with_designated_leader(group, 0)

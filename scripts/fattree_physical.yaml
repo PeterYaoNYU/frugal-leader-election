@@ -1,51 +1,51 @@
 nodes:
   - id: 0
-    connection: "PeterYao@pc494.emulab.net"
+    connection: "PeterYao@pc556.emulab.net"
     port: 22
     zk_ip_addr: "10.0.0.2"
 
   - id: 1
-    connection: "PeterYao@pc486.emulab.net"
+    connection: "PeterYao@pc527.emulab.net"
     port: 22
     zk_ip_addr: "10.0.0.3"
 
   - id: 2
-    connection: "PeterYao@pc423.emulab.net"
+    connection: "PeterYao@pc555.emulab.net"
     port: 22
     zk_ip_addr: "10.0.4.2"
 
   - id: 3
-    connection: "PeterYao@pc487.emulab.net"
+    connection: "PeterYao@pc530.emulab.net"
     port: 22
     zk_ip_addr: "10.0.1.2"
 
   - id: 4
-    connection: "PeterYao@pc438.emulab.net"
+    connection: "PeterYao@pc558.emulab.net"
     port: 22
     zk_ip_addr: "10.0.1.3"
 
 switches:
   - id: 1
-    connection: "PeterYao@pc433.emulab.net"
+    connection: "PeterYao@pc521.emulab.net"
     interfaces:
-      enp5s0f0: "10.0.3.2"
-      eno4: "10.0.0.1"
+      eno4: "10.0.3.2"
+      enp5s0f1: "10.0.0.1"
 
   - id: 2
-    connection: "PeterYao@pc485.emulab.net"
+    connection: "PeterYao@pc537.emulab.net"
     interfaces:
-      enp5s0f0: "10.0.3.1"
-      eno2: "10.0.2.1"
+      enp5s0f1: "10.0.3.1"
+      eno4: "10.0.2.1"
 
   - id: 3
-    connection: "PeterYao@pc418.emulab.net"
+    connection: "PeterYao@pc540.emulab.net"
     interfaces:
-      eno2: "10.0.2.2"
-      enp5s0f0: "10.0.4.1"
+      eno4: "10.0.2.2"
+      enp5s0f1: "10.0.4.1"
 
   - id: 4
-    connection: "PeterYao@pc504.emulab.net"
+    connection: "PeterYao@pc522.emulab.net"
     interfaces:
-      eno2: "10.0.2.3"
+      enp5s0f1: "10.0.2.3"
       eno4: "10.0.1.1"
     
