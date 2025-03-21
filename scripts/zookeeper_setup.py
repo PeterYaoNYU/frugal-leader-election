@@ -111,13 +111,13 @@ def varying_leader_quorum_exp():
       4. Plot the resulting bar chart.
     """
     experiment_logs = {}  # Dictionary to store experiments per leader.
-    for node_id in [1]:
+    for node_id in [1, 2, 3]:
         clear_all_switch_weights()
         designate_leader(node_id, [0, 1, 2, 3, 4])
         base_delay = 0
         leader_experiments = []  # To hold experiment info tuples: (experiment_key, start_time, end_time)
         
-        for lat in [0.5, 1.0]:
+        for lat in [0.5, 1.0, 1.5, 2.0]:
             if lat != 0:
                 setup_delay_fat_tree(lat)
             thd_cnt = 20

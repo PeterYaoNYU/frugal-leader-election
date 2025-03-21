@@ -686,6 +686,8 @@ void Node::handle_append_entries(const raft::leader_election::AppendEntries& app
     std::string leader_id = append_entries.leader_id();
     int id = append_entries.id();   
 
+    int match_index = 0;
+
     // the RPC has a smaller term number than the current one, reject on the spot. 
     if (received_term < current_term) {
         raft::leader_election::AppendEntriesResponse response;
@@ -755,11 +757,15 @@ void Node::handle_append_entries(const raft::leader_election::AppendEntries& app
         raft::leader_election::AppendEntriesResponse response;
         response.set_term(current_term);
         response.set_success(false);
+        response.set_match_index(match_index);
 
         // TODO: we can optionally include conflict information, omitted here for now
         send_append_entries_response(response, sender_addr);
         return;
     }
+
+    // implementation in referecen to this: https://github.com/ongardie/raftscope/blob/master/raft.js
+    int index = append_entries.prev_log_index();
 
     // If an existing entry conflicts with a new one (same index but different terms), delete the existing entry and all that follow it
     {
@@ -767,6 +773,7 @@ void Node::handle_append_entries(const raft::leader_election::AppendEntries& app
         // this is the index that we start insering, and wiping out all inconsistent entries.
         int insertion_index = append_entries.prev_log_index() + 1;
         for (int i = 0; i < append_entries.entries_size(); i++) {
+            index++;
             const raft::leader_election::LogEntry& new_entry = append_entries.entries(i);
             LogEntry existingEntry;
             if (raftLog.getEntry(insertion_index, existingEntry)) {
@@ -783,6 +790,8 @@ void Node::handle_append_entries(const raft::leader_election::AppendEntries& app
         }
     }
 
+    match_index = index;
+
     // if leaderCommit > commitIndex, set commitIndex = min(leaderCommit, index of last new entry)
     if (append_entries.leader_commit() > raftLog.getCommitIndex()) {
         std::lock_guard<std::mutex> lock(raftLog.log_mutex);
@@ -794,6 +803,7 @@ void Node::handle_append_entries(const raft::leader_election::AppendEntries& app
     raft::leader_election::AppendEntriesResponse response;
     response.set_term(current_term);
     response.set_success(true);
+    response.set_match_index(match_index);
 
     send_append_entries_response(response, sender_addr);
 
@@ -1205,4 +1215,35 @@ void Node::handle_petition(const raft::leader_election::Petition& petition_msg, 
     }
 }
 
-void Node:: 
+void Node::handle_append_entries_response(const raft::leader_election::AppendEntriesResponse& response, const sockaddr_in& sender_addr) {
+    if (role != Role::LEADER) {
+        return;
+    }
+
+    int received_term = response.term();
+    if (received_term > current_term) {
+        current_term = received_term;
+        role = Role::FOLLOWER;
+        voted_for = "";
+        latency_to_leader.clear();
+        petition_count = 0;
+        return;
+    }
+
+    std::string sender_ip = inet_ntoa(sender_addr.sin_addr);
+    int sender_port = ntohs(sender_addr.sin_port);
+    std::string sender_id = sender_ip + ":" + std::to_string(sender_port);
+    
+    if (response.success()) {
+        // according to the implementation specification at: https://github.com/ongardie/raftscope/blob/master/raft.js
+        match_index[sender_id] = std::max(match_index[sender_id], response.match_index());
+        next_index[sender_id] = response.match_index() + 1;
+    } else {
+        // // If conflict_index is provided, set next_index accordingly:
+        // if (response.set_conflict_index()) {
+        //     next_index[sender_id] = response.conflict_index();
+        // } else {
+            // Fallback: decrement by one (ensuring it stays at least 1)
+            next_index[sender_id] = std::max(1, next_index[sender_id] - 1);
+    }
+}
