@@ -454,7 +454,7 @@ void Node::recv_cb(EV_P_ ev_io* w, int revents) {
                 self->handle_petition(petition_msg, sender_addr);
                 break;
             }
-            case raft::leader_election::AppendEntriesResponse: {
+            case raft::leader_election::MessageWrapper::APPEND_ENTRIES_RESPONSE: {
                 raft::leader_election::AppendEntriesResponse response;
                 if (!response.ParseFromString(wrapper.payload())) {
                     LOG(ERROR) << "Failed to parse AppendEntriesResponse message.";
@@ -1254,5 +1254,34 @@ void Node::handle_append_entries_response(const raft::leader_election::AppendEnt
         // } else {
             // Fallback: decrement by one (ensuring it stays at least 1)
             next_index[sender_id] = std::max(1, next_index[sender_id] - 1);
+    }
+}
+
+void Node::updated_commit_index() {
+    std::lock_guard<std::mutex> lock(raftLog.log_mutex);
+
+    int new_commit_index = raftLog.commitIndex;
+    int last_log_index = raftLog.getLastLogIndex();
+    for (int i = raftLog.commitIndex + 1; i <= last_log_index; i++) {
+        int count = 1; // Count self
+        for (const auto& [ip, peer_port] : peer_addresses) {
+            std::string id = ip + ":" + std::to_string(peer_port);
+            if (match_index[id] >= i) {
+                count++;
+            }
+        }
+        if (count >= majority_count) {
+            LogEntry entry;
+            if (raftLog.getEntry(i, entry) && entry.term == current_term) {
+                new_commit_index = i;
+            }
+        }
+    }
+
+    if (new_commit_index != raftLog.commitIndex) {
+        raftLog.commitIndex = new_commit_index;
+        LOG(INFO) << "Advanced commit index to: " << new_commit_index;
+        // Optionally, trigger applying the newly committed entries to the state machine.
+        // apply_committed_entries();
     }
 }
