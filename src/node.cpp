@@ -315,7 +315,7 @@ void Node::start_election_timeout(bool double_time, bool force_raft) {
 void Node::reset_election_timeout(bool double_time, bool force_raft) {
     ev_timer_stop(loop, &election_timer);
 
-    LOG(INFO) << "resetting election timeout... the current term heartbeat count is " << heartbeat_current_term;
+    // LOG(INFO) << "resetting election timeout... the current term heartbeat count is " << heartbeat_current_term;
     if (double_time) {
         start_election_timeout(true, force_raft);
     } else {
@@ -326,7 +326,7 @@ void Node::reset_election_timeout(bool double_time, bool force_raft) {
 }
 
 void Node::election_timeout_cb(EV_P_ ev_timer* w, int revents) {
-    LOG(INFO) << "Inside election timeout callback";
+    // LOG(INFO) << "Inside election timeout callback";
     Node* self = static_cast<Node*>(w->data);
 
     if (self->check_false_positive) {
@@ -384,7 +384,7 @@ void Node::send_request_vote() {
 }
 
 void Node::heartbeat_cb(EV_P_ ev_timer* w, int revents) {
-    LOG(INFO) << "Heartbeat callback";
+    // LOG(INFO) << "Heartbeat callback";
     Node* self = static_cast<Node*>(w->data);
     self->send_heartbeat();
 }
@@ -653,9 +653,10 @@ void Node::send_heartbeat() {
                                    (sockaddr*)&peer_addr, sizeof(peer_addr));
             if (nsend == -1) {
                 LOG(ERROR) << "Failed to send heartbeat to " << ip << ":" << peer_port;
-            } else {
-                LOG(INFO) << "Sent heartbeat to " << ip << ":" << peer_port;
-            }
+            } 
+            // else {
+            //     LOG(INFO) << "Sent heartbeat to " << ip << ":" << peer_port;
+            // }
         }
     }
 
@@ -1014,6 +1015,7 @@ double Node::get_latency_to_peer(const std::string& peer_id) {
 
 void Node::handle_client_request(const raft::client::ClientRequest& request, const sockaddr_in& sender_addr) {
     if (role != Role::LEADER) {
+        LOG(INFO) << "Not a leader. Cannot handle client request.";
         auto client_id = request.client_id();
         auto client_request_id = request.request_id();
         LOG(INFO) << "Not a leader. Cannot handle client request.";
@@ -1057,7 +1059,7 @@ void Node::handle_client_request(const raft::client::ClientRequest& request, con
 
     // *append_entries.add_entries() = convertToProto(new_entry);
     // append_entries.set_leader_commit(raftLog.commitIndex);
-
+    LOG(INFO) << "Received client request: " << request.command() << " from " << inet_ntoa(sender_addr.sin_addr) << ":" << ntohs(sender_addr.sin_port);
 }
 
 void Node::send_proposals_to_followers(int current_term, int commit_index) {

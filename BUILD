@@ -41,3 +41,36 @@ cc_binary(
     ],
     copts = ["-std=c++17"],  
 )
+
+cc_library(
+    name = "client_lib",
+    srcs = [
+        "src/client.cpp",
+    ],
+    hdrs = [
+        "src/client.h",
+    ],
+    deps = [
+        "@com_github_google_glog//:glog",
+        "@com_github_enki_libev//:libev",
+        "@com_github_jbeder_yaml_cpp//:yaml-cpp",
+        "@com_github_cameron314_concurrentqueue//:concurrentqueue",
+        "//proto:raft_client_cc_proto",
+        "//lib:utils",  
+    ],
+    copts = ["-std=c++17"],
+)
+
+cc_binary(
+    name = "client",
+    srcs = [
+        "src/client_main.cpp",
+    ],
+    deps = [
+        ":client_lib",
+    ],
+    linkopts = [
+        "-pthread",
+    ],
+    copts = ["-std=c++17"],
+)
