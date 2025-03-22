@@ -463,6 +463,15 @@ void Node::recv_cb(EV_P_ ev_io* w, int revents) {
                 self->handle_append_entries_response(response, sender_addr);
                 break;
             }
+            case raft::leader_election::MessageWrapper::CLIENT_REQUEST: {
+                raft::client::ClientRequest client_request;
+                if (!client_request.ParseFromString(wrapper.payload())) {
+                    LOG(ERROR) << "Failed to parse ClientRequest message.";
+                    return;
+                }
+                self->handle_client_request(client_request, sender_addr);
+                break;
+            }
             default:
                 LOG(ERROR) << "Unknown message type.";
         }
@@ -1014,6 +1023,7 @@ double Node::get_latency_to_peer(const std::string& peer_id) {
 }
 
 void Node::handle_client_request(const raft::client::ClientRequest& request, const sockaddr_in& sender_addr) {
+    LOG(INFO) << "Received client request: " << request.command() << " from " << inet_ntoa(sender_addr.sin_addr) << ":" << ntohs(sender_addr.sin_port);
     if (role != Role::LEADER) {
         LOG(INFO) << "Not a leader. Cannot handle client request.";
         auto client_id = request.client_id();
@@ -1027,6 +1037,8 @@ void Node::handle_client_request(const raft::client::ClientRequest& request, con
         send_client_response(response, sender_addr);    
         return;
     }
+
+    LOG(INFO) << "Am the leader, handling client request.";
 
     // append new command as a log entry
     int new_log_index = raftLog.getLastLogIndex() + 1;

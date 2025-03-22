@@ -84,6 +84,7 @@ message MessageWrapper {
     APPEND_ENTRIES_RESPONSE = 3;
     PENALTY_SCORE = 4;
     PETITION = 5;
+    CLIENT_REQUEST = 6;
   }
   MessageType type = 1;
   bytes payload = 2;

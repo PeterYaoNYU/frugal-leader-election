@@ -263,6 +263,48 @@ def start_remote_default(c):
     print("All remote nodes have been started.")
     print("Logs are available in the 'logs/' directory on each respective node.")
 
+
+# invoke start-client --serverIp 127.0.0.4 --serverPort 7899 --value 0.5
+@task
+def start_client(c, serverIp, serverPort, value):
+    """
+    Starts the client process locally.
+    
+    Parameters:
+      server_ip (str): The IP address of the server to connect to.
+      server_port (int): The port number of the server.
+      sendMode (str): The sending mode ("fixed" or "maxcap").
+      value (str): If sendMode is "fixed", the fixed interval in seconds (as a float);
+                   if sendMode is "maxcap", the maximum number of in-flight requests (as an int).
+    """
+    # print("sendMode is: ", sendMode)
+    # if sendMode.lower() == "fixed":
+    #     mode_arg = "fixed"
+    # elif sendMode.lower() == "maxcap":
+    #     mode_arg = "maxcap"
+    # else:
+    #     print("Unknown mode. Use 'fixed' or 'maxcap'.")
+    #     return
+
+    sendMode = "fixed"
+
+    binary_path = "../bazel-bin/client"  # Path to the built client binary.
+    # Build the command-line arguments. (Client expects: server_ip server_port mode value)
+    cmd = [binary_path, serverIp, str(serverPort), sendMode, value]
+    
+    # Log our intention (using Python's print, but you could also use logging if desired)
+    print(f"Starting client with command: {' '.join(cmd)}")
+
+    try:
+        # client_proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        client_proc = subprocess.Popen(cmd)
+        # Store the process PID in a global dictionary (or you might want to manage it in another way)
+        processes["client"] = client_proc
+        print(f"Client started with PID {client_proc.pid}")
+    except Exception as e:
+        print(f"Failed to start client: {e}")
+        
+        
 @task
 def start(c):
     """

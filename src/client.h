@@ -11,6 +11,7 @@
 #include <sstream>
 #include <string>
 #include "proto/raft_client.pb.h"
+#include "proto/raft_leader_election.pb.h"
 
 
 // Sending modes

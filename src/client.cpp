@@ -30,13 +30,14 @@ Client::Client(const std::string& server_ip, int server_port, SendMode mode,
         LOG(FATAL) << "Invalid server IP: " << server_ip_;
     }
 
-    // Optionally, bind to any local address.
     sockaddr_in local_addr{};
     local_addr.sin_family = AF_INET;
     local_addr.sin_port = htons(0); // let the OS choose a free port
-    local_addr.sin_addr.s_addr = INADDR_ANY;
+    if (inet_pton(AF_INET, "127.0.0.10", &local_addr.sin_addr) <= 0) {
+        LOG(FATAL) << "Invalid local IP address: 127.0.0.10";
+    }
     if (bind(sock_fd_, (sockaddr*)&local_addr, sizeof(local_addr)) < 0) {
-        LOG(FATAL) << "Failed to bind local socket.";
+        LOG(FATAL) << "Failed to bind local socket to 127.0.0.10.";
     }
 
     // Initialize the libev watchers.
@@ -80,6 +81,12 @@ void Client::send_request() {
         return;
     }
 
+    raft::leader_election::MessageWrapper wrapper;
+    wrapper.set_type(raft::leader_election::MessageWrapper::CLIENT_REQUEST);
+    wrapper.set_payload(serialized_request);
+
+    serialized_request = wrapper.SerializeAsString();
+
     ssize_t sent = sendto(sock_fd_, serialized_request.c_str(), serialized_request.size(), 0,
                             (sockaddr*)&server_addr_, sizeof(server_addr_));
     if (sent < 0) {
@@ -119,6 +126,7 @@ void Client::recv_cb(struct ev_loop* loop, ev_io* w, int revents) {
         LOG(ERROR) << "recvfrom() error.";
         return;
     }
+    LOG(INFO) << "Got a response from: " << inet_ntoa(from_addr.sin_addr) << ":" << ntohs(from_addr.sin_port);
     std::string serialized_response(buffer, nread);
     client->handle_response(serialized_response);
 }

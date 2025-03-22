@@ -41,7 +41,7 @@ int main(int argc, char* argv[]) {
     }
 
     // Use a dummy client id (could be randomized or assigned)
-    int client_id = 12345;
+    int client_id = 12367;
 
     Client client(server_ip, server_port, mode, fixed_interval, max_in_flight, client_id);
     client.run();

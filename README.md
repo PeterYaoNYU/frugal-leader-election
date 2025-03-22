@@ -1,7 +1,8 @@
 ### How to build?
 I use the Bazel build system. Any any location, call:
 ```bash
-bazel build //:leader_election
+bazel-7.5.0 build //:leader_election
+bazel-7.5.0 build //:client
 ```
 
 ### How to run?
