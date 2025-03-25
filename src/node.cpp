@@ -642,14 +642,28 @@ void Node::send_heartbeat() {
     append_entries.set_leader_id(self_ip + ":" + std::to_string(port));
     append_entries.set_id(++heartbeat_count);
 
-    // wrap around:
-    raft::leader_election::MessageWrapper wrapper;
-    wrapper.set_type(raft::leader_election::MessageWrapper::APPEND_ENTRIES);
-    wrapper.set_payload(append_entries.SerializeAsString());
-
-    std::string serialized_message = wrapper.SerializeAsString();   
-
     for (const auto& [ip, peer_port] : peer_addresses) {
+        int start_index = next_index[ip + ":" + std::to_string(peer_port)];
+        // The preceding log index/term.
+        int prev_index = start_index - 1;
+        int prev_term = 0;
+        if (prev_index > 0) {
+            LogEntry prevEntry;
+            if (raftLog.getEntry(prev_index, prevEntry))
+                prev_term = prevEntry.term;
+        }
+        append_entries.set_prev_log_index(prev_index);
+        append_entries.set_prev_log_term(prev_term);
+
+        append_entries.set_leader_commit(raftLog.getCommitIndex());
+
+        // wrap around:
+        raft::leader_election::MessageWrapper wrapper;
+        wrapper.set_type(raft::leader_election::MessageWrapper::APPEND_ENTRIES);
+        wrapper.set_payload(append_entries.SerializeAsString());
+
+        std::string serialized_message = wrapper.SerializeAsString();   
+
         sockaddr_in peer_addr{};
         peer_addr.sin_family = AF_INET;
         peer_addr.sin_port = htons(peer_port);
