@@ -1287,6 +1287,7 @@ void Node::handle_append_entries_response(const raft::leader_election::AppendEnt
         match_index[sender_id] = std::max(match_index[sender_id], response.match_index());
         next_index[sender_id] = response.match_index() + 1;
         LOG(INFO) << "Success AE response from " << sender_id << ". Match index: " << response.match_index() << ". Next index: " << next_index[sender_id];
+        updated_commit_index();
     } else {
         // // If conflict_index is provided, set next_index accordingly:
         // if (response.set_conflict_index()) {
