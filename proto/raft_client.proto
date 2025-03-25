@@ -13,4 +13,5 @@ message ClientResponse {
   string response = 2;
   int64 client_id = 3;
   int64 request_id = 4;
+  string leader_id = 5;
 }

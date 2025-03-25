@@ -292,15 +292,21 @@ def start_client(c, serverIp, serverPort, value):
     # Build the command-line arguments. (Client expects: server_ip server_port mode value)
     cmd = [binary_path, serverIp, str(serverPort), sendMode, value]
     
-    # Log our intention (using Python's print, but you could also use logging if desired)
-    print(f"Starting client with command: {' '.join(cmd)}")
-
+    # Create logs directory if it doesn't exist
+    logs_dir = Path("logs")
+    logs_dir.mkdir(exist_ok=True)
+    log_file = logs_dir / "client.log"
+    
     try:
-        # client_proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-        client_proc = subprocess.Popen(cmd)
-        # Store the process PID in a global dictionary (or you might want to manage it in another way)
-        processes["client"] = client_proc
-        print(f"Client started with PID {client_proc.pid}")
+        with open(log_file, "w") as logf:
+            client_proc = subprocess.Popen(
+                cmd,
+                stdout=logf,
+                stderr=subprocess.STDOUT,
+                preexec_fn=os.setsid  # To allow killing the whole process group if needed
+            )
+            processes["client"] = client_proc
+            print(f"Client started with PID {client_proc.pid}, logging to {log_file}")
     except Exception as e:
         print(f"Failed to start client: {e}")
         

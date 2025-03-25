@@ -138,6 +138,29 @@ void Client::handle_response(const std::string& response_data) {
         LOG(ERROR) << "Failed to parse ClientResponse.";
         return;
     }
+
+    if (!response.success()) {
+        LOG(ERROR) << "Received ClientResponse: success=false, request id =\"" << response.request_id() << "\"";
+        // if unsuccessful, change the leader to the one in the response
+        std::string leader_id = response.leader_id();
+        size_t colon_pos = leader_id.find(':');
+        if (colon_pos != std::string::npos) {
+            std::string leader_ip = leader_id.substr(0, colon_pos);
+            server_ip_ = leader_ip;
+            int leader_port = std::stoi(leader_id.substr(colon_pos + 1));
+            server_port_ = leader_port;
+            // Update server address with new leader details.
+            server_addr_.sin_family = AF_INET;
+            server_addr_.sin_port = htons(leader_port);
+            if (inet_pton(AF_INET, leader_ip.c_str(), &server_addr_.sin_addr) <= 0) {
+                LOG(ERROR) << "Invalid leader IP: " << leader_ip;
+            } else {
+                LOG(INFO) << "Updated leader to " << leader_ip << ":" << leader_port;
+            }
+        } else {
+            LOG(ERROR) << "Invalid leader_id format: " << leader_id;
+        }
+    }
     LOG(INFO) << "Received ClientResponse: success=" << response.success()
                 << ", response=\"" << response.response() << "\""
                 << ", client_id=" << response.client_id()

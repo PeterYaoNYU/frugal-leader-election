@@ -1038,6 +1038,7 @@ void Node::handle_client_request(const raft::client::ClientRequest& request, con
         response.set_response("Not a leader. Leader: " + current_leader_ip + ":" + std::to_string(current_leader_port));
         response.set_client_id(client_id);
         response.set_request_id(client_request_id);
+        response.set_leader_id(current_leader_ip + ":" + std::to_string(current_leader_port));
         send_client_response(response, sender_addr);    
         return;
     }
@@ -1259,6 +1260,7 @@ void Node::handle_append_entries_response(const raft::leader_election::AppendEnt
         voted_for = "";
         latency_to_leader.clear();
         petition_count = 0;
+        LOG(INFO) << "Received AppendEntriesResponse with a bigger term number: " << received_term << ". Reverting back to follower.";
         return;
     }
 
@@ -1270,6 +1272,7 @@ void Node::handle_append_entries_response(const raft::leader_election::AppendEnt
         // according to the implementation specification at: https://github.com/ongardie/raftscope/blob/master/raft.js
         match_index[sender_id] = std::max(match_index[sender_id], response.match_index());
         next_index[sender_id] = response.match_index() + 1;
+        LOG(INFO) << "Success AE response from " << sender_id << ". Match index: " << response.match_index() << ". Next index: " << next_index[sender_id];
     } else {
         // // If conflict_index is provided, set next_index accordingly:
         // if (response.set_conflict_index()) {
@@ -1277,6 +1280,7 @@ void Node::handle_append_entries_response(const raft::leader_election::AppendEnt
         // } else {
             // Fallback: decrement by one (ensuring it stays at least 1)
             next_index[sender_id] = std::max(1, next_index[sender_id] - 1);
+            LOG(INFO) << "Failure AE response from " << sender_id << ". Decrementing next index to: " << next_index[sender_id];
     }
 }
 
