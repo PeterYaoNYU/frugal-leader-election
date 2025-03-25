@@ -707,6 +707,8 @@ void Node::handle_append_entries(const raft::leader_election::AppendEntries& app
 
     int match_index = 0;
 
+    LOG(INFO) << "Received AppendEntries from " << leader_id << " for term " << received_term << " with id " << id;
+
     // the RPC has a smaller term number than the current one, reject on the spot. 
     if (received_term < current_term) {
         raft::leader_election::AppendEntriesResponse response;
@@ -780,6 +782,7 @@ void Node::handle_append_entries(const raft::leader_election::AppendEntries& app
 
         // TODO: we can optionally include conflict information, omitted here for now
         send_append_entries_response(response, sender_addr);
+        LOG(INFO) << "Prev entries do not match, sending AppendEntriesResponse with success=false";
         return;
     }
 
@@ -788,7 +791,7 @@ void Node::handle_append_entries(const raft::leader_election::AppendEntries& app
 
     // If an existing entry conflicts with a new one (same index but different terms), delete the existing entry and all that follow it
     {
-        std::lock_guard<std::mutex> lock(raftLog.log_mutex);
+        // std::lock_guard<std::mutex> lock(raftLog.log_mutex);
         // this is the index that we start insering, and wiping out all inconsistent entries.
         int insertion_index = append_entries.prev_log_index() + 1;
         for (int i = 0; i < append_entries.entries_size(); i++) {
@@ -805,6 +808,7 @@ void Node::handle_append_entries(const raft::leader_election::AppendEntries& app
                 // if the position is empty, just append the new entry
                 raftLog.appendEntry(new_entry.term(), new_entry.command());
             }
+            LOG(INFO) << "Appended entry at index " << index << " with term " << new_entry.term();
             insertion_index++;
         }
     }
@@ -813,7 +817,7 @@ void Node::handle_append_entries(const raft::leader_election::AppendEntries& app
 
     // if leaderCommit > commitIndex, set commitIndex = min(leaderCommit, index of last new entry)
     if (append_entries.leader_commit() > raftLog.getCommitIndex()) {
-        std::lock_guard<std::mutex> lock(raftLog.log_mutex);
+        // std::lock_guard<std::mutex> lock(raftLog.log_mutex);
         raftLog.commitIndex = std::min(append_entries.leader_commit(), raftLog.getLastLogIndex());
         // TODO: Implement the persistence
         // apply_committed_entries(); // persist the changes to the state machine
@@ -1277,7 +1281,7 @@ void Node::handle_append_entries_response(const raft::leader_election::AppendEnt
 }
 
 void Node::updated_commit_index() {
-    std::lock_guard<std::mutex> lock(raftLog.log_mutex);
+    // std::lock_guard<std::mutex> lock(raftLog.log_mutex);
 
     int new_commit_index = raftLog.commitIndex;
     int last_log_index = raftLog.getLastLogIndex();
