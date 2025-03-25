@@ -1042,11 +1042,10 @@ void Node::handle_client_request(const raft::client::ClientRequest& request, con
 
     // append new command as a log entry
     int new_log_index = raftLog.getLastLogIndex() + 1;
+    LOG(INFO) << "the new log index is " << new_log_index;
     LogEntry new_entry { current_term, request.command() };
-    {
-        std::lock_guard<std::mutex> lock(raftLog.log_mutex);
-        raftLog.appendEntry(new_entry);
-    }
+    raftLog.appendEntry(new_entry);
+    LOG(INFO) << "Appended new entry to log.";
 
     // communicate with the other replicas in the system
     // first get the prev log term and prev log index, needede for append entries RPC. 
@@ -1057,12 +1056,18 @@ void Node::handle_client_request(const raft::client::ClientRequest& request, con
         raftLog.getEntry(prev_index, prev_entry);
         prev_term = prev_entry.term;
     }
+
+    LOG(INFO) << "Prev index: " << prev_index << ", Prev term: " << prev_term;
     // TODO High Priority: Implement the request queue
     // TODO: Instead of sending off the request ASA it is received. 
     // poll from a request queue (concurrent) until it is empty
 
     // this function will either dispatch immeidiately, or wait for a batch to form, more flexibility. 
+    // TODO: Duplication calculation of prev term and prev index. 
+    LOG(INFO) << "Begin sending proposals to followers.";
     send_proposals_to_followers(current_term, raftLog.commitIndex);
+    LOG(INFO) << "Done sending proposals to followers.";
+
     // raft::leader_election::AppendEntries append_entries;
     // append_entries.set_term(current_term);  
     // append_entries.set_leader_id(self_ip + ":" + std::to_string(port));
