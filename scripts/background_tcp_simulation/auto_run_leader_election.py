@@ -21,22 +21,22 @@ import threading
 #     # {"host": "c240g5-110103.wisc.cloudlab.us", "port": 26612},
 # ]
 
-nodes = [
-    {"host": "c220g5-111004.wisc.cloudlab.us", "port": 32410},
-    {"host": "c220g5-111012.wisc.cloudlab.us", "port": 32410},
-    {"host": "c220g5-111004.wisc.cloudlab.us", "port": 32411},
-    {"host": "c220g5-111004.wisc.cloudlab.us", "port": 32412},
-    {"host": "c220g5-111012.wisc.cloudlab.us", "port": 32411},
-]
-
-
 # nodes = [
-#     {"host": "c220g1-031113.wisc.cloudlab.us", "port": 22},
-#     {"host": "c220g1-031130.wisc.cloudlab.us", "port": 22},
-#     {"host": "c220g1-031108.wisc.cloudlab.us", "port": 22},
-#     {"host": "c220g1-031125.wisc.cloudlab.us", "port": 22},
-#     {"host": "c220g1-031129.wisc.cloudlab.us", "port": 22},
+#     {"host": "c220g5-111004.wisc.cloudlab.us", "port": 32410},
+#     {"host": "c220g5-111012.wisc.cloudlab.us", "port": 32410},
+#     {"host": "c220g5-111004.wisc.cloudlab.us", "port": 32411},
+#     {"host": "c220g5-111004.wisc.cloudlab.us", "port": 32412},
+#     {"host": "c220g5-111012.wisc.cloudlab.us", "port": 32411},
 # ]
+
+
+nodes = [
+    {"host": "pc550.emulab.net", "port": 22},
+    {"host": "pc557.emulab.net", "port": 22},
+    {"host": "pc470.emulab.net", "port": 22},
+    {"host": "pc538.emulab.net", "port": 22},
+    {"host": "pc541.emulab.net", "port": 22},
+]
 
 # nodes = [
 #     {"host": "pc605.emulab.net", "port": 29442},
@@ -60,7 +60,7 @@ def build_install_bazel(conn):
     try:
         # conn.run("sudo apt update && sudo apt install -y openjdk-11-jdk", hide=True)
         # Add Bazel Distribution URI and keys
-        conn.run("sudo apt purge bazel -y")
+        # conn.run("sudo apt purge bazel -y")
         conn.run("sudo apt install apt-transport-https curl gnupg -y")
         conn.run("curl -fsSL https://bazel.build/bazel-release.pub.gpg | gpg --dearmor > bazel-archive-keyring.gpg")
         conn.run("sudo mv bazel-archive-keyring.gpg /usr/share/keyrings/bazel-archive-keyring.gpg")
@@ -95,14 +95,14 @@ def execute_on_node(node, id, build_bazel=False, build_invoke=False, build_fabri
         # conn.run(f"rm -rf frugal-leader-election", hide=True)
         
         # # Clone the repository
-        # if build_bazel:
-        #     conn.run(f"git clone {repo_url}", hide=True)
-        # print(f"Repository cloned on {node['host']}:{node['port']}")
+        if build_bazel:
+            conn.run(f"git clone {repo_url}", hide=True)
+        print(f"Repository cloned on {node['host']}:{node['port']}")
         
-        conn.run(f"cd frugal-leader-election && git checkout main && git stash save && git pull && bazel-7.5.0 build //:leader_election")
+        conn.run(f"cd frugal-leader-election && git checkout main && git stash save && git pull && bazel-7.5.0 build //:leader_election && bazel-7.5.0 build //:client")
+        # conn.run(f"cd frugal-leader-election && git checkout main && git stash save && git pull && bazel-7.5.0 build //:leader_election")
         
         # conn.run("cd frugal-leader-election && git pull")
-
         
         print(f"Script executed on {node['host']}:{node['port']}")
     except Exception as e:
