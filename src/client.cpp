@@ -87,6 +87,8 @@ void Client::send_request() {
 
     serialized_request = wrapper.SerializeAsString();
 
+    request_times_[request.request_id()] = std::chrono::steady_clock::now();
+
     ssize_t sent = sendto(sock_fd_, serialized_request.c_str(), serialized_request.size(), 0,
                             (sockaddr*)&server_addr_, sizeof(server_addr_));
     if (sent < 0) {
@@ -161,10 +163,23 @@ void Client::handle_response(const std::string& response_data) {
             LOG(ERROR) << "Invalid leader_id format: " << leader_id;
         }
     }
+
+    // Compute response time if we have a recorded submission time.
+    auto it = request_times_.find(response.request_id());
+    if (it != request_times_.end()) {
+        auto now = std::chrono::steady_clock::now();
+        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(now - it->second).count();
+        LOG(INFO) << "Response time for request id " << response.request_id() << " is " << duration << " ms.";
+        request_times_.erase(it);
+    } else {
+        LOG(WARNING) << "No recorded request time for request id " << response.request_id();
+    }
+    
     LOG(INFO) << "Received ClientResponse: success=" << response.success()
                 << ", response=\"" << response.response() << "\""
                 << ", client_id=" << response.client_id()
-                << ", request_id=" << response.request_id();
+                << ", request_id=" << response.request_id()
+                << ", leader_id=" << response.leader_id();
 
     // In MAX_IN_FLIGHT mode, decrement the count on each response.
     if (mode_ == MAX_IN_FLIGHT && in_flight_ > 0) {

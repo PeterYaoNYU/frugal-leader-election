@@ -48,6 +48,8 @@ private:
     int client_id_;
     int request_id_;
 
+    std::unordered_map<int, std::chrono::steady_clock::time_point> request_times_;
+
     // Send a client request (one UDP message).
     void send_request();
 
