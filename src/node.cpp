@@ -815,12 +815,12 @@ void Node::handle_append_entries(const raft::leader_election::AppendEntries& app
             if (raftLog.getEntry(insertion_index, existingEntry)) {
                 if (existingEntry.term != new_entry.term()) {
                     raftLog.deleteEntriesStartingFrom(insertion_index);
-                    raftLog.appendEntry(new_entry.term(), new_entry.command());
+                    raftLog.appendEntry(new_entry.term(), new_entry.command(), new_entry.client_id(), new_entry.request_id());
                 }
                 // if matches, do nothing, and continue to the next one
             } else {
                 // if the position is empty, just append the new entry
-                raftLog.appendEntry(new_entry.term(), new_entry.command());
+                raftLog.appendEntry(new_entry.term(), new_entry.command(), new_entry.client_id(), new_entry.request_id());
             }
             LOG(INFO) << "Appended entry at index " << index << " with term " << new_entry.term();
             insertion_index++;
@@ -1062,7 +1062,7 @@ void Node::handle_client_request(const raft::client::ClientRequest& request, con
     // append new command as a log entry
     int new_log_index = raftLog.getLastLogIndex() + 1;
     LOG(INFO) << "the new log index is " << new_log_index;
-    LogEntry new_entry { current_term, request.command() };
+    LogEntry new_entry { current_term, request.command(), request.client_id(), request.request_id() };
     raftLog.appendEntry(new_entry);
     LOG(INFO) << "Appended new entry to log.";
 

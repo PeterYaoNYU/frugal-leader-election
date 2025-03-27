@@ -6,6 +6,8 @@ package raft.leader_election;
 message LogEntry {
   int32 term = 1;
   string command = 2;
+  int64 client_id = 3;
+  int64 request_id = 4;
 }
 
 message RequestVote {

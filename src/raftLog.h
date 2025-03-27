@@ -6,6 +6,8 @@
 struct LogEntry {
     int term;
     std::string command;
+    int client_id;
+    int request_id;
 };
 
 class RaftLog {
@@ -14,7 +16,7 @@ public:
     ~RaftLog();
 
     void appendEntry(const LogEntry& entry);
-    void appendEntry(int term, const std::string& command);
+    void appendEntry(int term, const std::string& command, int client_id, int request_id);
     int getLastLogIndex();
     int getLastLogTerm();
     bool getEntry(int index, LogEntry& entry);

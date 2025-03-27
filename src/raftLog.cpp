@@ -9,9 +9,9 @@ void RaftLog::appendEntry(const LogEntry& entry) {
     log.push_back(entry);
 }
 
-void RaftLog::appendEntry(int term, const std::string& command) {
+void RaftLog::appendEntry(int term, const std::string& command, int client_id, int request_id) {
     std::lock_guard<std::mutex> lock(log_mutex);
-    log.push_back({term, command});
+    log.push_back({term, command, client_id, request_id});
 }
 
 // index starts at 1
