@@ -9,6 +9,9 @@
 #include <string>
 #include <vector>
 
+#include <arpa/inet.h>
+#include <sys/socket.h>
+
 // using a thread pool to get the socket statistics. 
 #include <queue>               // CHANGED: For task queue
 #include <condition_variable>  // CHANGED: For synchronization
@@ -140,6 +143,8 @@ private:
 
     std::unordered_map<std::string, int> next_index;
     std::unordered_map<std::string, int> match_index;
+
+    std::unordered_map<int, sockaddr_in> client_id_to_addr;
 
     void start_election_timeout(bool double_time=false, bool force_raft=false);
     void reset_election_timeout(bool double_time=false, bool force_raft=false);

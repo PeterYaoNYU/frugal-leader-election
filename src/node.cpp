@@ -1,6 +1,4 @@
 #include "node.h"
-#include <arpa/inet.h>
-#include <sys/socket.h>
 #include <sstream>
 #include <cstring>
 
@@ -1057,6 +1055,12 @@ void Node::handle_client_request(const raft::client::ClientRequest& request, con
         return;
     }
 
+    if (client_id_to_addr.find(request.client_id()) == client_id_to_addr.end()) {
+        client_id_to_addr[request.client_id()] = sender_addr;
+        LOG(INFO) << "Added client " << request.client_id() << " to client_id_to_addr map.";
+    }
+        
+
     LOG(INFO) << "Am the leader, handling client request.";
 
     // append new command as a log entry
@@ -1325,5 +1329,20 @@ void Node::updated_commit_index() {
         LOG(INFO) << "Advanced commit index to: " << new_commit_index;
         // Optionally, trigger applying the newly committed entries to the state machine.
         // apply_committed_entries();
+
+        LogEntry entry;
+        if (raftLog.getEntry(new_commit_index, entry)) {
+
+            auto client_address = client_id_to_addr.find(entry.client_id);
+
+            if (client_address != client_id_to_addr.end()) {
+                raft::client::ClientResponse response;
+                response.set_success(true);
+                response.set_response("Command committed successfully.");
+                response.set_client_id(entry.client_id);
+                response.set_request_id(entry.request_id);
+                send_client_response(response, client_address->second);
+            }
+        }
     }
 }
