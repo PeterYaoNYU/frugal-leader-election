@@ -11,13 +11,13 @@ replica:
   - "eth1"
   - "eth1"
   - "eth1"
-  runtimeSeconds: 3000
+  runtimeSeconds: 240
   timeoutLowerBound: 150
   timeoutUpperBound: 300
   failureLeader: false
   # if the failureLeader is true, after maxHeartbeats number of heartbeats, the leader will fail
   maxHeartbeats: 100
-  port: 8888
+  port: 8889
   delayLowerBound: 10
   delayUpperBound: 250
   useSimulatedLinks: false

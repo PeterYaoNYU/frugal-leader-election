@@ -190,6 +190,11 @@ void Node::run() {
 
     // Start the event loop
     ev_run(loop, 0);
+
+    // After event loop stops, dump the raft log.
+    std::string filename = "raftlog_dump_" + self_ip + "_" + std::to_string(port) + ".log";
+    dumpRaftLogToFile(filename);
+    LOG(INFO) << "Node shutting down. Raft log dumped to " << filename;
 }
 
 
@@ -1345,4 +1350,33 @@ void Node::updated_commit_index() {
             }
         }
     }
+}
+
+void Node::dumpRaftLogToFile(const std::string& file_path) {
+    std::ofstream ofs(file_path, std::ios::out);
+    if (!ofs.is_open()) {
+        LOG(ERROR) << "Failed to open file " << file_path << " for writing raft log.";
+        return;
+    }
+    
+    // Write header information.
+    ofs << "Raft Log Dump for Node " << self_ip << ":" << port << "\n";
+    ofs << "Current term: " << current_term << "\n";
+    int lastIndex = raftLog.getLastLogIndex();
+    ofs << "Last log index: " << lastIndex << "\n";
+    ofs << "----------------------------------------\n";
+
+    // Iterate over the log entries (assuming log indices start at 1).
+    for (int i = 1; i <= lastIndex; i++) {
+        LogEntry entry;
+        if (raftLog.getEntry(i, entry)) {
+            ofs << "Index: " << i 
+                << ", Term: " << entry.term
+                << ", Command: " << entry.command
+                << ", Client ID: " << entry.client_id
+                << ", Request ID: " << entry.request_id << "\n";
+        }
+    }
+    ofs.close();
+    LOG(INFO) << "Raft log dumped to file: " << file_path;
 }

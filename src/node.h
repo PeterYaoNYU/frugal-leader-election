@@ -12,6 +12,10 @@
 #include <arpa/inet.h>
 #include <sys/socket.h>
 
+#include <fstream>
+#include <chrono>
+#include <iomanip>
+
 // using a thread pool to get the socket statistics. 
 #include <queue>               // CHANGED: For task queue
 #include <condition_variable>  // CHANGED: For synchronization
@@ -205,6 +209,8 @@ private:
 
     // check quorum and forward commit idx, for the leader's use.
     void updated_commit_index();
+
+    void dumpRaftLogToFile(const std::string& file_path);
 };
 
 
