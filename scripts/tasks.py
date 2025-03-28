@@ -11,6 +11,7 @@ import threading
 from fabric import Connection, ThreadingGroup
 from datetime import datetime
 import time
+from time import sleep
 
 # Define the ports and peers
 PORTS = [5000, 5001, 5002, 5003]
@@ -166,23 +167,24 @@ def start_remote_default(c):
     Logs are stored in the logs/ directory of each respective node.
     """
     config_path = "../configs/remote.yaml"
-    remote_config_path = "configs/remote.yaml"
+    remote_config_path = "/users/PeterYao/frugal-leader-election/configs/remote.yaml"
     
-    full_remote_config_path = f"~/frugal-leader-election/configs"
+    full_remote_config_path = f"/home/peter/frugal-leader-election/configs/remote.yaml"
     
     # put the local remote.yaml file to the remote nodes
-    # for replica_id, node in enumerate(nodes):
-    #     replica_ip = node["host"]
-    #     replica_port = node["port"]
-    #     print(f"putting remote config file to remote node {replica_id} on remote node {replica_ip} with port {replica_port}")
+    for replica_id, node in enumerate(nodes):
+        replica_ip = node["host"]
+        replica_port = node["port"]
+        print(f"putting remote config file to remote node {replica_id} on remote node {replica_ip} with port {replica_port}")
 
-    #     try:
-    #         # Establish connection to the remote node
-    #         conn = Connection(host=replica_ip, user=username, port=node["port"])
-    #         conn.put(config_path, remote_config_path)
-    #     except Exception as e:
-    #         print(f"Failed to put remote config file to replica {replica_id} on {replica_ip}: {e}")
-    #         continue
+        try:
+            # Establish connection to the remote node
+            print("File exists:", os.path.exists(full_remote_config_path))
+            conn = Connection(host=replica_ip, user=username, port=node["port"])
+            conn.put(full_remote_config_path, remote_config_path)
+        except Exception as e:
+            print(f"Failed to put remote config file to replica {replica_id} on {replica_ip}: {e}")
+            continue
 
     # Ensure the binary path is defined
     binary_path = "bazel-bin/leader_election"
@@ -274,9 +276,9 @@ def start_client(c, serverIp, serverPort, value):
     except Exception as e:
         print(f"Failed to start client: {e}")
 
-# invoke start-client-remote --remoteHostId 1 --serverIp 10.0.0.3 --serverPort 7912 --value 0.5
+# invoke start-client-remote --remoteHostId 1 --serverIp 10.0.0.3 --serverPort 7912 --value 0.001 --logSuffix 1
 @task
-def start_client_remote(c, remoteHostId, serverIp, serverPort, value):
+def start_client_remote(c, remoteHostId, serverIp, serverPort, value, logSuffix=""):
     """
     Starts the client process on a remote node.
     
@@ -304,6 +306,10 @@ def start_client_remote(c, remoteHostId, serverIp, serverPort, value):
         # Run the command asynchronously; pty is set to False to avoid allocation of a pseudo-terminal.
         conn.run(cmd, pty=False, asynchronous=True)
         print(f"Remote client started on {remote_host}, logging to client_remote.log")
+        sleep(60)
+        conn.run("killall client", warn=True)
+        conn.get("frugal-leader-election/client_remote.log", local=f"client_remote_{logSuffix}.log")
+        
     except Exception as e:
         print(f"Failed to start remote client on {remote_host}: {e}")
 
