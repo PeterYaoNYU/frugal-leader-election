@@ -208,6 +208,9 @@ void Node::shutdown_cb(EV_P_ ev_timer* w, int revents) {
     }
     // Stop the event loop
     ev_break(EV_A_ EVBREAK_ALL);
+    std::string filename = "raftlog_dump_" + self->self_ip  + ".log";
+    self->dumpRaftLogToFile(filename);
+    LOG(INFO) << "Node shutting down. Raft log dumped to " << filename;
 }
 
 void Node::start_election_timeout(bool double_time, bool force_raft) {

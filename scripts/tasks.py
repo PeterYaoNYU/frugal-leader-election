@@ -276,7 +276,7 @@ def start_client(c, serverIp, serverPort, value):
     except Exception as e:
         print(f"Failed to start client: {e}")
 
-# invoke start-client-remote --remoteHostId 1 --serverIp 10.0.0.3 --serverPort 7912 --value 0.001 --logSuffix 1
+# invoke start-client-remote --remoteHostId 1 --serverIp 10.0.0.3 --serverPort 7912 --value 0.01 --logSuffix 5
 @task
 def start_client_remote(c, remoteHostId, serverIp, serverPort, value, logSuffix=""):
     """
