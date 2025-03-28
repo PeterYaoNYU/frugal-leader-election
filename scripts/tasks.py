@@ -171,18 +171,18 @@ def start_remote_default(c):
     full_remote_config_path = f"~/frugal-leader-election/configs"
     
     # put the local remote.yaml file to the remote nodes
-    for replica_id, node in enumerate(nodes):
-        replica_ip = node["host"]
-        replica_port = node["port"]
-        print(f"putting remote config file to remote node {replica_id} on remote node {replica_ip} with port {replica_port}")
+    # for replica_id, node in enumerate(nodes):
+    #     replica_ip = node["host"]
+    #     replica_port = node["port"]
+    #     print(f"putting remote config file to remote node {replica_id} on remote node {replica_ip} with port {replica_port}")
 
-        try:
-            # Establish connection to the remote node
-            conn = Connection(host=replica_ip, user=username, port=node["port"])
-            conn.put(config_path, remote_config_path)
-        except Exception as e:
-            print(f"Failed to put remote config file to replica {replica_id} on {replica_ip}: {e}")
-            continue
+    #     try:
+    #         # Establish connection to the remote node
+    #         conn = Connection(host=replica_ip, user=username, port=node["port"])
+    #         conn.put(config_path, remote_config_path)
+    #     except Exception as e:
+    #         print(f"Failed to put remote config file to replica {replica_id} on {replica_ip}: {e}")
+    #         continue
 
     # Ensure the binary path is defined
     binary_path = "bazel-bin/leader_election"
@@ -273,7 +273,40 @@ def start_client(c, serverIp, serverPort, value):
             print(f"Client started with PID {client_proc.pid}, logging to {log_file}")
     except Exception as e:
         print(f"Failed to start client: {e}")
-        
+
+# invoke start-client-remote --remoteHostId 1 --serverIp 10.0.0.3 --serverPort 7912 --value 0.5
+@task
+def start_client_remote(c, remoteHostId, serverIp, serverPort, value):
+    """
+    Starts the client process on a remote node.
+    
+    Parameters:
+      remote_host_id: The index of the remote node in the 'nodes' list.
+      serverIp (str): The IP address of the server to connect to.
+      serverPort (int): The port number of the server.
+      value (str): For 'fixed' mode, the fixed interval in seconds; for 'maxcap' mode, the maximum number of in-flight requests.
+      
+    This function is similar to start_client() but executes the client on the specified remote node.
+    """
+    # For this example we assume fixed mode.
+    sendMode = "fixed"
+    binary_path = "bazel-bin/client"  # Path to the built client binary on the remote node.
+    # Build the command-line string (client expects: serverIp serverPort mode value)
+    cmd = f"cd frugal-leader-election && nohup {binary_path} {serverIp} {serverPort} {sendMode} {value} > client_remote.log 2>&1 &"
+    
+    remote_host = nodes[int(remoteHostId)]["host"]    
+
+    print(f"Starting remote client on {remote_host} with command: {cmd}")
+    
+    try:
+        # Connect to the remote node (using default SSH port 22)
+        conn = Connection(host=remote_host, user=username, port=22)
+        # Run the command asynchronously; pty is set to False to avoid allocation of a pseudo-terminal.
+        conn.run(cmd, pty=False, asynchronous=True)
+        print(f"Remote client started on {remote_host}, logging to client_remote.log")
+    except Exception as e:
+        print(f"Failed to start remote client on {remote_host}: {e}")
+
         
 @task
 def start(c):

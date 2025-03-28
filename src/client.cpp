@@ -168,8 +168,10 @@ void Client::handle_response(const std::string& response_data) {
     auto it = request_times_.find(response.request_id());
     if (it != request_times_.end()) {
         auto now = std::chrono::steady_clock::now();
-        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(now - it->second).count();
-        LOG(INFO) << "Response time for request id " << response.request_id() << " is " << duration << " ms.";
+        double duration_ms = std::chrono::duration_cast<std::chrono::duration<double, std::milli>>(now - it->second).count();
+        std::ostringstream oss;
+        oss << std::fixed << std::setprecision(3) << duration_ms;
+        LOG(INFO) << "Response time for request id " << response.request_id() << " is " << oss.str() << " ms.";        
         request_times_.erase(it);
     } else {
         LOG(WARNING) << "No recorded request time for request id " << response.request_id();
