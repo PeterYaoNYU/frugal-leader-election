@@ -275,6 +275,51 @@ def start_client(c, serverIp, serverPort, value):
             print(f"Client started with PID {client_proc.pid}, logging to {log_file}")
     except Exception as e:
         print(f"Failed to start client: {e}")
+        
+        
+processes = {}  # To store the client processes
+
+# invoke start-clients --serverIp 127.0.0.4 --serverPort 7723 --value 0.005
+@task
+def start_clients(c, serverIp, serverPort, value):
+    """
+    Starts two client processes concurrently.
+    
+    Parameters:
+      serverIp (str): The IP address of the server to connect to.
+      serverPort (int): The port number of the server.
+      value (str): For 'fixed' mode, the fixed interval in seconds (as a float);
+                   for 'maxcap' mode, the maximum number of in-flight requests (as an int).
+    """
+    sendMode = "fixed"
+    binary_path = "../bazel-bin/client"  # Path to the built client binary.
+    
+    # Create logs directory if it doesn't exist
+    logs_dir = Path("logs")
+    logs_dir.mkdir(exist_ok=True)
+    
+    client_id_one = 123
+    client_id_two = 456
+    client_ids = [client_id_one, client_id_two]
+    
+    # Loop to start two clients.
+    for i in range(1, 3):
+        # Create a unique log file for each client.
+        log_file = logs_dir / f"client_{i}.log"
+        cmd = [binary_path, serverIp, str(serverPort), sendMode, value, str(client_ids[i-1])]
+        
+        try:
+            with open(log_file, "w") as logf:
+                client_proc = subprocess.Popen(
+                    cmd,
+                    stdout=logf,
+                    stderr=subprocess.STDOUT,
+                    preexec_fn=os.setsid  # To allow killing the whole process group if needed
+                )
+                processes[f"client_{i}"] = client_proc
+                print(f"Client {i} started with PID {client_proc.pid}, logging to {log_file}")
+        except Exception as e:
+            print(f"Failed to start client {i}: {e}")
 
 # invoke start-client-remote --remoteHostId 1 --serverIp 10.0.0.3 --serverPort 7912 --value 0.01 --logSuffix 5
 @task

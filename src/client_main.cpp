@@ -6,11 +6,12 @@ int main(int argc, char* argv[]) {
     google::InitGoogleLogging(argv[0]);
     FLAGS_logtostderr = true;
 
-    if (argc < 4) {
-        std::cerr << "Usage: " << argv[0] << " <server_ip> <server_port> <mode> [<value>]" << std::endl;
+    if (argc < 6) {
+        std::cerr << "Usage: " << argv[0] << " <server_ip> <server_port> <mode> <value> <client_id>" << std::endl;
         std::cerr << "  mode: fixed OR maxcap" << std::endl;
         std::cerr << "  For fixed mode, <value> is send interval in seconds." << std::endl;
         std::cerr << "  For maxcap mode, <value> is maximum in-flight requests (integer)." << std::endl;
+        std::cerr << "  <client_id> is an integer identifier for the client." << std::endl;
         return 1;
     }
 
@@ -40,8 +41,7 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    // Use a dummy client id (could be randomized or assigned)
-    int client_id = 12367;
+    int client_id = std::stoi(argv[5]);
 
     Client client(server_ip, server_port, mode, fixed_interval, max_in_flight, client_id);
     client.run();

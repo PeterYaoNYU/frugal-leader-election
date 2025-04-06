@@ -71,7 +71,7 @@ void Client::run() {
 void Client::send_request() {
     // Construct the ClientRequest message.
     raft::client::ClientRequest request;
-    request.set_command("Request " + std::to_string(request_id_));
+    request.set_command("Request " + std::to_string(request_id_) + " from client " + std::to_string(client_id_));
     request.set_client_id(client_id_);
     request.set_request_id(request_id_++);
 

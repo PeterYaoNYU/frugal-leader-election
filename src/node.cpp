@@ -1156,6 +1156,7 @@ void Node::send_proposals_to_followers(int current_term, int commit_index) {
             LogEntry entry;
             if (raftLog.getEntry(i, entry)) {
                 *append_entries.add_entries() = convertToProto(entry);
+                LOG(INFO) << "Added entry to AppendEntries: " << entry.command << " at index " << i << " with term " << entry.term;
             }
         }
         append_entries.set_leader_commit(commit_index);
