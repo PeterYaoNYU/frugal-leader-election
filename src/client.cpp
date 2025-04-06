@@ -92,7 +92,7 @@ void Client::send_request() {
     ssize_t sent = sendto(sock_fd_, serialized_request.c_str(), serialized_request.size(), 0,
                             (sockaddr*)&server_addr_, sizeof(server_addr_));
     if (sent < 0) {
-        LOG(ERROR) << "sendto() failed while sending request id " << request.request_id();
+        LOG(ERROR) << "sendto() failed while sending request id " << request.request_id() << "to IP: " << server_ip_ << ":" << server_port_;
     } else {
         LOG(INFO) << "Sent ClientRequest id " << request.request_id() - 1
                     << " to " << server_ip_ << ":" << server_port_ 

@@ -365,6 +365,8 @@ void Node::send_request_vote() {
     raft::leader_election::RequestVote request;
     request.set_term(current_term);
     request.set_candidate_id(self_ip + ":" + std::to_string(port));
+    request.set_last_log_index(raftLog.getLastLogIndex());
+    request.set_last_log_term(raftLog.getLastLogTerm());
 
     raft::leader_election::MessageWrapper wrapper;
     wrapper.set_type(raft::leader_election::MessageWrapper::REQUEST_VOTE);
@@ -491,6 +493,8 @@ void Node::handle_request_vote(const raft::leader_election::RequestVote& request
     std::string candidate_id = request.candidate_id();
 
     if (received_term < current_term) {
+
+        LOG(INFO) << "Received STALE request vote from " << candidate_id << " for term " << received_term << ". Current term: " << current_term;
         raft::leader_election::VoteResponse response;
         response.set_term(current_term);
         response.set_vote_granted(false);
@@ -508,6 +512,7 @@ void Node::handle_request_vote(const raft::leader_election::RequestVote& request
         petition_count = 0;
         role = Role::FOLLOWER;
         voted_for = ""; 
+        LOG(INFO) << "Received request vote from " << candidate_id << " for term " << received_term << ". Current term updated to: " << current_term;
     }
 
     // section 5.4 of the raft paper enforces a trick that requies the leader to be up-to-date before being aboe to 
@@ -516,6 +521,14 @@ void Node::handle_request_vote(const raft::leader_election::RequestVote& request
     int last_log_term = raftLog.getLastLogTerm();
     bool candidate_up_to_date = (request.last_log_term() > last_log_term) || 
                                  (request.last_log_term() == last_log_term && request.last_log_index() >= last_log_index);
+
+    if (!candidate_up_to_date) {
+        LOG(INFO) << "Candidate " << candidate_id << " is not up-to-date. Current term: " << current_term 
+                  << ", Candidate last log term: " << request.last_log_term() 
+                  << ", Candidate last log index: " << request.last_log_index() 
+                  << ", My last log term: " << last_log_term 
+                  << ", My last log index: " << last_log_index;
+    }
 
     // this is important, ensure that a node only votes once per term. 
     bool vote_granted = false;
@@ -717,6 +730,8 @@ void Node::failure_cb(EV_P_ ev_timer* w, int revents) {
     // Optionally, log the simulated failure
     LOG(INFO) << "[" << get_current_time() << "] Leader has stopped for term: "<< self->current_term ;
 
+    // we also need to change the internal status to follower
+    self->role = Role::FOLLOWER;
     // Continue participating in other activities (e.g., receiving messages)
 }
 
