@@ -17,11 +17,13 @@ replica:
   failureLeader: true
   # if the failureLeader is true, after maxHeartbeats number of heartbeats, the leader will fail
   maxHeartbeats: 150
-  port: 7725
-  delayLowerBound: 10
-  delayUpperBound: 250
-  useSimulatedLinks: false
-  linkLossRate: 0.0
+  port: 7727
+  delayLowerBound: 1
+  delayUpperBound: 25
+  # if use simulated links is true, there is a chance that the proposal to followers will not be sent. 
+  # this is used to verify correctness of the implementation. 
+  useSimulatedLinks: true
+  linkLossRate: 0.01
   checkFalsePositiveRate: true
   tcp_monitor: true
   confidenceLevel: 0.999

@@ -1172,12 +1172,18 @@ void Node::send_proposals_to_followers(int current_term, int commit_index) {
         peer_addr.sin_port = htons(peer_port);
         inet_pton(AF_INET, ip.c_str(), &peer_addr.sin_addr);
 
-        ssize_t nsend = sendto(sock_fd, serialized_message.c_str(), serialized_message.size(), 0,
-                               (sockaddr*)&peer_addr, sizeof(peer_addr));
-        if (nsend == -1) {
-            LOG(ERROR) << "Failed to send proposals to " << ip << ":" << peer_port;
+        if (use_simulated_links) {
+            send_with_delay_and_loss(serialized_message, peer_addr);
         } else {
-            LOG(INFO) << "Sent proposals to " << ip << ":" << peer_port;
+            LOG(INFO) << "Sending proposals to " << ip << ":" << peer_port;
+
+            ssize_t nsend = sendto(sock_fd, serialized_message.c_str(), serialized_message.size(), 0,
+                                    (sockaddr*)&peer_addr, sizeof(peer_addr));
+            if (nsend == -1) {
+                LOG(ERROR) << "Failed to send proposals to " << ip << ":" << peer_port;
+            } else {
+                LOG(INFO) << "Sent proposals to " << ip << ":" << peer_port;
+            }
         }
     }
 }
