@@ -23,6 +23,9 @@
 
 #include <random>
 #include <unordered_map>
+
+#include <thread>
+
 #include "process_config.h"
 #include "proto/raft_leader_election.pb.h"
 #include "proto/raft_client.pb.h"
@@ -43,6 +46,13 @@ inline raft::leader_election::LogEntry convertToProto(const LogEntry& entry) {
     protoEntry.set_command(entry.command);
     return protoEntry;
 }
+
+// a simple struct to hold raw messages, and sender information. 
+struct ReceivedMessage {
+    // the raw messages have not been parsed by protobuf. 
+    std::string raw_message;
+    sockaddr_in sender;
+};
 
 class Node {
 public:
@@ -150,6 +160,10 @@ private:
 
     std::unordered_map<int, sockaddr_in> client_id_to_addr;
 
+    moodycamel::ConcurrentQueue<ReceivedMessage> workerQueue;
+    std::vector<std::thread> workerThreads;
+    std::atomic<bool> shutdownWorkers {false};
+
     void start_election_timeout(bool double_time=false, bool force_raft=false);
     void reset_election_timeout(bool double_time=false, bool force_raft=false);
     static void election_timeout_cb(EV_P_ ev_timer* w, int revents);
@@ -211,6 +225,10 @@ private:
     void updated_commit_index();
 
     void dumpRaftLogToFile(const std::string& file_path);
+
+    void startWorkerThreads(int numWorkers);
+
+    void workerThreadFunc();
 };
 
 

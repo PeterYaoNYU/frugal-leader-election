@@ -188,6 +188,9 @@ void Node::run() {
 
     start_penalty_timer();
 
+    // start running the worker threads. 
+    startWorkerThreads(4);
+
     // Start the event loop
     ev_run(loop, 0);
 
@@ -206,6 +209,16 @@ void Node::shutdown_cb(EV_P_ ev_timer* w, int revents) {
         self->tcp_stat_manager.stopMonitoring();
         self->tcp_stat_manager.stopPeriodicStatsPrinting();
     }
+
+    self->shutdownWorkers.store(true);
+    // join all worker threads:
+    // Note of implementation: we need auto& to work with references of threads, not copies
+    for (auto& thread : self->workerThreads) {
+        if (thread.joinable()) {
+            thread.join();
+        }
+    }
+
     // Stop the event loop
     ev_break(EV_A_ EVBREAK_ALL);
     std::string filename = "raftlog_dump_" + self->self_ip  + ".log";
@@ -405,85 +418,101 @@ void Node::recv_cb(EV_P_ ev_io* w, int revents) {
     ssize_t nread = recvfrom(w->fd, buffer, sizeof(buffer), 0,
                              (sockaddr*)&sender_addr, &sender_len);
     if (nread > 0) {
-        // buffer[nread] = '\0';
-        std::string message(buffer, nread);
-        // LOG(INFO) << "Received message: " << message;
+        ReceivedMessage rm;
+        rm.raw_message = std::string(buffer, nread);
+        rm.sender = sender_addr;
+        self->workerQueue.enqueue(rm);
+    }
+}
 
-        raft::leader_election::MessageWrapper wrapper;
-        if (!wrapper.ParseFromString(message)) {
-            LOG(ERROR) << "Failed to parse message.";
-            return;
-        }   
-
-        switch (wrapper.type()) {
-            case raft::leader_election::MessageWrapper::REQUEST_VOTE: {
-                raft::leader_election::RequestVote request;
-                if (!request.ParseFromString(wrapper.payload())) {
-                    LOG(ERROR) << "Failed to parse request vote.";
-                    return;
+void Node::workerThreadFunc() {
+    ReceivedMessage rm;
+    while (!shutdownWorkers.load()) {
+        // try to dequeue a message. 
+        if (workerQueue.try_dequeue(rm)) {
+            // process the message
+            raft::leader_election::MessageWrapper wrapper;
+            if (!wrapper.ParseFromString(rm.raw_message)) {
+                LOG(ERROR) << "Failed to parse message.";
+                return;
+            }   
+    
+            switch (wrapper.type()) {
+                case raft::leader_election::MessageWrapper::REQUEST_VOTE: {
+                    raft::leader_election::RequestVote request;
+                    if (!request.ParseFromString(wrapper.payload())) {
+                        LOG(ERROR) << "Failed to parse request vote.";
+                        return;
+                    }
+                    handle_request_vote(request, rm.sender);
+                    break;
                 }
-                self->handle_request_vote(request, sender_addr);
-                break;
-            }
-            case raft::leader_election::MessageWrapper::VOTE_RESPONSE: {
-                raft::leader_election::VoteResponse response;
-                if (!response.ParseFromString(wrapper.payload())) {
-                    LOG(ERROR) << "Failed to parse vote response.";
-                    return;
+                case raft::leader_election::MessageWrapper::VOTE_RESPONSE: {
+                    raft::leader_election::VoteResponse response;
+                    if (!response.ParseFromString(wrapper.payload())) {
+                        LOG(ERROR) << "Failed to parse vote response.";
+                        return;
+                    }
+                    handle_vote_response(response, rm.sender);
+                    break;
                 }
-                self->handle_vote_response(response, sender_addr);
-                break;
-            }
-            case raft::leader_election::MessageWrapper::APPEND_ENTRIES: {
-                raft::leader_election::AppendEntries append_entries;
-                if (!append_entries.ParseFromString(wrapper.payload())) {
-                    LOG(ERROR) << "Failed to parse append entries.";
-                    return;
+                case raft::leader_election::MessageWrapper::APPEND_ENTRIES: {
+                    raft::leader_election::AppendEntries append_entries;
+                    if (!append_entries.ParseFromString(wrapper.payload())) {
+                        LOG(ERROR) << "Failed to parse append entries.";
+                        return;
+                    }
+                    handle_append_entries(append_entries, rm.sender);
+                    // LOG(INFO) << "Received append entries message.";
+                    break;
                 }
-                self->handle_append_entries(append_entries, sender_addr);
-                // LOG(INFO) << "Received append entries message.";
-                break;
-            }
-            case raft::leader_election::MessageWrapper::PENALTY_SCORE: {
-                raft::leader_election::PenaltyScore penalty_msg;
-                if (!penalty_msg.ParseFromString(wrapper.payload())) {
-                    LOG(ERROR) << "Failed to parse PenaltyScore message.";
-                    return;
+                case raft::leader_election::MessageWrapper::PENALTY_SCORE: {
+                    raft::leader_election::PenaltyScore penalty_msg;
+                    if (!penalty_msg.ParseFromString(wrapper.payload())) {
+                        LOG(ERROR) << "Failed to parse PenaltyScore message.";
+                        return;
+                    }
+                    handle_penalty_score(penalty_msg, rm.sender);
+                    break;
                 }
-                self->handle_penalty_score(penalty_msg, sender_addr);
-                break;
-            }
-            case raft::leader_election::MessageWrapper::PETITION: {
-                raft::leader_election::Petition petition_msg;
-                if (!petition_msg.ParseFromString(wrapper.payload())) {
-                    LOG(ERROR) << "Failed to parse Petition message.";
-                    return;
+                case raft::leader_election::MessageWrapper::PETITION: {
+                    raft::leader_election::Petition petition_msg;
+                    if (!petition_msg.ParseFromString(wrapper.payload())) {
+                        LOG(ERROR) << "Failed to parse Petition message.";
+                        return;
+                    }
+                    handle_petition(petition_msg, rm.sender);
+                    break;
                 }
-                self->handle_petition(petition_msg, sender_addr);
-                break;
-            }
-            case raft::leader_election::MessageWrapper::APPEND_ENTRIES_RESPONSE: {
-                raft::leader_election::AppendEntriesResponse response;
-                if (!response.ParseFromString(wrapper.payload())) {
-                    LOG(ERROR) << "Failed to parse AppendEntriesResponse message.";
-                    return;
+                case raft::leader_election::MessageWrapper::APPEND_ENTRIES_RESPONSE: {
+                    raft::leader_election::AppendEntriesResponse response;
+                    if (!response.ParseFromString(wrapper.payload())) {
+                        LOG(ERROR) << "Failed to parse AppendEntriesResponse message.";
+                        return;
+                    }
+                    handle_append_entries_response(response, rm.sender);
+                    break;
                 }
-                self->handle_append_entries_response(response, sender_addr);
-                break;
-            }
-            case raft::leader_election::MessageWrapper::CLIENT_REQUEST: {
-                raft::client::ClientRequest client_request;
-                if (!client_request.ParseFromString(wrapper.payload())) {
-                    LOG(ERROR) << "Failed to parse ClientRequest message.";
-                    return;
+                case raft::leader_election::MessageWrapper::CLIENT_REQUEST: {
+                    raft::client::ClientRequest client_request;
+                    if (!client_request.ParseFromString(wrapper.payload())) {
+                        LOG(ERROR) << "Failed to parse ClientRequest message.";
+                        return;
+                    }
+                    handle_client_request(client_request, rm.sender);
+                    break;
                 }
-                self->handle_client_request(client_request, sender_addr);
-                break;
+                default:
+                    LOG(ERROR) << "Unknown message type.";
             }
-            default:
-                LOG(ERROR) << "Unknown message type.";
         }
+    }
+}
 
+
+void Node::startWorkerThreads(int numWorkers) {
+    for (int i = 0; i < numWorkers; i++) {
+        workerThreads.emplace_back(&Node::workerThreadFunc, this);
     }
 }
 
@@ -1064,16 +1093,15 @@ double Node::get_latency_to_peer(const std::string& peer_id) {
 void Node::handle_client_request(const raft::client::ClientRequest& request, const sockaddr_in& sender_addr) {
     LOG(INFO) << "Received client request: " << request.command() << " from " << inet_ntoa(sender_addr.sin_addr) << ":" << ntohs(sender_addr.sin_port);
     if (role != Role::LEADER) {
-        LOG(INFO) << "Not a leader. Cannot handle client request.";
         auto client_id = request.client_id();
         auto client_request_id = request.request_id();
-        LOG(INFO) << "Not a leader. Cannot handle client request.";
         raft::client::ClientResponse response;  
         response.set_success(false);    
         response.set_response("Not a leader. Leader: " + current_leader_ip + ":" + std::to_string(current_leader_port));
         response.set_client_id(client_id);
         response.set_request_id(client_request_id);
         response.set_leader_id(current_leader_ip + ":" + std::to_string(current_leader_port));
+        LOG(INFO) << "Not a leader. Cannot handle client request. Telling the client that the leader is " << current_leader_ip << ":" << current_leader_port;
         send_client_response(response, sender_addr);    
         return;
     }
