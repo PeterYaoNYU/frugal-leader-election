@@ -180,6 +180,13 @@ void Node::run() {
 
     ev_io_start(loop, &recv_watcher);
 
+
+    // before starting the election timeout, let us first init the async watcher for worker threads:
+    ev_async_init(&election_async_watcher, Node::election_async_cb);
+    election_async_watcher.data = this;
+    // register this async wather with the main event loop:
+    ev_async_start(loop, &election_async_watcher);
+
     // Start election timeout
     start_election_timeout();
 
@@ -199,6 +206,26 @@ void Node::run() {
     std::string filename = "raftlog_dump_" + self_ip + "_" + std::to_string(port) + ".log";
     dumpRaftLogToFile(filename);
     LOG(INFO) << "Node shutting down. Raft log dumped to " << filename;
+}
+
+void Node::election_async_cb(EV_P_ ev_async* w, int revents) {
+    Node* self = static_cast<Node*>(w->data);
+    self->process_election_async_task();
+}
+
+void Node::process_election_async_task() {
+    std::function<void()> task;
+    while (true) {
+        {
+            std::lock_guard<std::mutex> lock(election_async_mutex);
+            if (election_async_tasks.empty())
+                break;
+            task = std::move(election_async_tasks.front());
+            election_async_tasks.pop();
+        }
+        // Execute the task in the event loop thread.
+        task();
+    }
 }
 
 
@@ -567,7 +594,17 @@ void Node::handle_request_vote(const raft::leader_election::RequestVote& request
     if ((voted_for.empty() || voted_for == candidate_id) && candidate_up_to_date) {
         vote_granted = true;
         voted_for = candidate_id;
-        reset_election_timeout(true, false);
+        {
+            std::lock_guard<std::mutex> lock(election_async_mutex);
+            election_async_tasks.push([this]() {
+                // This lambda will run in the event loop thread.
+                // Cancel the old election timer and start a new one.
+                reset_election_timeout(/*double_time=*/true, /*force_raft=*/false);
+            });
+        }
+        // Notify the event loop thread:
+        ev_async_send(loop, &election_async_watcher);
+        // reset_election_timeout(true, false);
     }
 
     raft::leader_election::VoteResponse response;
@@ -836,7 +873,16 @@ void Node::handle_append_entries(const raft::leader_election::AppendEntries& app
     current_leader_port = std::stoi(leader_id.substr(leader_id.find(':') + 1));
     voted_for = ""; // Reset voted_for in the new term
     LOG(INFO) << "resetting election timeout... the current term is " << current_term << " and the current leader is " << current_leader_ip << ":" << current_leader_port;
-    reset_election_timeout(); // Reset election timeout upon receiving heartbeat
+    // reset_election_timeout(); // Reset election timeout upon receiving heartbeat
+    // for thread safety, should call async eventloop instead of directly resetting the 
+    {
+        std::lock_guard<std::mutex> lock(election_async_mutex);
+        election_async_tasks.push([this]() {
+            reset_election_timeout(false, false);
+        });
+        ev_async_send(loop, &election_async_watcher);
+    }
+
     // Assuming logs are consistent for simplicity
     LOG(INFO) << "DONE resetting election timeout... the current term is " << current_term << " and the current leader is " << current_leader_ip << ":" << current_leader_port;
 

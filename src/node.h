@@ -170,6 +170,19 @@ private:
     // for protecting the map that stores client addresses. 
     std::mutex client_map_mutex;
 
+    // for multithreading safety,init an async watcher that exclusively handles 
+    // election related timeouts and potentially other timeouts.
+
+    ev_async election_async_watcher;
+    std::mutex election_async_mutex;
+    // holds functions that return void and has no argument list.
+    std::queue<std::function<void()>> election_async_tasks;
+
+    // async signal callback function:
+    static void election_async_cb(EV_P_ ev_async* w, int revents);
+
+    void process_election_async_task();
+
     void start_election_timeout(bool double_time=false, bool force_raft=false);
     void reset_election_timeout(bool double_time=false, bool force_raft=false);
     static void election_timeout_cb(EV_P_ ev_timer* w, int revents);
