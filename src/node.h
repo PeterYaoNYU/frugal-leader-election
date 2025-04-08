@@ -178,6 +178,8 @@ private:
     // holds functions that return void and has no argument list.
     std::queue<std::function<void()>> election_async_tasks;
 
+    int worker_threads_count = 1;
+
     // async signal callback function:
     static void election_async_cb(EV_P_ ev_async* w, int revents);
 

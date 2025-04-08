@@ -50,6 +50,8 @@ struct ProcessConfig {
     int safetyMarginLowerBound;
     int safetyMarginStepSize;
 
+    // the number of worker threads responsible for processing messages. 
+    int workerThreadsCount;
 
     template <class T> T parseField(const YAML::Node &parent, const std::string &key)
     {
@@ -119,6 +121,7 @@ struct ProcessConfig {
 
             safetyMarginLowerBound = parseField<int>(replicaNode, "safetyMarginLowerBound");
             safetyMarginStepSize = parseField<int>(replicaNode, "safetyMarginStepSize");
+            workerThreadsCount = parseField<int>(replicaNode, "workerThreadsCount");
         } catch (const ConfigParseException &e) {
             throw ConfigParseException("Error parsing replica " + std::string(e.what()));
         }

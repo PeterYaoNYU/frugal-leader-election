@@ -41,7 +41,8 @@ Node::Node(const ProcessConfig& config, int replicaId)
       latency_threshold(1000.0), // Set your desired latency threshold
       majority_count((config.peerIPs.size() + 1) / 2 + 1), // Calculate majority count
       safety_margin_lower_bound(config.safetyMarginLowerBound),
-      safety_margin_step_size(config.safetyMarginStepSize)
+      safety_margin_step_size(config.safetyMarginStepSize), 
+      worker_threads_count(config.workerThreadsCount)
 {
     election_timer.data = this;
     heartbeat_timer.data = this;
@@ -197,7 +198,7 @@ void Node::run() {
     start_penalty_timer();
 
     // start running the worker threads. 
-    startWorkerThreads(4);
+    startWorkerThreads(worker_threads_count);
 
     // Start the event loop
     ev_run(loop, 0);
