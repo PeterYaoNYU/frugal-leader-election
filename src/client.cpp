@@ -148,15 +148,15 @@ void Client::handle_response(const std::string& response_data) {
         size_t colon_pos = leader_id.find(':');
         if (colon_pos != std::string::npos) {
             std::string leader_ip = leader_id.substr(0, colon_pos);
-            server_ip_ = leader_ip;
-            int leader_port = std::stoi(leader_id.substr(colon_pos + 1));
-            server_port_ = leader_port;
-            // Update server address with new leader details.
-            server_addr_.sin_family = AF_INET;
-            server_addr_.sin_port = htons(leader_port);
             if (inet_pton(AF_INET, leader_ip.c_str(), &server_addr_.sin_addr) <= 0) {
                 LOG(ERROR) << "Invalid leader IP: " << leader_ip;
             } else {
+                server_ip_ = leader_ip;
+                int leader_port = std::stoi(leader_id.substr(colon_pos + 1));
+                server_port_ = leader_port;
+                // Update server address with new leader details.
+                server_addr_.sin_family = AF_INET;
+                server_addr_.sin_port = htons(leader_port);
                 LOG(INFO) << "Updated leader to " << leader_ip << ":" << leader_port;
             }
         } else {
