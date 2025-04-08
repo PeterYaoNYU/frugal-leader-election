@@ -678,7 +678,18 @@ void Node::handle_vote_response(const raft::leader_election::VoteResponse& respo
         if (votes_received >= peer_addresses.size() / 2 + 1) {
             LOG(INFO) << "Received enough votes to become leader. Term: " << current_term << ". Votes received: " << votes_received << " out of " << peer_addresses.size();
             // role = Role::LEADER;
-            become_leader();
+            // become_leader();
+
+            // become leader directly stops the election timer in the worker thread, instead of the main thread. 
+            // this can be fixed by async task 
+            {
+                std::lock_guard<std::mutex> lock(election_async_mutex);
+                election_async_tasks.push([this]() {
+                    become_leader();
+                });
+            }
+
+            ev_async_send(loop, &election_async_watcher);
         }
     }
 }
