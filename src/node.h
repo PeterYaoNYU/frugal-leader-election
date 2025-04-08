@@ -163,6 +163,12 @@ private:
     moodycamel::ConcurrentQueue<ReceivedMessage> workerQueue;
     std::vector<std::thread> workerThreads;
     std::atomic<bool> shutdownWorkers {false};
+    // for protecting Variables like current_term, voted_for, votes_received, role, heartbeat_count, heartbeat_current_term, current_leader_ip, and current_leader_port
+    std::mutex state_mutex;
+    // for protecting next_index and match_index
+    std::mutex indices_mutex;
+    // for protecting the map that stores client addresses. 
+    std::mutex client_map_mutex;
 
     void start_election_timeout(bool double_time=false, bool force_raft=false);
     void reset_election_timeout(bool double_time=false, bool force_raft=false);

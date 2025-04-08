@@ -91,6 +91,7 @@ Node::Node(const ProcessConfig& config, int replicaId)
 }
 
 void Node::send_with_delay_and_loss(const std::string& message, const sockaddr_in& recipient_addr) {
+    LOG(INFO) << "Inside send_with_delay_and_loss function";
     if (loss_dist(rng) < link_loss_rate) { // Simulate 5% packet loss by default
         LOG(INFO) << "Simulated packet loss to " << inet_ntoa(recipient_addr.sin_addr)
                   << ":" << ntohs(recipient_addr.sin_port);
@@ -347,6 +348,7 @@ void Node::reset_election_timeout(bool double_time, bool force_raft) {
 void Node::election_timeout_cb(EV_P_ ev_timer* w, int revents) {
     // LOG(INFO) << "Inside election timeout callback";
     Node* self = static_cast<Node*>(w->data);
+    std::lock_guard<std::mutex> lock(self->state_mutex);
 
     if (self->check_false_positive) {
         // In "check false positive rate mode", do not initiate leader election
@@ -517,6 +519,7 @@ void Node::startWorkerThreads(int numWorkers) {
 }
 
 void Node::handle_request_vote(const raft::leader_election::RequestVote& request, const sockaddr_in& send_addr) {
+    std::lock_guard<std::mutex> lock(state_mutex);
     int received_term = request.term();
     // this is not an id, but the candidate IP and port combination. 
     std::string candidate_id = request.candidate_id();
@@ -605,6 +608,8 @@ std::string sockaddr_to_string(const sockaddr_in& addr) {
 }
 
 void Node::handle_vote_response(const raft::leader_election::VoteResponse& response, const sockaddr_in& sender_addr) {
+    std::lock_guard<std::mutex> lock(state_mutex);
+    
     if (role != Role::CANDIDATE) {
         return;
     }
@@ -1154,6 +1159,7 @@ void Node::handle_client_request(const raft::client::ClientRequest& request, con
 }
 
 void Node::send_proposals_to_followers(int current_term, int commit_index) {
+    std::lock_guard<std::mutex> lock(indices_mutex);
     // Iterate over each follower (skip self).
     for (const auto& [ip, peer_port] : peer_addresses) {
         std::string follower_id = ip + ":" + std::to_string(peer_port);
@@ -1325,6 +1331,8 @@ void Node::handle_petition(const raft::leader_election::Petition& petition_msg, 
 }
 
 void Node::handle_append_entries_response(const raft::leader_election::AppendEntriesResponse& response, const sockaddr_in& sender_addr) {
+    std::lock_guard<std::mutex> lock(indices_mutex);
+    
     if (role != Role::LEADER) {
         return;
     }
