@@ -685,7 +685,7 @@ void Node::handle_request_vote(const raft::leader_election::RequestVote& request
         petition_count = 0;
         role = Role::FOLLOWER;
         voted_for = ""; 
-        LOG(INFO) << "Received request vote from " << candidate_id << " for term " << received_term << ". Current term updated to: " << current_term;
+        LOG(INFO) << "Got newer request vote. Received request vote from " << candidate_id << " for term " << received_term << ". Current term updated to: " << current_term;
     }
 
     // section 5.4 of the raft paper enforces a trick that requies the leader to be up-to-date before being aboe to 
@@ -1361,9 +1361,11 @@ void Node::send_proposals_to_followers(int current_term, int commit_index) {
             LogEntry entry;
             if (raftLog.getEntry(i, entry)) {
                 *append_entries.add_entries() = convertToProto(entry);
-                LOG(INFO) << "Added entry to AppendEntries: " << entry.command << " at index " << i << " with term " << entry.term;
+                // LOG(INFO) << "Added entry to AppendEntries: " << entry.command << " at index " << i << " with term " << entry.term;
             }
         }
+
+        LOG(INFO) << "Sending proposals to " << ip << " | start index: " << start_index << " | end index: " << raftLog.getLastLogIndex() << " | prev index: " << prev_index << " | prev term: " << prev_term;
         append_entries.set_leader_commit(commit_index);
 
         // Serialize and send this RPC to the follower.

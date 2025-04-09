@@ -17,7 +17,7 @@ replica:
   failureLeader: true
   # if the failureLeader is true, after maxHeartbeats number of heartbeats, the leader will fail
   maxHeartbeats: 150
-  port: 7137
+  port: 7142
   delayLowerBound: 1
   delayUpperBound: 25
   # if use simulated links is true, there is a chance that the proposal to followers will not be sent. 
