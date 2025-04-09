@@ -5,6 +5,15 @@ bazel-7.5.0 build //:leader_election
 bazel-7.5.0 build //:client
 ```
 
+TODO:
+Identified bug, before sleep. The cause is that there are synchronization error when sending messgaes, causing the messages to be not parsable. 
+
+Proof:
+the system is under small load when the succession of failed requests occurred. 
+The cause of the catrastrophe is the node not parsing messages, and then sending an election timeout to everyone else incorrectly. 
+Always, before the election timeout, the node says that it cannot parse incoming messages, no exceptions. 
+The phenomenom is compunded by increasing the number of worker threads. 
+
 ### How to run?
 
 > To reproduce, you should only run on the Wisconsin Cluster of CloudLab. Emulab has known issue to delay messages without conforming to the predetermined distribution, causing inferior performance. 

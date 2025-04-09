@@ -181,7 +181,7 @@ void Node::run() {
     }
 
 
-    const int num_receiver_threads = 3;
+    const int num_receiver_threads = 6;
     for (int i = 0; i < num_receiver_threads; i++) {
         receiverThreads.emplace_back(&Node::receiverThreadFunc, this);
     }
@@ -946,7 +946,7 @@ void Node::handle_append_entries(const raft::leader_election::AppendEntries& app
         response.set_term(current_term);
         response.set_success(false);
 
-        LOG(INFO) << "Received Stale AppendEntries from " << leader_id << " for term " << received_term << " with id " << id;
+        LOG(INFO) << "Received Stale AppendEntries from " << leader_id << " for term " << received_term << " while current term: " << current_term;
 
         send_append_entries_response(response, sender_addr);
         return;
