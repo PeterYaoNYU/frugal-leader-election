@@ -162,6 +162,7 @@ private:
 
     moodycamel::ConcurrentQueue<ReceivedMessage> workerQueue;
     std::vector<std::thread> workerThreads;
+    std::vector<std::thread> receiverThreads;
     std::atomic<bool> shutdownWorkers {false};
     // for protecting Variables like current_term, voted_for, votes_received, role, heartbeat_count, heartbeat_current_term, current_leader_ip, and current_leader_port
     std::mutex state_mutex;
@@ -250,6 +251,10 @@ private:
     void startWorkerThreads(int numWorkers);
 
     void workerThreadFunc();
+
+    int createBoundSocket();
+
+    void receiverThreadFunc();
 };
 
 

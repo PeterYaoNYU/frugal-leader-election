@@ -146,6 +146,12 @@ void Node::run() {
         LOG(FATAL) << "Failed to create socket.";
     }
 
+    int optval = 1;
+    if (setsockopt(sock_fd, SOL_SOCKET, SO_REUSEPORT, &optval, sizeof(optval)) < 0) {
+        LOG(ERROR) << "Failed to setsockopt SO_REUSEPORT";
+        close(sock_fd);
+    }
+
     if (tcp_monitor) {
         LOG(INFO) << "Starting TCP monitoring";
         tcp_stat_manager.startMonitoring();
@@ -172,6 +178,12 @@ void Node::run() {
         inet_ntop(AF_INET, &addr.sin_addr, ip_str, INET_ADDRSTRLEN);
         LOG(INFO) << "Binding to IP: " << ip_str << ", port: " << ntohs(addr.sin_port);
         LOG(FATAL) << "Failed to bind socket to port " << port;
+    }
+
+
+    const int num_receiver_threads = 3;
+    for (int i = 0; i < num_receiver_threads; i++) {
+        receiverThreads.emplace_back(&Node::receiverThreadFunc, this);
     }
 
     // Initialize receive watcher
@@ -209,6 +221,100 @@ void Node::run() {
     LOG(INFO) << "Node shutting down. Raft log dumped to " << filename;
 }
 
+int Node::createBoundSocket() {
+    int s = socket(AF_INET, SOCK_DGRAM, 0);
+    if (s < 0) {
+        LOG(ERROR) << "Failed to create socket";
+        return -1;
+    }
+
+    int optval = 1;
+    if (setsockopt(s, SOL_SOCKET, SO_REUSEPORT, &optval, sizeof(optval)) < 0) {
+        LOG(ERROR) << "Failed to setsockopt SO_REUSEPORT";
+        close(s);
+        return -1;
+    }
+
+    // set the socket mode to non-blocking. 
+    int flags = fcntl(s, F_GETFL, 0);
+    if (flags == -1) flags = 0;
+    if (fcntl(s, F_SETFL, flags | O_NONBLOCK) < 0) {
+        perror("fcntl non-blocking");
+        close(s);
+        return -1;
+    }
+
+    // bind the socket to the port and to the specified address. 
+    sockaddr_in addr;
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons(port);
+    addr.sin_addr.s_addr = INADDR_ANY;
+
+    // change the ip address to the legitimate one. 
+    if (inet_pton(AF_INET, self_ip.c_str(), &addr.sin_addr) <= 0) {
+        LOG(FATAL) << "Invalid IP address: " << self_ip;
+    }
+
+    // actually bind the sock to the address and port. 
+    if (bind(s, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) < 0) {
+        char ip_str[INET_ADDRSTRLEN];
+        inet_ntop(AF_INET, &addr.sin_addr, ip_str, INET_ADDRSTRLEN);
+        LOG(INFO) << "Binding to IP: " << ip_str << ", port: " << ntohs(addr.sin_port);
+        LOG(FATAL) << "Failed to bind socket to port " << port;
+
+        close(s);
+        return -1;
+    } 
+
+    LOG(INFO) << "Receiver Thread: Bound to the socket " << s;
+
+    // return the socket fd number. 
+    return s;
+}
+
+void Node::receiverThreadFunc() {
+    int recvSock = createBoundSocket();
+    if (recvSock < 0) {
+        LOG(ERROR) << "Receiver thread: failed to create socket";
+        return;
+    }
+
+    const size_t bufSize = 4096;
+    char buffer[bufSize];
+
+    while (!shutdownWorkers.load()) {
+        sockaddr_in sender_addr;
+        socklen_t addr_len = sizeof(sender_addr);
+        ssize_t nrecv = recvfrom(recvSock, buffer, bufSize, 0, (sockaddr*)&sender_addr, &addr_len);
+        if (nrecv < 0) {
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                // No data available, continue
+                continue;
+            } else if (errno == EINTR) {
+                continue;
+            }
+            LOG(ERROR) << "Receiver thread: recvfrom error: " << strerror(errno);
+            continue;
+        } else if (nrecv == 0) {
+            LOG(ERROR) << "Receiver thread: recvfrom returned 0 bytes";
+            continue;
+        } else {
+            // Create a ReceivedMessage instance
+            ReceivedMessage msg;
+            msg.raw_message = std::string(buffer, nrecv);
+            msg.sender = sender_addr;
+
+            // Push the message to the worker queue
+            if (!workerQueue.enqueue(msg)) {
+                LOG(ERROR) << "Receiver thread: Failed to enqueue message";
+            }
+        }
+    }
+
+    close(recvSock);
+    LOG(INFO) << "Receiver Thread Exiting...";
+}
+
 void Node::election_async_cb(EV_P_ ev_async* w, int revents) {
     Node* self = static_cast<Node*>(w->data);
     self->process_election_async_task();
@@ -243,6 +349,13 @@ void Node::shutdown_cb(EV_P_ ev_timer* w, int revents) {
     // join all worker threads:
     // Note of implementation: we need auto& to work with references of threads, not copies
     for (auto& thread : self->workerThreads) {
+        if (thread.joinable()) {
+            thread.join();
+        }
+    }
+
+    // we should also join the receiver threads. 
+    for (auto& thread : self->receiverThreads) {
         if (thread.joinable()) {
             thread.join();
         }
