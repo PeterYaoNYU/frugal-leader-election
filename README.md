@@ -5,7 +5,8 @@ bazel-7.5.0 build //:leader_election
 bazel-7.5.0 build //:client
 ```
 
-TODO:
+BUG LOG: 
+
 Identified bug, before sleep. The cause is that there are synchronization error when sending messgaes, causing the messages to be not parsable. 
 
 Proof:
@@ -13,6 +14,11 @@ the system is under small load when the succession of failed requests occurred.
 The cause of the catrastrophe is the node not parsing messages, and then sending an election timeout to everyone else incorrectly. 
 Always, before the election timeout, the node says that it cannot parse incoming messages, no exceptions. 
 The phenomenom is compunded by increasing the number of worker threads. 
+
+
+Now I am pretty sure that, synchronization may not be the main cause of the problem. The problem is that the message cannot be parsed, and this is because of the fact that the message size exceeds MTU, causing truncation. 
+
+potential solutions include (1) switching to TCP or nano message. (2) cutoff when the message size is big, but this introduces problems of when are we going to send additional leftover entries. 
 
 ### How to run?
 

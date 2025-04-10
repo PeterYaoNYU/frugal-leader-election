@@ -536,13 +536,17 @@ void Node::send_request_vote() {
         peer_addr.sin_port = htons(peer_port);
         inet_pton(AF_INET, ip.c_str(), &peer_addr.sin_addr);
 
-        ssize_t nsend = sendto(sock_fd, serialized_message.c_str(), serialized_message.size(), 0,
-                               (sockaddr*)&peer_addr, sizeof(peer_addr));
+        {
+            // std::lock_guard<std::mutex> lock(send_sock_mutex);
 
-        if (nsend == -1) {
-            LOG(ERROR) << "Failed to send request vote to " << ip << ":" << peer_port;
-        } else {
-            LOG(INFO) << "Sent request vote to " << ip << ":" << peer_port;
+            ssize_t nsend = sendto(sock_fd, serialized_message.c_str(), serialized_message.size(), 0,
+                                (sockaddr*)&peer_addr, sizeof(peer_addr));
+
+            if (nsend == -1) {
+                LOG(ERROR) << "Failed to send request vote to " << ip << ":" << peer_port;
+            } else {
+                LOG(INFO) << "Sent request vote to " << ip << ":" << peer_port;
+            }
         }
     }
 }
@@ -576,8 +580,8 @@ void Node::workerThreadFunc() {
             // process the message
             raft::leader_election::MessageWrapper wrapper;
             if (!wrapper.ParseFromString(rm.raw_message)) {
-                LOG(ERROR) << "Failed to parse message.";
-                return;
+                LOG(ERROR) << "Failed to parse message from sender: " << inet_ntoa(rm.sender.sin_addr) << ":" << ntohs(rm.sender.sin_port);
+                continue;
             }   
     
             switch (wrapper.type()) {
@@ -735,13 +739,17 @@ void Node::send_vote_response(const raft::leader_election::VoteResponse& respons
 
     std::string serialized_message = wrapper.SerializeAsString();
 
-    ssize_t nsend = sendto(sock_fd, serialized_message.c_str(), serialized_message.size(), 0,
-                           (sockaddr*)&recepient_addr, sizeof(recepient_addr));
-    if (nsend == -1) {
-        LOG(ERROR) << "Failed to send vote response.";
-    } else {
-        LOG(INFO) << "Sent VoteResponse to "
-                  << inet_ntoa(recepient_addr.sin_addr) << ":" << ntohs(recepient_addr.sin_port);
+    {
+        // std::lock_guard<std::mutex> lock(send_sock_mutex);
+
+        ssize_t nsend = sendto(sock_fd, serialized_message.c_str(), serialized_message.size(), 0,
+                            (sockaddr*)&recepient_addr, sizeof(recepient_addr));
+        if (nsend == -1) {
+            LOG(ERROR) << "Failed to send vote response.";
+        } else {
+            LOG(INFO) << "Sent VoteResponse to "
+                    << inet_ntoa(recepient_addr.sin_addr) << ":" << ntohs(recepient_addr.sin_port);
+        }
     }
 }
 
@@ -967,7 +975,6 @@ void Node::handle_append_entries(const raft::leader_election::AppendEntries& app
     }
 
 
-    LOG(INFO) << "Received AppendEntries from " << leader_id << " for term " << received_term << " with id " << id;
 
     // if (id != heartbeat_current_term + 1) {
     //     LOG(INFO) << "Received out of order heartbeat. Expected id: " << heartbeat_current_term << ", received id: " << id;
@@ -1026,6 +1033,8 @@ void Node::handle_append_entries(const raft::leader_election::AppendEntries& app
         return;
     }
 
+    LOG(INFO) << "Prev entries match, processing new log entries..." << append_entries.prev_log_index() << " " << append_entries.prev_log_term() << " " << append_entries.entries_size();
+
     // implementation in referecen to this: https://github.com/ongardie/raftscope/blob/master/raft.js
     int index = append_entries.prev_log_index();
 
@@ -1080,13 +1089,16 @@ void Node::send_append_entries_response(const raft::leader_election::AppendEntri
 
     std::string serialized_message = wrapper.SerializeAsString();
 
-    ssize_t nsend = sendto(sock_fd, serialized_message.c_str(), serialized_message.size(), 0,
-                           (sockaddr*)&recipient_addr, sizeof(recipient_addr));
-    if (nsend == -1) {
-        LOG(ERROR) << "Failed to send AppendEntriesResponse";
-    } else {
-        LOG(INFO) << "Sent AppendEntriesResponse to "
-                  << inet_ntoa(recipient_addr.sin_addr) << ":" << ntohs(recipient_addr.sin_port);
+    {
+        // std::lock_guard<std::mutex> lock(send_sock_mutex);
+        ssize_t nsend = sendto(sock_fd, serialized_message.c_str(), serialized_message.size(), 0,
+        (sockaddr*)&recipient_addr, sizeof(recipient_addr));
+        if (nsend == -1) {
+            LOG(ERROR) << "Failed to send AppendEntriesResponse";
+        } else {
+            LOG(INFO) << "Sent AppendEntriesResponse to "
+                << inet_ntoa(recipient_addr.sin_addr) << ":" << ntohs(recipient_addr.sin_port);
+        }
     }
 }
 
@@ -1129,13 +1141,17 @@ void Node::calculate_and_send_penalty_score() {
         peer_addr.sin_port = htons(peer_port);
         inet_pton(AF_INET, ip.c_str(), &peer_addr.sin_addr);
 
-        ssize_t nsend = sendto(sock_fd, serialized_message.c_str(), serialized_message.size(), 0,
-                               (sockaddr*)&peer_addr, sizeof(peer_addr));
+        {
+            // std::lock_guard<std::mutex> lock(send_sock_mutex);
 
-        if (nsend == -1) {
-            LOG(ERROR) << "Failed to send penalty score to " << ip << ":" << peer_port;
-        } else {
-            LOG(INFO) << "Sent penalty score to " << ip << ":" << peer_port;
+            ssize_t nsend = sendto(sock_fd, serialized_message.c_str(), serialized_message.size(), 0,
+                                (sockaddr*)&peer_addr, sizeof(peer_addr));
+
+            if (nsend == -1) {
+                LOG(ERROR) << "Failed to send penalty score to " << ip << ":" << peer_port;
+            } else {
+                LOG(INFO) << "Sent penalty score to " << ip << ":" << peer_port;
+            }
         }
     }
 }
@@ -1383,13 +1399,32 @@ void Node::send_proposals_to_followers(int current_term, int commit_index) {
             send_with_delay_and_loss(serialized_message, peer_addr);
         } else {
             LOG(INFO) << "Sending proposals to " << ip << ":" << peer_port;
+            
+            {
+                // try to first parse the message
+                // std::lock_guard<std::mutex> lock(send_sock_mutex);
 
-            ssize_t nsend = sendto(sock_fd, serialized_message.c_str(), serialized_message.size(), 0,
-                                    (sockaddr*)&peer_addr, sizeof(peer_addr));
-            if (nsend == -1) {
-                LOG(ERROR) << "Failed to send proposals to " << ip << ":" << peer_port;
-            } else {
-                LOG(INFO) << "Sent proposals to " << ip << ":" << peer_port;
+                ssize_t nsend = sendto(sock_fd, serialized_message.c_str(), serialized_message.size(), 0,
+                                        (sockaddr*)&peer_addr, sizeof(peer_addr));
+                if (nsend == -1) {
+                    LOG(ERROR) << "Failed to send proposals to " << ip << ":" << peer_port;
+                } else {
+                    LOG(INFO) << "Sent proposals to " << ip << ":" << peer_port << " length in bytes: " << serialized_message.size();
+                    if (serialized_message.size() > 1500) {
+                        LOG(ERROR) << "Message size exceeds 1500 bytes. Possible fragmentation.";
+                    }
+                }
+
+                // raft::leader_election::MessageWrapper wrapper_check;
+                // if (!wrapper_check.ParseFromString(serialized_message)) {
+                //     LOG(ERROR) << "[Parsing Verification] Failed to parse message from sender"; 
+                // }   
+
+                // if (wrapper_check.type() != raft::leader_election::MessageWrapper::APPEND_ENTRIES) {
+                //     LOG(ERROR) << "[Parsing Verification] Message type mismatch. Expected APPEND_ENTRIES.";
+                // } else {
+                //     LOG(INFO) << "[Parsing Verification] Message type is correct.";
+                // }
             }
         }
     }
@@ -1400,13 +1435,17 @@ void Node::send_proposals_to_followers(int current_term, int commit_index) {
 void Node::send_client_response(const raft::client::ClientResponse& response, const sockaddr_in& recipient_addr) {
     std::string serialized_message = response.SerializeAsString();
 
-    ssize_t nsend = sendto(sock_fd, serialized_message.c_str(), serialized_message.size(), 0,
-                           (sockaddr*)&recipient_addr, sizeof(recipient_addr));
-    if (nsend == -1) {
-        LOG(ERROR) << "Failed to send client response.";
-    } else {
-        LOG(INFO) << "Sent client response to "
-                  << inet_ntoa(recipient_addr.sin_addr) << ":" << ntohs(recipient_addr.sin_port);
+    {
+        // std::lock_guard<std::mutex> lock(send_sock_mutex);
+
+        ssize_t nsend = sendto(sock_fd, serialized_message.c_str(), serialized_message.size(), 0,
+                            (sockaddr*)&recipient_addr, sizeof(recipient_addr));
+        if (nsend == -1) {
+            LOG(ERROR) << "Failed to send client response.";
+        } else {
+            LOG(INFO) << "Sent client response to "
+                    << inet_ntoa(recipient_addr.sin_addr) << ":" << ntohs(recipient_addr.sin_port);
+        }
     }
 }
 

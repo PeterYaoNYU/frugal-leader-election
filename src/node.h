@@ -181,6 +181,9 @@ private:
 
     int worker_threads_count = 1;
 
+    // to help with the synchronization of the worker threads sennding through the same socket. 
+    std::mutex send_sock_mutex;
+
     // async signal callback function:
     static void election_async_cb(EV_P_ ev_async* w, int revents);
 
