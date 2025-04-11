@@ -1599,6 +1599,8 @@ void Node::handle_append_entries_response(const raft::leader_election::AppendEnt
 void Node::updated_commit_index() {
     // std::lock_guard<std::mutex> lock(raftLog.log_mutex);
 
+    //  we should send response not just to the last committed entry, but to all the entries that are now recently committed.
+    int old_commit_index = raftLog.commitIndex;
     int new_commit_index = raftLog.commitIndex;
     int last_log_index = raftLog.getLastLogIndex();
     for (int i = raftLog.commitIndex + 1; i <= last_log_index; i++) {
@@ -1623,18 +1625,21 @@ void Node::updated_commit_index() {
         // Optionally, trigger applying the newly committed entries to the state machine.
         // apply_committed_entries();
 
-        LogEntry entry;
-        if (raftLog.getEntry(new_commit_index, entry)) {
-
-            auto client_address = client_id_to_addr.find(entry.client_id);
-
-            if (client_address != client_id_to_addr.end()) {
-                raft::client::ClientResponse response;
-                response.set_success(true);
-                response.set_response("Command committed successfully.");
-                response.set_client_id(entry.client_id);
-                response.set_request_id(entry.request_id);
-                send_client_response(response, client_address->second);
+        for (int idx = old_commit_index; idx < new_commit_index; idx++) 
+        {
+            LogEntry entry;
+            if (raftLog.getEntry(idx, entry)) {
+    
+                auto client_address = client_id_to_addr.find(entry.client_id);
+    
+                if (client_address != client_id_to_addr.end()) {
+                    raft::client::ClientResponse response;
+                    response.set_success(true);
+                    response.set_response("Command committed successfully.");
+                    response.set_client_id(entry.client_id);
+                    response.set_request_id(entry.request_id);
+                    send_client_response(response, client_address->second);
+                }
             }
         }
     }
