@@ -20,6 +20,9 @@ Now I am pretty sure that, synchronization may not be the main cause of the prob
 
 potential solutions include (1) switching to TCP or nano message. (2) cutoff when the message size is big, but this introduces problems of when are we going to send additional leftover entries. 
 
+
+identified bug: after batch commit, did not send acknowledgement for all previous messages, causing trouble in max in flight mode, the client will get stuck for not receiving any ack. 
+
 ### How to run?
 
 > To reproduce, you should only run on the Wisconsin Cluster of CloudLab. Emulab has known issue to delay messages without conforming to the predetermined distribution, causing inferior performance. 

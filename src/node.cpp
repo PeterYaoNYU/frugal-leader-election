@@ -308,6 +308,8 @@ void Node::receiverThreadFunc() {
             if (!workerQueue.enqueue(msg)) {
                 LOG(ERROR) << "Receiver thread: Failed to enqueue message";
             }
+
+            LOG(INFO) << "Approximate Size of Recv Queue: " << workerQueue.size_approx() << " msgs";
         }
     }
 
@@ -1038,6 +1040,8 @@ void Node::handle_append_entries(const raft::leader_election::AppendEntries& app
     // implementation in referecen to this: https://github.com/ongardie/raftscope/blob/master/raft.js
     int index = append_entries.prev_log_index();
 
+    int prev_last_log_idx = raftLog.getLastLogIndex();
+
     // If an existing entry conflicts with a new one (same index but different terms), delete the existing entry and all that follow it
     {
         // std::lock_guard<std::mutex> lock(raftLog.log_mutex);
@@ -1050,6 +1054,8 @@ void Node::handle_append_entries(const raft::leader_election::AppendEntries& app
             if (raftLog.getEntry(insertion_index, existingEntry)) {
                 if (existingEntry.term != new_entry.term()) {
                     raftLog.deleteEntriesStartingFrom(insertion_index);
+
+                    LOG(INFO) << "deleted entries from " << insertion_index << " to " << prev_last_log_idx << " due to term mismatch";
                     raftLog.appendEntry(new_entry.term(), new_entry.command(), new_entry.client_id(), new_entry.request_id());
                 }
                 // if matches, do nothing, and continue to the next one
@@ -1057,10 +1063,13 @@ void Node::handle_append_entries(const raft::leader_election::AppendEntries& app
                 // if the position is empty, just append the new entry
                 raftLog.appendEntry(new_entry.term(), new_entry.command(), new_entry.client_id(), new_entry.request_id());
             }
-            LOG(INFO) << "Appended entry at index " << index << " with term " << new_entry.term();
+            // LOG(INFO) << "Appended entry at index " << index << " with term " << new_entry.term();
             insertion_index++;
         }
     }
+
+    LOG(INFO) << "Appended entries from " << append_entries.prev_log_index() + 1 << " to " << index << ", Previous log ends at " << prev_last_log_idx
+              << " and this message progressed by " << index - prev_last_log_idx << " entries";
 
     match_index = index;
 
@@ -1311,7 +1320,7 @@ void Node::handle_client_request(const raft::client::ClientRequest& request, con
     LOG(INFO) << "the new log index is " << new_log_index;
     LogEntry new_entry { current_term, request.command(), request.client_id(), request.request_id() };
     raftLog.appendEntry(new_entry);
-    LOG(INFO) << "Appended new entry to log.";
+    LOG(INFO) << "Appended new entry to log-> Index: " << new_log_index << ", Term: " << new_entry.term << ", Client ID: " << new_entry.client_id << ", Command: " << new_entry.command;
 
     // communicate with the other replicas in the system
     // first get the prev log term and prev log index, needede for append entries RPC. 
@@ -1373,15 +1382,20 @@ void Node::send_proposals_to_followers(int current_term, int commit_index) {
         append_entries.set_prev_log_term(prev_term);
 
         // Add all entries from start_index onwards.
-        for (int i = start_index; i <= raftLog.getLastLogIndex(); i++) {
+        int i;
+        for (i = start_index; i <= raftLog.getLastLogIndex(); i++) {
             LogEntry entry;
             if (raftLog.getEntry(i, entry)) {
                 *append_entries.add_entries() = convertToProto(entry);
                 // LOG(INFO) << "Added entry to AppendEntries: " << entry.command << " at index " << i << " with term " << entry.term;
             }
+            if (append_entries.SerializeAsString().size() > 1400) {
+                LOG(WARNING) << "Message size exceeds 1400 bytes. Possible fragmentation. Break Loop";
+                break;
+            }
         }
 
-        LOG(INFO) << "Sending proposals to " << ip << " | start index: " << start_index << " | end index: " << raftLog.getLastLogIndex() << " | prev index: " << prev_index << " | prev term: " << prev_term;
+        LOG(INFO) << "Sending proposals to " << ip << " | start index: " << start_index << " | last index: " << raftLog.getLastLogIndex() << " | num entries: " << i - start_index + 1 <<" | end index: " << i << " | prev term: " << prev_term;
         append_entries.set_leader_commit(commit_index);
 
         // Serialize and send this RPC to the follower.
@@ -1566,9 +1580,10 @@ void Node::handle_append_entries_response(const raft::leader_election::AppendEnt
     
     if (response.success()) {
         // according to the implementation specification at: https://github.com/ongardie/raftscope/blob/master/raft.js
+        int prev_next_index = next_index[sender_id];
         match_index[sender_id] = std::max(match_index[sender_id], response.match_index());
         next_index[sender_id] = response.match_index() + 1;
-        LOG(INFO) << "Success AE response from " << sender_id << ". Match index: " << response.match_index() << ". Next index: " << next_index[sender_id];
+        LOG(INFO) << "Success AE response from " << sender_id << ". Match index: " << response.match_index() << ". Next index: " << next_index[sender_id] << " Prev next index: " << prev_next_index << " progresses by " << next_index[sender_id] - prev_next_index;
         updated_commit_index();
     } else {
         // // If conflict_index is provided, set next_index accordingly:

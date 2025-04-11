@@ -279,7 +279,7 @@ def start_client(c, serverIp, serverPort, value):
         
 processes = {}  # To store the client processes
 
-# invoke start-clients --serverIp 127.0.0.4 --serverPort 7728 --value 0.005
+# invoke start-clients --serverIp 127.0.0.4 --serverPort 7717 --value 200
 @task
 def start_clients(c, serverIp, serverPort, value):
     """
@@ -291,7 +291,8 @@ def start_clients(c, serverIp, serverPort, value):
       value (str): For 'fixed' mode, the fixed interval in seconds (as a float);
                    for 'maxcap' mode, the maximum number of in-flight requests (as an int).
     """
-    sendMode = "fixed"
+    # sendMode = "fixed"
+    sendMode = "maxcap"
     binary_path = "../bazel-bin/client"  # Path to the built client binary.
     
     # Create logs directory if it doesn't exist
@@ -302,10 +303,12 @@ def start_clients(c, serverIp, serverPort, value):
     client_id_two = 456
     client_id_three = 789
     client_id_four = 1011
-    client_ids = [client_id_one, client_id_two, client_id_three, client_id_four]
+    # client_ids = [client_id_one, client_id_two, client_id_three, client_id_four]
+    client_ids = [client_id_one, client_id_two]
+    
     
     # Loop to start two clients.
-    for i in range(1, 5):
+    for i in range(1, 3):
         # Create a unique log file for each client.
         log_file = logs_dir / f"client_{i}.log"
         cmd = [binary_path, serverIp, str(serverPort), sendMode, value, str(client_ids[i-1])]
@@ -383,6 +386,12 @@ def start(c):
     replica_ips = config["replica"]["ips"]
     n_replicas = len(replica_ips)   
     print("num replicas: ", n_replicas)
+    
+    # remove all logs:
+    cmd = "rm -f logs/*"
+    os.system(cmd)
+    
+    sleep(5)
     
     # Create logs directory if it doesn't exist
     logs_dir = Path("logs")

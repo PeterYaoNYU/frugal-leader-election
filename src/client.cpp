@@ -50,12 +50,16 @@ Client::Client(const std::string& server_ip, int server_port, SendMode mode,
         ev_timer_init(&send_timer_, send_timer_cb, fixed_interval_, fixed_interval_);
         send_timer_.data = this;
         ev_timer_start(loop_, &send_timer_);
-    } else if (mode_ == MAX_IN_FLIGHT) {
-        // In MAX_IN_FLIGHT mode, we use a very short timer to try sending new requests.
-        ev_timer_init(&send_timer_, send_timer_cb, 0.0, 0.002); // every 10ms
-        send_timer_.data = this;
-        ev_timer_start(loop_, &send_timer_);
     }
+    
+    // for MAX_IN_FLIGHT mode, we don't start the timer here. Send off the initial batch immediately.  
+    
+    // else if (mode_ == MAX_IN_FLIGHT) {
+    //     // In MAX_IN_FLIGHT mode, we use a very short timer to try sending new requests.
+    //     ev_timer_init(&send_timer_, send_timer_cb, 0.0, 0.002); // every 10ms
+    //     send_timer_.data = this;
+    //     ev_timer_start(loop_, &send_timer_);
+    // }
 }
 
 Client::~Client() {
@@ -64,6 +68,18 @@ Client::~Client() {
 
 void Client::run() {
     LOG(INFO) << "Client starting event loop.";
+
+    send_request();
+    sleep(1);
+
+    // send of the initial batch of requests altogether. 
+    if (mode_ == MAX_IN_FLIGHT) {
+        for (int i = 0; i < max_in_flight_ - 1; i++) {
+            send_request();
+            // in_flight_++;
+        }
+    }
+
     ev_run(loop_, 0);
     LOG(INFO) << "Client event loop stopped.";
 }
@@ -184,8 +200,14 @@ void Client::handle_response(const std::string& response_data) {
                 << ", leader_id=" << response.leader_id();
 
     // In MAX_IN_FLIGHT mode, decrement the count on each response.
-    if (mode_ == MAX_IN_FLIGHT && in_flight_ > 0) {
-        in_flight_--;
+    if (mode_ == MAX_IN_FLIGHT) {
+        // Decrement the counter since a response has been received.
+        if (in_flight_ > 0)
+            in_flight_--;
         LOG(INFO) << "In-flight requests decremented to " << in_flight_;
+        // Immediately send a new request if we are below the limit.
+        if (in_flight_ < max_in_flight_) {
+            send_request();
+        }
     }
 }
