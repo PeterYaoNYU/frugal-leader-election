@@ -7,11 +7,11 @@ import threading
 # the order should reeally match the ip list
 
 nodes = [
-    {"host": "c220g5-111004.wisc.cloudlab.us", "port": 32410},
-    {"host": "c220g5-111012.wisc.cloudlab.us", "port": 32410},
-    {"host": "c220g5-111004.wisc.cloudlab.us", "port": 32411},
-    {"host": "c220g5-111004.wisc.cloudlab.us", "port": 32412},
-    {"host": "c220g5-111012.wisc.cloudlab.us", "port": 32411},
+    {"host": "pc532.emulab.net", "port": 22},
+    {"host": "pc417.emulab.net", "port": 22},
+    {"host": "pc559.emulab.net", "port": 22},
+    {"host": "pc509.emulab.net", "port": 22},
+    {"host": "pc545.emulab.net", "port": 22},
 ]
 
 # SSH username

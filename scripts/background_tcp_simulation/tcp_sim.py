@@ -118,7 +118,7 @@ def main(node_id, central_port):
     node_ip_format = "10.0.{}.2"
     
     # node_ip_list = ["10.0.2.1", "10.0.1.2", "10.0.3.2", "10.0.4.2", "10.0.5.2"]
-    node_ip_list = ["10.0.1.2", "10.0.2.2", "10.0.3.2", "10.0.4.2", "10.0.5.2"]
+    node_ip_list = ["10.0.0.2", "10.0.0.3", "10.0.4.2", "10.0.1.2", "10.0.1.3"]
     # Validate the node ID
     if node_id < 1 or node_id > 5:
         print("Node ID must be between 1 and 5.")
@@ -127,6 +127,7 @@ def main(node_id, central_port):
     # Start listening for incoming connections
     # listen_ip = node_ip_format.format(node_id)
     listen_ip = node_ip_list[node_id - 1]
+    print("Listening IP: ", listen_ip)
     listen_thread = threading.Thread(target=listen_for_connections, args=(listen_ip, central_port))
     listen_thread.start()
     
