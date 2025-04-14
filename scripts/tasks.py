@@ -31,11 +31,11 @@ processes = {}
 # ]
 
 nodes = [
-    {"host": "pc550.emulab.net", "port": 22},
-    {"host": "pc557.emulab.net", "port": 22},
-    {"host": "pc470.emulab.net", "port": 22},
-    {"host": "pc538.emulab.net", "port": 22},
-    {"host": "pc541.emulab.net", "port": 22},
+    {"host": "pc532.emulab.net", "port": 22},
+    {"host": "pc417.emulab.net", "port": 22},
+    {"host": "pc559.emulab.net", "port": 22},
+    {"host": "pc509.emulab.net", "port": 22},
+    {"host": "pc545.emulab.net", "port": 22},
 ]
 
 # SSH username
@@ -279,7 +279,7 @@ def start_client(c, serverIp, serverPort, value):
         
 processes = {}  # To store the client processes
 
-# invoke start-clients --serverIp 127.0.0.4 --serverPort 7717 --value 200
+# invoke start-clients --serverIp 127.0.0.4 --serverPort 7016 --value 5
 @task
 def start_clients(c, serverIp, serverPort, value):
     """
@@ -303,12 +303,12 @@ def start_clients(c, serverIp, serverPort, value):
     client_id_two = 456
     client_id_three = 789
     client_id_four = 1011
-    # client_ids = [client_id_one, client_id_two, client_id_three, client_id_four]
-    client_ids = [client_id_one, client_id_two]
+    client_ids = [client_id_one, client_id_two, client_id_three, client_id_four]
+    # client_ids = [client_id_one, client_id_two]
     
     
     # Loop to start two clients.
-    for i in range(1, 3):
+    for i in range(1, 5):
         # Create a unique log file for each client.
         log_file = logs_dir / f"client_{i}.log"
         cmd = [binary_path, serverIp, str(serverPort), sendMode, value, str(client_ids[i-1])]
@@ -326,7 +326,7 @@ def start_clients(c, serverIp, serverPort, value):
         except Exception as e:
             print(f"Failed to start client {i}: {e}")
 
-# invoke start-client-remote --remoteHostId 1 --serverIp 10.0.0.3 --serverPort 7912 --value 0.01 --logSuffix 5
+# invoke start-client-remote --remoteHostId 1 --serverIp 10.0.0.3 --serverPort 6788 --value 5
 @task
 def start_client_remote(c, remoteHostId, serverIp, serverPort, value, logSuffix=""):
     """
@@ -341,10 +341,10 @@ def start_client_remote(c, remoteHostId, serverIp, serverPort, value, logSuffix=
     This function is similar to start_client() but executes the client on the specified remote node.
     """
     # For this example we assume fixed mode.
-    sendMode = "fixed"
+    sendMode = "maxcap"
     binary_path = "bazel-bin/client"  # Path to the built client binary on the remote node.
     # Build the command-line string (client expects: serverIp serverPort mode value)
-    cmd = f"cd frugal-leader-election && nohup {binary_path} {serverIp} {serverPort} {sendMode} {value} > client_remote.log 2>&1 &"
+    cmd = f"cd frugal-leader-election && nohup {binary_path} {serverIp} {serverPort} {sendMode} {value} 123 > client_remote.log 2>&1 &"
     
     remote_host = nodes[int(remoteHostId)]["host"]    
 

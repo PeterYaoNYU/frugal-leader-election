@@ -23,6 +23,14 @@ potential solutions include (1) switching to TCP or nano message. (2) cutoff whe
 
 identified bug: after batch commit, did not send acknowledgement for all previous messages, causing trouble in max in flight mode, the client will get stuck for not receiving any ack. 
 
+
+too many worker threads actually degrade the performance. Weird.
+
+
+Is the bottleneck at the single UDP socket responsible for both ingress and egress of all packets? A simple program to test the limit of a single socket might be interesting. 
+
+
+
 ### How to run?
 
 > To reproduce, you should only run on the Wisconsin Cluster of CloudLab. Emulab has known issue to delay messages without conforming to the predetermined distribution, causing inferior performance. 

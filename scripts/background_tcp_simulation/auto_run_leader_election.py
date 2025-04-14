@@ -31,11 +31,11 @@ import threading
 
 
 nodes = [
-    {"host": "pc550.emulab.net", "port": 22},
-    {"host": "pc557.emulab.net", "port": 22},
-    {"host": "pc470.emulab.net", "port": 22},
-    {"host": "pc538.emulab.net", "port": 22},
-    {"host": "pc541.emulab.net", "port": 22},
+    {"host": "pc532.emulab.net", "port": 22},
+    {"host": "pc417.emulab.net", "port": 22},
+    {"host": "pc559.emulab.net", "port": 22},
+    {"host": "pc509.emulab.net", "port": 22},
+    {"host": "pc545.emulab.net", "port": 22},
 ]
 
 # nodes = [
@@ -74,8 +74,8 @@ def build_install_bazel(conn):
         print(f"Failed to install Bazel on {conn.host}:{conn.port} - {e}")
     
     
-def execute_on_node(node, id, build_bazel=False, build_invoke=False, build_fabric=False):    
-# def execute_on_node(node, id, build_bazel=True, build_invoke=True, build_fabric=True):
+# def execute_on_node(node, id, build_bazel=False, build_invoke=False, build_fabric=False):    
+def execute_on_node(node, id, build_bazel=True, build_invoke=True, build_fabric=True):
     try:
         # Establish SSH connection
         conn = Connection(host=node["host"], user=username, port=node["port"])
