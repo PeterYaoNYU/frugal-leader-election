@@ -33,11 +33,11 @@ Client::Client(const std::string& server_ip, int server_port, SendMode mode,
     sockaddr_in local_addr{};
     local_addr.sin_family = AF_INET;
     local_addr.sin_port = htons(0); // let the OS choose a free port
-    if (inet_pton(AF_INET, "127.0.0.10", &local_addr.sin_addr) <= 0) {
-        LOG(FATAL) << "Invalid local IP address: 127.0.0.10";
+    if (inet_pton(AF_INET, "10.0.0.3", &local_addr.sin_addr) <= 0) {
+        LOG(FATAL) << "Invalid local IP address: 10.0.0.3";
     }
     if (bind(sock_fd_, (sockaddr*)&local_addr, sizeof(local_addr)) < 0) {
-        LOG(FATAL) << "Failed to bind local socket to 127.0.0.10.";
+        LOG(FATAL) << "Failed to bind local socket to 10.0.0.3.";
     }
 
     // Initialize the libev watchers.
