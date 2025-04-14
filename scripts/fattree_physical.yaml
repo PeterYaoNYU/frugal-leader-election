@@ -29,23 +29,23 @@ switches:
     connection: "PeterYao@pc479.emulab.net"
     interfaces:
       eno4: "10.0.3.2"
-      enp5s0f1: "10.0.0.1"
+      enp5s0f0: "10.0.0.1"
 
   - id: 2
     connection: "PeterYao@pc503.emulab.net"
     interfaces:
-      enp5s0f1: "10.0.3.1"
-      eno4: "10.0.2.1"
+      eno4: "10.0.3.1"
+      eno2: "10.0.2.1"
 
   - id: 3
     connection: "PeterYao@pc504.emulab.net"
     interfaces:
-      eno4: "10.0.2.2"
-      enp5s0f1: "10.0.4.1"
+      eno2: "10.0.2.2"
+      eno4: "10.0.4.1"
 
   - id: 4
     connection: "PeterYao@pc447.emulab.net"
     interfaces:
-      enp5s0f1: "10.0.2.3"
-      eno4: "10.0.1.1"
+      enp5s0f0: "10.0.2.3"
+      eno3: "10.0.1.1"
     
