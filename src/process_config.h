@@ -53,6 +53,9 @@ struct ProcessConfig {
     // the number of worker threads responsible for processing messages. 
     int workerThreadsCount;
 
+    // the fd Mode, whether it uses Jacobson, Raft, or CI> 
+    std::string fdMode;
+
     template <class T> T parseField(const YAML::Node &parent, const std::string &key)
     {
         if (!parent[key]) {
@@ -122,6 +125,7 @@ struct ProcessConfig {
             safetyMarginLowerBound = parseField<int>(replicaNode, "safetyMarginLowerBound");
             safetyMarginStepSize = parseField<int>(replicaNode, "safetyMarginStepSize");
             workerThreadsCount = parseField<int>(replicaNode, "workerThreadsCount");
+            fdMode = parseField<std::string>(replicaNode, "fdMode");
         } catch (const ConfigParseException &e) {
             throw ConfigParseException("Error parsing replica " + std::string(e.what()));
         }

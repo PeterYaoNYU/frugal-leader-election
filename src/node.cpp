@@ -89,6 +89,17 @@ Node::Node(const ProcessConfig& config, int replicaId)
     network_interface = config.interfaces[replicaId];
     LOG(INFO) << "Network interface for the node is: " << network_interface << " according to the provided config.";
 
+    // change the fd mode:
+    if (config.fdMode == "raft") {
+        election_timeout_bound = raft;
+    } else if (config.fdMode == "Jacobson") {
+        election_timeout_bound = Jacobson;
+    } else if (config.fdMode == "CI") {
+        election_timeout_bound = CI;
+    } else {
+        LOG(FATAL) << "Invalid fd mode: " << config.fdMode; 
+    }
+
 }
 
 void Node::send_with_delay_and_loss(const std::string& message, const sockaddr_in& recipient_addr) {
