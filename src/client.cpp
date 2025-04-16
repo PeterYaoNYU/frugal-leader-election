@@ -144,21 +144,27 @@ void Client::recv_cb(struct ev_loop* loop, ev_io* w, int revents) {
         LOG(ERROR) << "recvfrom() error.";
         return;
     }
-    LOG(INFO) << "Got a response from: " << inet_ntoa(from_addr.sin_addr) << ":" << ntohs(from_addr.sin_port);
+    // LOG(INFO) << "Got a response from: " << inet_ntoa(from_addr.sin_addr) << ":" << ntohs(from_addr.sin_port);
     std::string serialized_response(buffer, nread);
-    client->handle_response(serialized_response);
+    client->handle_response(serialized_response, from_addr);
 }
 
 // Handle an incoming ClientResponse.
-void Client::handle_response(const std::string& response_data) {
+void Client::handle_response(const std::string& response_data,  sockaddr_in& from_addr) {
     raft::client::ClientResponse response;
     if (!response.ParseFromString(response_data)) {
         LOG(ERROR) << "Failed to parse ClientResponse.";
         return;
     }
 
+    if (response.success()) {
+        if (!known_leader_) {
+            known_leader_ = true; // Set flag to indicate we know the leader
+            LOG(INFO) << "Begin of Leadership under: " << server_ip_;
+        }
+    }
+
     if (!response.success()) {
-        LOG(ERROR) << "Received ClientResponse: success=false, request id =\"" << response.request_id() << "\"";
         // if unsuccessful, change the leader to the one in the response
         std::string leader_id = response.leader_id();
         size_t colon_pos = leader_id.find(':');
@@ -167,6 +173,15 @@ void Client::handle_response(const std::string& response_data) {
             if (inet_pton(AF_INET, leader_ip.c_str(), &server_addr_.sin_addr) <= 0) {
                 LOG(ERROR) << "Invalid leader IP: " << leader_ip;
             } else {
+                known_leader_ = false; // Set flag to indicate we don't know the leader
+                // If we are in MAX_IN_FLIGHT mode, we need to reset the in-flight count.
+                if (mode_ == MAX_IN_FLIGHT) {
+                    in_flight_ = 0;
+                    LOG(INFO)   << "In-flight requests reset to 0.";
+                }
+
+                LOG(INFO) << "End of Leadership under: " << server_ip_;
+
                 server_ip_ = leader_ip;
                 int leader_port = std::stoi(leader_id.substr(colon_pos + 1));
                 server_port_ = leader_port;
@@ -174,6 +189,7 @@ void Client::handle_response(const std::string& response_data) {
                 server_addr_.sin_family = AF_INET;
                 server_addr_.sin_port = htons(leader_port);
                 LOG(INFO) << "Updated leader to " << leader_ip << ":" << leader_port;
+
             }
         } else {
             LOG(ERROR) << "Invalid leader_id format: " << leader_id;
@@ -194,6 +210,7 @@ void Client::handle_response(const std::string& response_data) {
     }
     
     LOG(INFO) << "Received ClientResponse: success=" << response.success()
+                << ", from=" << inet_ntoa(from_addr.sin_addr)
                 << ", response=\"" << response.response() << "\""
                 << ", client_id=" << response.client_id()
                 << ", request_id=" << response.request_id()

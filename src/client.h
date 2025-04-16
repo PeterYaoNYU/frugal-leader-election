@@ -51,6 +51,8 @@ private:
 
     std::unordered_map<int, std::chrono::steady_clock::time_point> request_times_;
 
+    bool known_leader_ = true; // Flag to indicate if we know the leader
+
     // Send a client request (one UDP message).
     void send_request();
 
@@ -61,7 +63,7 @@ private:
     static void recv_cb(struct ev_loop* loop, ev_io* w, int revents);
 
     // Handle an incoming ClientResponse.
-    void handle_response(const std::string& response_data);
+    void handle_response(const std::string& response_data, sockaddr_in& from_addr);
 };
 
 

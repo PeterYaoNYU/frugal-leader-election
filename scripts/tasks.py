@@ -327,7 +327,7 @@ def start_clients(c, serverIp, serverPort, value):
             print(f"Failed to start client {i}: {e}")
 
 # invoke start-client-remote --remoteHostId 1 --serverIp 10.0.0.3 --serverPort 6772 --value 5
-# ./bazel-bin/client 10.0.0.3 6776 maxcap 5 789 > client_change.log 2>&1
+# ./bazel-bin/client 10.0.0.3 6114 maxcap 5 789 > client_nochange.log 2>&1
 @task
 def start_client_remote(c, remoteHostId, serverIp, serverPort, value, logSuffix=""):
     """
