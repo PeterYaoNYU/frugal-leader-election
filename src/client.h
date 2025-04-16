@@ -53,6 +53,10 @@ private:
 
     bool known_leader_ = true; // Flag to indicate if we know the leader
 
+    ev_timer timeout_timer_;
+
+    double timeout_interval_;
+
     // Send a client request (one UDP message).
     void send_request();
 
@@ -61,6 +65,8 @@ private:
 
     // I/O callback for receiving responses.
     static void recv_cb(struct ev_loop* loop, ev_io* w, int revents);
+
+    static void timeout_cb(struct ev_loop* loop, ev_timer* w, int revents);
 
     // Handle an incoming ClientResponse.
     void handle_response(const std::string& response_data, sockaddr_in& from_addr);

@@ -9,7 +9,8 @@ Client::Client(const std::string& server_ip, int server_port, SendMode mode,
         max_in_flight_(maxInFlight),
         in_flight_(0),
         client_id_(client_id),
-        request_id_(1)
+        request_id_(1), 
+        timeout_interval_(1.0)
 {
     // Create the default event loop.
     loop_ = ev_default_loop(0);
@@ -60,6 +61,13 @@ Client::Client(const std::string& server_ip, int server_port, SendMode mode,
     //     send_timer_.data = this;
     //     ev_timer_start(loop_, &send_timer_);
     // }
+
+    if (mode_ == MAX_IN_FLIGHT) {
+        // You may choose a short periodic interval (e.g., check every second) or use the timeout interval.
+        ev_timer_init(&timeout_timer_, timeout_cb , timeout_interval_, timeout_interval_);
+        timeout_timer_.data = this;
+        ev_timer_start(loop_, &timeout_timer_);
+    }
 }
 
 Client::~Client() {
@@ -116,6 +124,13 @@ void Client::send_request() {
         if (mode_ == MAX_IN_FLIGHT) {
             in_flight_++;
         }
+
+        // cancel the previous timeout timer, and start a new one.
+        if (mode_ == MAX_IN_FLIGHT) {
+            ev_timer_stop(loop_, &timeout_timer_);
+            ev_timer_init(&timeout_timer_, timeout_cb, timeout_interval_, timeout_interval_);
+            ev_timer_start(loop_, &timeout_timer_);
+        }
     }
 }
 
@@ -128,6 +143,19 @@ void Client::send_timer_cb(struct ev_loop* loop, ev_timer* w, int revents) {
         // In max-in-flight mode, send as many requests as possible (non-blocking)
         // until we hit the cap.
         while (client->in_flight_ < client->max_in_flight_) {
+            client->send_request();
+        }
+    }
+}
+
+void Client::timeout_cb(struct ev_loop* loop, ev_timer* w, int revents) {
+    Client* client = static_cast<Client*>(w->data);
+    if (client->in_flight_ > 0) {
+        LOG(INFO) << "Timeout occurred. In-flight requests: " << client->in_flight_;
+        // clear the in-flight requests
+        client->in_flight_ = 0;
+        // send a new request
+        for (int i = 0; i < client->max_in_flight_; i++) {
             client->send_request();
         }
     }
