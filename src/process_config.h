@@ -56,6 +56,9 @@ struct ProcessConfig {
     // the fd Mode, whether it uses Jacobson, Raft, or CI> 
     std::string fdMode;
 
+    int clientPort;
+    int internalBasePort;
+
     template <class T> T parseField(const YAML::Node &parent, const std::string &key)
     {
         if (!parent[key]) {
@@ -126,6 +129,8 @@ struct ProcessConfig {
             safetyMarginStepSize = parseField<int>(replicaNode, "safetyMarginStepSize");
             workerThreadsCount = parseField<int>(replicaNode, "workerThreadsCount");
             fdMode = parseField<std::string>(replicaNode, "fdMode");
+            clientPort = parseField<int>(replicaNode, "clientPort");
+            internalBasePort = parseField<int>(replicaNode, "internalBasePort");
         } catch (const ConfigParseException &e) {
             throw ConfigParseException("Error parsing replica " + std::string(e.what()));
         }

@@ -42,7 +42,9 @@ Node::Node(const ProcessConfig& config, int replicaId)
       majority_count((config.peerIPs.size() + 1) / 2 + 1), // Calculate majority count
       safety_margin_lower_bound(config.safetyMarginLowerBound),
       safety_margin_step_size(config.safetyMarginStepSize), 
-      worker_threads_count(config.workerThreadsCount)
+      worker_threads_count(config.workerThreadsCount), 
+      client_port(config.clientPort),
+      internal_base_port(config.internalBasePort)
 {
     election_timer.data = this;
     heartbeat_timer.data = this;
@@ -81,6 +83,20 @@ Node::Node(const ProcessConfig& config, int replicaId)
     }
 
     LOG(INFO) << "Node initialized with ID: " << self_id << ", IP: " << self_ip << ", port: " << port;
+
+
+    // need to constructy the sockets here. 
+    // client sokcet. 
+    clientSock_ = makeBoundUDPSocket(self_ip, client_port);
+    clientCtx_.fd = clientSock_;
+    clientCtx_.loop = ev_loop_new(EVFLAG_AUTO);
+
+    // then we could contruc one socket per peer, including ourselves for simpler addressing:
+    for (int id = 0; id < peerIPs.size(); id++) {
+        int port = internal_base_port + id;
+        int fd = makeBoundUDPSocket(self_ip, port);
+        peerCtx_[id] = {fd, {}, ev_loop_new(EVFLAG_AUTO)};
+    }
 
     if (failure_leader) {
         LOG(INFO) << "Failure leader mode enabled. Leader will fail after " << max_heartbeats << " heartbeats.";
@@ -150,60 +166,19 @@ void Node::delay_cb(EV_P_ ev_timer* w, int revents) {
 
 
 void Node::run() {
-    // Setup UDP socket
-    LOG(INFO) << "Start running node on port " << port;
-    sock_fd = socket(AF_INET, SOCK_DGRAM, 0);
-    if (sock_fd < 0) {
-        LOG(FATAL) << "Failed to create socket.";
-    }
-
-    int optval = 1;
-    if (setsockopt(sock_fd, SOL_SOCKET, SO_REUSEPORT, &optval, sizeof(optval)) < 0) {
-        LOG(ERROR) << "Failed to setsockopt SO_REUSEPORT";
-        close(sock_fd);
-    }
-
     if (tcp_monitor) {
         LOG(INFO) << "Starting TCP monitoring";
         tcp_stat_manager.startMonitoring();
     }
 
-    // Set socket to non-blocking
-    fcntl(sock_fd, F_SETFL, O_NONBLOCK);
+    receiverThreads.emplace_back([ctx=&clientCtx_, this] { runRecvLoop(ctx, -1); });
 
-    // Bind socket to the specified port
-    sockaddr_in addr{};
-    addr.sin_family = AF_INET;
-    addr.sin_port = htons(port);
-    // we cannot use INADDR_ANY here, because we need to know the ip address of the current node
-    addr.sin_addr.s_addr = INADDR_ANY;
-
-    // bind to the ip address of the current node
-    // Convert self_ip (string) to in_addr
-    if (inet_pton(AF_INET, self_ip.c_str(), &addr.sin_addr) <= 0) {
-        LOG(FATAL) << "Invalid IP address: " << self_ip;
+    for (auto& [id, ctx] : peerCtx_) {
+        // capture `this`, the pointer-to-ctx, and the peer id all by value:
+        receiverThreads.emplace_back([this, ctx = &ctx, id]() {
+            runRecvLoop(ctx, id);
+        });
     }
-
-    if (bind(sock_fd, (sockaddr*)&addr, sizeof(addr)) < 0) {
-        char ip_str[INET_ADDRSTRLEN];
-        inet_ntop(AF_INET, &addr.sin_addr, ip_str, INET_ADDRSTRLEN);
-        LOG(INFO) << "Binding to IP: " << ip_str << ", port: " << ntohs(addr.sin_port);
-        LOG(FATAL) << "Failed to bind socket to port " << port;
-    }
-
-
-    const int num_receiver_threads = 6;
-    for (int i = 0; i < num_receiver_threads; i++) {
-        receiverThreads.emplace_back(&Node::receiverThreadFunc, this);
-    }
-
-    // Initialize receive watcher
-    ev_io_init(&recv_watcher, recv_cb, sock_fd, EV_READ);
-
-    ev_set_priority(&recv_watcher, -2);
-
-    ev_io_start(loop, &recv_watcher);
-
 
     // before starting the election timeout, let us first init the async watcher for worker threads:
     ev_async_init(&election_async_watcher, Node::election_async_cb);
@@ -230,6 +205,14 @@ void Node::run() {
     std::string filename = "raftlog_dump_" + self_ip + "_" + std::to_string(port) + ".log";
     dumpRaftLogToFile(filename);
     LOG(INFO) << "Node shutting down. Raft log dumped to " << filename;
+}
+
+
+void Node::runRecvLoop(UDPSocketCtx* ctx, int peerId) {
+    ev_io_init(&ctx->watcher, recv_cb, ctx->fd, EV_READ);
+    ctx->watcher.data = new std::pair<Node*, int>(this, peerId);
+    ev_io_start(ctx->loop, &ctx->watcher);
+    ev_run(ctx->loop, 0);
 }
 
 int Node::createBoundSocket() {
@@ -281,51 +264,6 @@ int Node::createBoundSocket() {
 
     // return the socket fd number. 
     return s;
-}
-
-void Node::receiverThreadFunc() {
-    int recvSock = createBoundSocket();
-    if (recvSock < 0) {
-        LOG(ERROR) << "Receiver thread: failed to create socket";
-        return;
-    }
-
-    const size_t bufSize = 4096;
-    char buffer[bufSize];
-
-    while (!shutdownWorkers.load()) {
-        sockaddr_in sender_addr;
-        socklen_t addr_len = sizeof(sender_addr);
-        ssize_t nrecv = recvfrom(recvSock, buffer, bufSize, 0, (sockaddr*)&sender_addr, &addr_len);
-        if (nrecv < 0) {
-            if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                // No data available, continue
-                continue;
-            } else if (errno == EINTR) {
-                continue;
-            }
-            LOG(ERROR) << "Receiver thread: recvfrom error: " << strerror(errno);
-            continue;
-        } else if (nrecv == 0) {
-            LOG(ERROR) << "Receiver thread: recvfrom returned 0 bytes";
-            continue;
-        } else {
-            // Create a ReceivedMessage instance
-            ReceivedMessage msg;
-            msg.raw_message = std::string(buffer, nrecv);
-            msg.sender = sender_addr;
-
-            // Push the message to the worker queue
-            if (!workerQueue.enqueue(msg)) {
-                LOG(ERROR) << "Receiver thread: Failed to enqueue message";
-            }
-
-            LOG(INFO) << "Approximate Size of Recv Queue: " << workerQueue.size_approx() << " msgs";
-        }
-    }
-
-    close(recvSock);
-    LOG(INFO) << "Receiver Thread Exiting...";
 }
 
 void Node::election_async_cb(EV_P_ ev_async* w, int revents) {
@@ -544,23 +482,14 @@ void Node::send_request_vote() {
     std::string serialized_message = wrapper.SerializeAsString();
 
     for (const auto& [ip, peer_port] : peer_addresses) {
-        sockaddr_in peer_addr{};
-        peer_addr.sin_family = AF_INET;
-        peer_addr.sin_port = htons(peer_port);
-        inet_pton(AF_INET, ip.c_str(), &peer_addr.sin_addr);
+        int id  = peerIdFromIp(ip);                 // ←  peer‑id
+        sockaddr_in dst{};
+        dst.sin_family = AF_INET;
+        dst.sin_port   = htons(peer_port);
+        inet_pton(AF_INET, ip.c_str(), &dst.sin_addr);
 
-        {
-            // std::lock_guard<std::mutex> lock(send_sock_mutex);
-
-            ssize_t nsend = sendto(sock_fd, serialized_message.c_str(), serialized_message.size(), 0,
-                                (sockaddr*)&peer_addr, sizeof(peer_addr));
-
-            if (nsend == -1) {
-                LOG(ERROR) << "Failed to send request vote to " << ip << ":" << peer_port;
-            } else {
-                LOG(INFO) << "Sent request vote to " << ip << ":" << peer_port;
-            }
-        }
+        sendToPeer(id, serialized_message, dst);
+        LOG(INFO) << "Sent RequestVote to " << ip << ":" << peer_port;
     }
 }
 
@@ -571,18 +500,31 @@ void Node::heartbeat_cb(EV_P_ ev_timer* w, int revents) {
 }
 
 void Node::recv_cb(EV_P_ ev_io* w, int revents) {
-    Node* self = static_cast<Node*>(w->data);
-    char buffer[4096];
-    sockaddr_in sender_addr{};
-    socklen_t sender_len = sizeof(sender_addr);
-    ssize_t nread = recvfrom(w->fd, buffer, sizeof(buffer), 0,
-                             (sockaddr*)&sender_addr, &sender_len);
-    if (nread > 0) {
-        ReceivedMessage rm;
-        rm.raw_message = std::string(buffer, nread);
-        rm.sender = sender_addr;
-        self->workerQueue.enqueue(rm);
-    }
+    auto [self, peerId] = *static_cast<std::pair<Node*,int>*>(w->data);
+    char buf[4096]; sockaddr_in from{}; socklen_t alen = sizeof from;
+    ssize_t n = recvfrom(w->fd, buf, sizeof buf, 0,
+                         reinterpret_cast<sockaddr*>(&from), &alen);
+    if (n <= 0) return;
+
+    /* wrap & dispatch exactly like you did before */
+    ReceivedMessage m;
+    m.raw_message.assign(buf, n);
+    m.sender = from;
+    m.channel = peerId;          // ←  so workers know the source socket
+    self->workerQueue.enqueue(std::move(m));
+}
+
+void Node::sendToPeer(int peerId, const std::string& payload, const sockaddr_in& dst)
+{
+    int fd = ctxForPeer(peerId).fd;
+    sendto(fd, payload.data(), payload.size(), 0,
+        reinterpret_cast<const sockaddr*>(&dst), sizeof dst);
+}
+
+void Node::sendToClient(const std::string& payload, const sockaddr_in& dst)
+{
+    sendto(clientSock_, payload.data(), payload.size(), 0,
+        reinterpret_cast<const sockaddr*>(&dst), sizeof dst);
 }
 
 void Node::workerThreadFunc() {
@@ -745,25 +687,17 @@ void Node::handle_request_vote(const raft::leader_election::RequestVote& request
     send_vote_response(response, send_addr);
 }
 
-void Node::send_vote_response(const raft::leader_election::VoteResponse& response, const sockaddr_in& recepient_addr) {
+void Node::send_vote_response(const raft::leader_election::VoteResponse& response, const sockaddr_in& recipient) {
     raft::leader_election::MessageWrapper wrapper;
     wrapper.set_type(raft::leader_election::MessageWrapper::VOTE_RESPONSE);
     wrapper.set_payload(response.SerializeAsString());
 
     std::string serialized_message = wrapper.SerializeAsString();
 
-    {
-        // std::lock_guard<std::mutex> lock(send_sock_mutex);
+    std::string ip   = inet_ntoa(recipient.sin_addr);
+    int         id   = peerIdFromIp(ip);
 
-        ssize_t nsend = sendto(sock_fd, serialized_message.c_str(), serialized_message.size(), 0,
-                            (sockaddr*)&recepient_addr, sizeof(recepient_addr));
-        if (nsend == -1) {
-            LOG(ERROR) << "Failed to send vote response.";
-        } else {
-            LOG(INFO) << "Sent VoteResponse to "
-                    << inet_ntoa(recepient_addr.sin_addr) << ":" << ntohs(recepient_addr.sin_port);
-        }
-    }
+    sendToPeer(id, serialized_message, recipient);    
 }
 
 // Utility function to convert sockaddr_in to string
@@ -916,6 +850,8 @@ void Node::send_heartbeat() {
             // else {
             //     LOG(INFO) << "Sent heartbeat to " << ip << ":" << peer_port;
             // }
+
+            sendToPeer(peerIdFromIp(ip), serialized_message, peer_addr);
         }
     }
 
@@ -1102,24 +1038,14 @@ void Node::handle_append_entries(const raft::leader_election::AppendEntries& app
     // LOG(INFO) << "Received heartbeat (AppendEntries) from leader " << leader_id << " for term " << received_term;
 }
 
-void Node::send_append_entries_response(const raft::leader_election::AppendEntriesResponse& response, const sockaddr_in& recipient_addr) {
+void Node::send_append_entries_response(const raft::leader_election::AppendEntriesResponse& response, const sockaddr_in& recipient) {
     raft::leader_election::MessageWrapper wrapper;
     wrapper.set_type(raft::leader_election::MessageWrapper::APPEND_ENTRIES_RESPONSE);
     wrapper.set_payload(response.SerializeAsString());
 
     std::string serialized_message = wrapper.SerializeAsString();
 
-    {
-        // std::lock_guard<std::mutex> lock(send_sock_mutex);
-        ssize_t nsend = sendto(sock_fd, serialized_message.c_str(), serialized_message.size(), 0,
-        (sockaddr*)&recipient_addr, sizeof(recipient_addr));
-        if (nsend == -1) {
-            LOG(ERROR) << "Failed to send AppendEntriesResponse";
-        } else {
-            LOG(INFO) << "Sent AppendEntriesResponse to "
-                << inet_ntoa(recipient_addr.sin_addr) << ":" << ntohs(recipient_addr.sin_port);
-        }
-    }
+    sendToPeer(peerIdFromIp(inet_ntoa(recipient.sin_addr)), serialized_message, recipient);
 }
 
 void Node::start_penalty_timer() {
@@ -1460,18 +1386,7 @@ void Node::send_proposals_to_followers(int current_term, int commit_index) {
 void Node::send_client_response(const raft::client::ClientResponse& response, const sockaddr_in& recipient_addr) {
     std::string serialized_message = response.SerializeAsString();
 
-    {
-        // std::lock_guard<std::mutex> lock(send_sock_mutex);
-
-        ssize_t nsend = sendto(sock_fd, serialized_message.c_str(), serialized_message.size(), 0,
-                            (sockaddr*)&recipient_addr, sizeof(recipient_addr));
-        if (nsend == -1) {
-            LOG(ERROR) << "Failed to send client response.";
-        } else {
-            LOG(INFO) << "Sent client response to "
-                    << inet_ntoa(recipient_addr.sin_addr) << ":" << ntohs(recipient_addr.sin_port);
-        }
-    }
+    sendToClient(serialized_message, recipient_addr);
 }
 
 

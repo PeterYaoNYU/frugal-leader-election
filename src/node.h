@@ -52,7 +52,32 @@ struct ReceivedMessage {
     // the raw messages have not been parsed by protobuf. 
     std::string raw_message;
     sockaddr_in sender;
+    int channel; // the socket id that received the message
 };
+
+// for scaling out the recv sockets. 
+struct UDPSocketCtx {
+    int              fd;
+    ev_io            watcher;
+    struct ev_loop*  loop;   // one private loop per socket
+};
+
+
+// transport layer helper function:
+static int makeBoundUDPSocket(const std::string& bindIp, int port)
+{
+    int s = socket(AF_INET, SOCK_DGRAM|SOCK_NONBLOCK, 0);
+    if (s < 0) throw std::runtime_error("socket()");
+    int yes = 1;
+    setsockopt(s, SOL_SOCKET, SO_REUSEPORT, &yes, sizeof yes);
+
+    sockaddr_in a{}; a.sin_family = AF_INET; a.sin_port = htons(port);
+    inet_pton(AF_INET, bindIp.c_str(), &a.sin_addr);
+
+    if (bind(s, reinterpret_cast<sockaddr*>(&a), sizeof a) < 0)
+        throw std::runtime_error("bind()");
+    return s;
+}
 
 class Node {
 public:
@@ -184,6 +209,19 @@ private:
     // to help with the synchronization of the worker threads sennding through the same socket. 
     std::mutex send_sock_mutex;
 
+    int client_port;
+    int internal_base_port;
+
+    int                                         clientSock_{-1};
+    UDPSocketCtx                                clientCtx_;
+    std::unordered_map<int, UDPSocketCtx>       peerCtx_;
+
+    inline UDPSocketCtx& ctxForPeer(int peerId) { return peerCtx_.at(peerId); }
+    inline int peerIdFromIp(const std::string& ip) const {
+        auto it = ip_to_id.find(ip);
+        return it == ip_to_id.end() ? -1 : it->second;
+    }
+
     // async signal callback function:
     static void election_async_cb(EV_P_ ev_async* w, int revents);
 
@@ -258,6 +296,12 @@ private:
     int createBoundSocket();
 
     void receiverThreadFunc();
+
+    void runRecvLoop(UDPSocketCtx* ctx, int peerId);
+
+    void sendToPeer(int peerId, const std::string& payload, const sockaddr_in& dst);
+    
+    void sendToClient(const std::string& payload, const sockaddr_in& dst);
 };
 
 

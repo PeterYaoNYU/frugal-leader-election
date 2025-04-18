@@ -17,7 +17,7 @@ replica:
   failureLeader: true
   # if the failureLeader is true, after maxHeartbeats number of heartbeats, the leader will fail
   maxHeartbeats: 150
-  port: 6116
+  port: 6119
   delayLowerBound: 1
   delayUpperBound: 25
   useSimulatedLinks: false
@@ -31,3 +31,5 @@ replica:
   safetyMarginStepSize: 5
   workerThreadsCount: 4
   fdMode: raft
+  clientPort: 6000
+  internalBasePort: 7000
