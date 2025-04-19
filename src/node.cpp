@@ -1282,15 +1282,25 @@ void Node::handle_client_request(const raft::client::ClientRequest& request, con
 }
 
 void Node::send_proposals_to_followers(int current_term, int commit_index) {
-    std::lock_guard<std::mutex> lock(indices_mutex);
-    // Iterate over each follower (skip self).
-    for (const auto& [ip, peer_port] : peer_addresses) {
-        std::string follower_id = ip + ":" + std::to_string(peer_port);
-        if (follower_id == self_ip + ":" + std::to_string(port))
-            continue;
 
-        // Get the starting index for this follower.
-        int start_index = next_index[follower_id];
+    std::unordered_map<std::string,int> startIndices;
+    {
+      std::lock_guard<std::mutex> lock(indices_mutex);
+      for (auto& [ip, peer_port] : peer_addresses) {
+        auto id = ip + ":" + std::to_string(peer_port);
+        if (id == self_ip + ":" + std::to_string(port))
+          continue;
+        startIndices[id] = next_index[id];
+      }
+    }  // << mutex unlocked here
+
+    int lastLogIdx = raftLog.getLastLogIndex();
+    // Iterate over each follower (skip self).
+    for (auto& [follower_id, start_index] : startIndices) {
+        // parse out ip & port
+        auto pos = follower_id.find(':');
+        std::string ip = follower_id.substr(0, pos);
+        int peer_port = std::stoi(follower_id.substr(pos+1));
 
         // Prepare an AppendEntries RPC containing log entries from start_index to the current last log index.
         raft::leader_election::AppendEntries append_entries;
