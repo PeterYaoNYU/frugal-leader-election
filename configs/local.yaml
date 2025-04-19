@@ -20,8 +20,6 @@ replica:
   port: 7019
   delayLowerBound: 1
   delayUpperBound: 25
-  # if use simulated links is true, there is a chance that the proposal to followers will not be sent. 
-  # this is used to verify correctness of the implementation. 
   useSimulatedLinks: false
   linkLossRate: 0.01
   checkFalsePositiveRate: true
@@ -31,4 +29,7 @@ replica:
   heartbeatIntervalMargin: 75
   safetyMarginLowerBound: 25
   safetyMarginStepSize: 5
-  workerThreadsCount: 4
+  workerThreadsCount: 1
+  fdMode: raft
+  clientPort: 10024
+  internalBasePort: 8140

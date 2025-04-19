@@ -66,10 +66,18 @@ def main():
     req_latency = {}   # request_id -> latency (float)
     req_leader = {}    # request_id -> leader (string)
     
+    begin_timestamp = None
+    end_timestamp = None
+    
+    overall_commit_count = 0;
+    
     try:
         with open(filename, "r") as f:
             for line in f:
                 current_timestamp = parse_timestamp(line)
+                if begin_timestamp is None:
+                    begin_timestamp = current_timestamp
+                end_timestamp = current_timestamp
                 
                 # Check for beginning of a leadership section.
                 begin_match = begin_leader_pattern.search(line)
@@ -160,9 +168,13 @@ def main():
         throughput = commits / duration if duration > 0 else float('inf')
         print("  Leader {}: Total commits = {}, Total duration = {:.6f} seconds, Throughput = {:.3f} requests/second"
               .format(leader, commits, duration, throughput))
-        overall_duration += duration
+
+    overall_duration = (end_timestamp - begin_timestamp).total_seconds()
         
     print("\nOverall Duration: {:.6f} seconds".format(overall_duration))
+    
+    print("Overall Commit Count: {}".format(successful_requests))
+    print("Overall Throughput: {:.3f} requests/second".format(successful_requests / overall_duration))
     
     # Per-leader response latency statistics.
     print("\nPer-Leader Response Latency:")

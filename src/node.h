@@ -38,6 +38,7 @@
 #include "raftLog.h"
 
 #include "concurrentqueue.h"
+#include "blockingconcurrentqueue.h"
 
 // Helper: Convert our in-memory log entry to the proto LogEntry.
 inline raft::leader_election::LogEntry convertToProto(const LogEntry& entry) {
@@ -185,7 +186,7 @@ private:
 
     std::unordered_map<int, sockaddr_in> client_id_to_addr;
 
-    moodycamel::ConcurrentQueue<ReceivedMessage> workerQueue;
+    moodycamel::BlockingConcurrentQueue<ReceivedMessage> workerQueue;
     std::vector<std::thread> workerThreads;
     std::vector<std::thread> receiverThreads;
     std::atomic<bool> shutdownWorkers {false};

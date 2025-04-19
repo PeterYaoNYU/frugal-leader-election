@@ -12,7 +12,7 @@ Node::Node(const ProcessConfig& config, int replicaId)
       self_ip(""),                                 // 7 (set later if needed)
       runtime_seconds(0),                          // 8 (set later if needed)
       shutdown_timer(),                            // 9
-      port(config.port),                                  // 10
+      port(config.clientPort),                                  // 10
       peer_addresses(),                            // 11 (initialized in the body)
       rng(std::random_device{}()),                 // 12
       dist(config.timeoutLowerBound, config.timeoutUpperBound),                              // 13
@@ -62,7 +62,7 @@ Node::Node(const ProcessConfig& config, int replicaId)
 
     // Parse peer addresses from config.peerIPs
     for (const auto& peer : peerIPs) {
-        peer_addresses.emplace_back(peer, port_for_service);
+        peer_addresses.emplace_back(peer, internal_base_port + replicaId);
     }
 
     LOG(INFO) << "Peer addresses size is: " << peer_addresses.size() << "and replica id is: " << replicaId;
@@ -519,6 +519,7 @@ void Node::sendToPeer(int peerId, const std::string& payload, const sockaddr_in&
     int fd = ctxForPeer(peerId).fd;
     sendto(fd, payload.data(), payload.size(), 0,
         reinterpret_cast<const sockaddr*>(&dst), sizeof dst);
+    LOG(INFO) << "Sent message to peer " << peerId << " at " << inet_ntoa(dst.sin_addr) << ":" << ntohs(dst.sin_port) << " from FD: " << fd;
 }
 
 void Node::sendToClient(const std::string& payload, const sockaddr_in& dst)
@@ -531,7 +532,7 @@ void Node::workerThreadFunc() {
     ReceivedMessage rm;
     while (!shutdownWorkers.load()) {
         // try to dequeue a message. 
-        if (workerQueue.try_dequeue(rm)) {
+        if (workerQueue.wait_dequeue_timed(rm, std::chrono::milliseconds{5})) {    // 5 ms wake‑up if queue stays empty
             // process the message
             raft::leader_election::MessageWrapper wrapper;
             if (!wrapper.ParseFromString(rm.raw_message)) {
@@ -982,7 +983,7 @@ void Node::handle_append_entries(const raft::leader_election::AppendEntries& app
         return;
     }
 
-    LOG(INFO) << "Prev entries match, processing new log entries..." << append_entries.prev_log_index() << " " << append_entries.prev_log_term() << " " << append_entries.entries_size();
+    LOG(INFO) << "Prev entries match, processing new log entries..." << append_entries.prev_log_index() << " " << append_entries.prev_log_term() << " Message Entries Count: " << append_entries.entries_size();
 
     // implementation in referecen to this: https://github.com/ongardie/raftscope/blob/master/raft.js
     int index = append_entries.prev_log_index();
@@ -1087,18 +1088,7 @@ void Node::calculate_and_send_penalty_score() {
         peer_addr.sin_port = htons(peer_port);
         inet_pton(AF_INET, ip.c_str(), &peer_addr.sin_addr);
 
-        {
-            // std::lock_guard<std::mutex> lock(send_sock_mutex);
-
-            ssize_t nsend = sendto(sock_fd, serialized_message.c_str(), serialized_message.size(), 0,
-                                (sockaddr*)&peer_addr, sizeof(peer_addr));
-
-            if (nsend == -1) {
-                LOG(ERROR) << "Failed to send penalty score to " << ip << ":" << peer_port;
-            } else {
-                LOG(INFO) << "Sent penalty score to " << ip << ":" << peer_port;
-            }
-        }
+        sendToPeer(peerIdFromIp(ip), serialized_message, peer_addr);
     }
 }
 
@@ -1349,34 +1339,8 @@ void Node::send_proposals_to_followers(int current_term, int commit_index) {
         if (use_simulated_links) {
             send_with_delay_and_loss(serialized_message, peer_addr);
         } else {
-            LOG(INFO) << "Sending proposals to " << ip << ":" << peer_port;
-            
-            {
-                // try to first parse the message
-                // std::lock_guard<std::mutex> lock(send_sock_mutex);
-
-                ssize_t nsend = sendto(sock_fd, serialized_message.c_str(), serialized_message.size(), 0,
-                                        (sockaddr*)&peer_addr, sizeof(peer_addr));
-                if (nsend == -1) {
-                    LOG(ERROR) << "Failed to send proposals to " << ip << ":" << peer_port;
-                } else {
-                    LOG(INFO) << "Sent proposals to " << ip << ":" << peer_port << " length in bytes: " << serialized_message.size();
-                    if (serialized_message.size() > 1500) {
-                        LOG(ERROR) << "Message size exceeds 1500 bytes. Possible fragmentation.";
-                    }
-                }
-
-                // raft::leader_election::MessageWrapper wrapper_check;
-                // if (!wrapper_check.ParseFromString(serialized_message)) {
-                //     LOG(ERROR) << "[Parsing Verification] Failed to parse message from sender"; 
-                // }   
-
-                // if (wrapper_check.type() != raft::leader_election::MessageWrapper::APPEND_ENTRIES) {
-                //     LOG(ERROR) << "[Parsing Verification] Message type mismatch. Expected APPEND_ENTRIES.";
-                // } else {
-                //     LOG(INFO) << "[Parsing Verification] Message type is correct.";
-                // }
-            }
+            sendToPeer(peerIdFromIp(ip), serialized_message, peer_addr);
+            LOG(INFO) << "Sending proposals to Node " << peerIdFromIp(ip);
         }
     }
 }

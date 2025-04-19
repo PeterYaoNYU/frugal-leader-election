@@ -1,7 +1,21 @@
 cc_library(
-    name = "concurrentqueue", 
-    srcs = ["concurrentqueue.h"],
-    visibility = [
-        "//visibility:public",
+    name = "concurrentqueue",
+    hdrs = ["concurrentqueue.h"],
+    visibility = ["//visibility:public"],
+)
+
+cc_library(
+    name = "lightweightsemaphore",
+    hdrs = ["lightweightsemaphore.h"],
+    visibility = ["//visibility:public"],
+)
+
+cc_library(
+    name = "blockingconcurrentqueue",
+    hdrs = ["blockingconcurrentqueue.h"],
+    deps = [
+      ":concurrentqueue",
+      ":lightweightsemaphore",
     ],
+    visibility = ["//visibility:public"],
 )
