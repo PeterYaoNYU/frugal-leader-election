@@ -11,7 +11,7 @@ replica:
   - "eth1"
   - "eth1"
   - "eth1"
-  runtimeSeconds: 50
+  runtimeSeconds: 120
   timeoutLowerBound: 150
   timeoutUpperBound: 300
   failureLeader: true
@@ -31,5 +31,5 @@ replica:
   safetyMarginStepSize: 5
   workerThreadsCount: 7
   fdMode: raft
-  clientPort: 10041
-  internalBasePort: 8301
+  clientPort: 10046
+  internalBasePort: 8360

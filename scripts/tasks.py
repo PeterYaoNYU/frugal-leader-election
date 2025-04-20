@@ -280,7 +280,7 @@ def start_client(c, serverIp, serverPort, value):
         
 processes = {}  # To store the client processes
 
-# invoke start-clients --serverIp 127.0.0.4 --serverPort 7016 --value 5
+# invoke start-clients --serverIp 127.0.0.4 --serverPort 10046 --value 5
 @task
 def start_clients(c, serverIp, serverPort, value):
     """
