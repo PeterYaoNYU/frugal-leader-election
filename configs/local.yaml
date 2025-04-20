@@ -11,10 +11,10 @@ replica:
   - "eth1"
   - "eth1"
   - "eth1"
-  runtimeSeconds: 3000
+  runtimeSeconds: 50
   timeoutLowerBound: 150
   timeoutUpperBound: 300
-  failureLeader: false
+  failureLeader: true
   # if the failureLeader is true, after maxHeartbeats number of heartbeats, the leader will fail
   maxHeartbeats: 150
   port: 7019
@@ -29,7 +29,7 @@ replica:
   heartbeatIntervalMargin: 75
   safetyMarginLowerBound: 25
   safetyMarginStepSize: 5
-  workerThreadsCount: 12
+  workerThreadsCount: 7
   fdMode: raft
-  clientPort: 10032
-  internalBasePort: 8220
+  clientPort: 10041
+  internalBasePort: 8301

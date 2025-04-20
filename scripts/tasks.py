@@ -257,7 +257,7 @@ def start_client(c, serverIp, serverPort, value):
 
     binary_path = "../bazel-bin/client"  # Path to the built client binary.
     # Build the command-line arguments. (Client expects: server_ip server_port mode value)
-    cmd = [binary_path, serverIp, str(serverPort), sendMode, value, "777"]
+    cmd = [binary_path, serverIp, str(serverPort), sendMode, value, "778"]
     
     # Create logs directory if it doesn't exist
     logs_dir = Path("logs")
@@ -456,7 +456,8 @@ def start(c):
     
     for replica_id in range(n_replicas):
         log_file = logs_dir / f"node_{replica_id}.log"
-        cmd = [binary_path, f"--config={config_path}", f"--replicaId={replica_id}", "--minloglevel=1"]
+        # cmd = [binary_path, f"--config={config_path}", f"--replicaId={replica_id}", "--minloglevel=1"]
+        cmd = [binary_path, f"--config={config_path}", f"--replicaId={replica_id}"]
         
         print(f"Starting replica {replica_id} with command: {' '.join(cmd)}")
     

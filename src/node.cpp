@@ -289,7 +289,7 @@ void Node::process_election_async_task() {
 
 void Node::shutdown_cb(EV_P_ ev_timer* w, int revents) {
     Node* self = static_cast<Node*>(w->data);
-    LOG(INFO) << "Runtime exceeded (" << self->runtime_seconds << " seconds). Shutting down node.";
+    LOG(WARNING) << "Runtime exceeded (" << self->runtime_seconds << " seconds). Shutting down node.";
 
     if (self->tcp_monitor) {
         self->tcp_stat_manager.stopMonitoring();
@@ -305,6 +305,20 @@ void Node::shutdown_cb(EV_P_ ev_timer* w, int revents) {
         }
     }
 
+    // Stop the event loop
+    ev_break(EV_A_ EVBREAK_ALL);
+    LOG(WARNING) << "Dumping raft log before shutdown.";
+    std::string filename = "raftlog_dump_" + self->self_ip  + ".log";
+    self->dumpRaftLogToFile(filename);
+    LOG(INFO) << "Node shutting down. Raft log dumped to " << filename;
+
+    // TODO: Fix with libev async!!!
+
+    for (auto& [id, ctx] : self->peerCtx_) {
+        ev_break(ctx.loop, EVBREAK_ALL);
+    }
+    ev_break(self->clientCtx_.loop, EVBREAK_ALL);   // client socket loop
+
     // we should also join the receiver threads. 
     for (auto& thread : self->receiverThreads) {
         if (thread.joinable()) {
@@ -312,11 +326,7 @@ void Node::shutdown_cb(EV_P_ ev_timer* w, int revents) {
         }
     }
 
-    // Stop the event loop
-    ev_break(EV_A_ EVBREAK_ALL);
-    std::string filename = "raftlog_dump_" + self->self_ip  + ".log";
-    self->dumpRaftLogToFile(filename);
-    LOG(INFO) << "Node shutting down. Raft log dumped to " << filename;
+    LOG(INFO) << "Node shutdown complete.";
 }
 
 void Node::start_election_timeout(bool double_time, bool force_raft) {
