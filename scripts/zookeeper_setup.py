@@ -445,7 +445,7 @@ def setup_delay_fat_tree(lat):
         if switch_conn is None:
             print(f"Switch {switch_id} not found in connections.")
         interface_info = switch.get("interfaces")
-        print("switcg id: ", switch_id)
+        print("switch id: ", switch_id)
         for interface in interface_info.keys():
             print("Interface name: ", interface)
             delete_command = f"sudo tc qdisc del dev {interface} root || true"
@@ -659,7 +659,8 @@ if __name__ == "__main__":
     # check_leader_node(connections.values())
     # start_zk_ensemble_with_designated_leader(group, 0)
     # run_ycsb_workload_from_node(1, 1, "zkProfile13.txt", contact_leader=False)
-    setup_delay_fat_tree(1)
+    clear_all_switch_weights()
+    # setup_delay_fat_tree(0.2)
     
     # kill_leader_then_reinstatiate()
     # designate_leader(1, [0, 1, 2, 3, 4])
