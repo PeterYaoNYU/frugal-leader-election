@@ -358,7 +358,7 @@ def start_client_remote(c, remoteHostId, serverIp, serverPort, value, logSuffix=
         # Run the command asynchronously; pty is set to False to avoid allocation of a pseudo-terminal.
         conn.run(cmd, pty=False, asynchronous=True)
         print(f"Remote client started on {remote_host}, logging to client_remote.log")
-        sleep(600)
+        sleep(200)
         conn.run("killall client", warn=True)
         # conn.get("frugal-leader-election/client_remote.log", local=f"client_remote_{logSuffix}.log")
         

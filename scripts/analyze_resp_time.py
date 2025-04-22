@@ -118,19 +118,19 @@ def main():
                     if active_section_leader is not None:
                         active_section_commits += 1
 
-                    # Capture response time lines.
-                    r_match = response_pattern.search(line)
-                    if r_match:
-                        req_id = int(r_match.group(1))
-                        latency = float(r_match.group(2))
-                        times.append(latency)
-                        req_latency[req_id] = latency
-                        if req_id in req_leader:
-                            leader = req_leader.pop(req_id)
-                            if leader not in leader_latency:
-                                leader_latency[leader] = []
-                            leader_latency[leader].append(latency)
-                            req_latency.pop(req_id)
+                # Capture response time lines.
+                r_match = response_pattern.search(line)
+                if r_match:
+                    req_id = int(r_match.group(1))
+                    latency = float(r_match.group(2))
+                    times.append(latency)
+                    req_latency[req_id] = latency
+                    if req_id in req_leader:
+                        leader = req_leader.pop(req_id)
+                        if leader not in leader_latency:
+                            leader_latency[leader] = []
+                        leader_latency[leader].append(latency)
+                        req_latency.pop(req_id)
                 
                 # Capture received response lines to get leader info.
                 rcv_match = received_pattern.search(line)
