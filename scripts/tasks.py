@@ -230,9 +230,9 @@ def start_remote_default(c):
     print("Logs are available in the 'logs/' directory on each respective node.")
 
 
-# invoke start-client --serverIp 127.0.0.4 --serverPort 7899 --value 5
+# invoke start-client --serverIp 127.0.0.4 --serverPort 7899 --value 5 --bindIp 127.0.0.18
 @task
-def start_client(c, serverIp, serverPort, value):
+def start_client(c, serverIp, serverPort, value, bindIp):
     """
     Starts the client process locally.
     
@@ -257,7 +257,7 @@ def start_client(c, serverIp, serverPort, value):
 
     binary_path = "../bazel-bin/client"  # Path to the built client binary.
     # Build the command-line arguments. (Client expects: server_ip server_port mode value)
-    cmd = [binary_path, serverIp, str(serverPort), sendMode, value, "779"]
+    cmd = [binary_path, serverIp, str(serverPort), sendMode, value, "779", bindIp]
     
     # Create logs directory if it doesn't exist
     logs_dir = Path("logs")
@@ -346,7 +346,7 @@ def start_client_remote(c, remoteHostId, serverIp, serverPort, value, logSuffix=
     sendMode = "maxcap"
     binary_path = "bazel-bin/client"  # Path to the built client binary on the remote node.
     # Build the command-line string (client expects: serverIp serverPort mode value)
-    cmd = f"cd frugal-leader-election && nohup {binary_path} {serverIp} {serverPort} {sendMode} {value} 123 > client_experiment1.log 2>&1 &"
+    cmd = f"cd frugal-leader-election && nohup {binary_path} {serverIp} {serverPort} {sendMode} {value} 333 > client_experiment5.log 2>&1 &"
     
     remote_host = nodes[int(remoteHostId)]["host"]    
 
@@ -366,9 +366,9 @@ def start_client_remote(c, remoteHostId, serverIp, serverPort, value, logSuffix=
         print(f"Failed to start remote client on {remote_host}: {e}")
 
 
-# invoke start-client-remote --remoteHostId 1 --serverIp 10.0.0.3 --serverPort 6788 --value 5
+# invoke start-client-remote --remoteHostId 1 --serverIp 10.0.0.3 --serverPort 6788 --value 5 --bindIp 10.0.3.1
 @task
-def start_clients_remote(c, remoteHostId, serverIp, serverPort, value, logSuffix=""):
+def start_clients_remote(c, remoteHostId, serverIp, serverPort, value, bindIp, logSuffix=""):
     """
     Starts the client process on a remote node.
     
@@ -384,7 +384,7 @@ def start_clients_remote(c, remoteHostId, serverIp, serverPort, value, logSuffix
     sendMode = "maxcap"
     binary_path = "bazel-bin/client"  # Path to the built client binary on the remote node.
     # Build the command-line string (client expects: serverIp serverPort mode value)
-    cmd = f"cd frugal-leader-election && nohup {binary_path} {serverIp} {serverPort} {sendMode} {value} {str(client_ids[i-1])} > client_remote.log 2>&1 &"
+    cmd = f"cd frugal-leader-election && nohup {binary_path} {serverIp} {serverPort} {sendMode} {value} {str(client_ids[i-1])} {bindIp} > client_remote.log 2>&1 &"
     
     remote_host = nodes[int(remoteHostId)]["host"]    
 

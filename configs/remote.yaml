@@ -31,5 +31,5 @@ replica:
   safetyMarginStepSize: 5
   workerThreadsCount: 7
   fdMode: raft
-  clientPort: 10069
-  internalBasePort: 8090
+  clientPort: 10083
+  internalBasePort: 8230

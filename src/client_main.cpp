@@ -43,7 +43,9 @@ int main(int argc, char* argv[]) {
 
     int client_id = std::stoi(argv[5]);
 
-    Client client(server_ip, server_port, mode, fixed_interval, max_in_flight, client_id);
+    std::string bind_ip = argv[6];
+
+    Client client(server_ip, server_port, mode, fixed_interval, max_in_flight, client_id, bind_ip);
     client.run();
 
     google::ShutdownGoogleLogging();

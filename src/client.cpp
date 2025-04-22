@@ -1,7 +1,7 @@
 #include "client.h"
 
 Client::Client(const std::string& server_ip, int server_port, SendMode mode,
-        double fixed_interval_sec, int maxInFlight, int client_id)
+        double fixed_interval_sec, int maxInFlight, int client_id, std::string bind_ip)
     : server_ip_(server_ip),
         server_port_(server_port),
         mode_(mode),
@@ -10,7 +10,8 @@ Client::Client(const std::string& server_ip, int server_port, SendMode mode,
         in_flight_(0),
         client_id_(client_id),
         request_id_(1), 
-        timeout_interval_(1.0)
+        timeout_interval_(1.0), 
+        bind_ip_(bind_ip) 
 {
     // Create the default event loop.
     loop_ = ev_default_loop(0);
@@ -34,7 +35,7 @@ Client::Client(const std::string& server_ip, int server_port, SendMode mode,
     sockaddr_in local_addr{};
     local_addr.sin_family = AF_INET;
     local_addr.sin_port = htons(0); // let the OS choose a free port
-    if (inet_pton(AF_INET, server_ip_.c_str(), &local_addr.sin_addr) <= 0) {
+    if (inet_pton(AF_INET, bind_ip_.c_str(), &local_addr.sin_addr) <= 0) {
         LOG(FATAL) << "Invalid local IP address: " << server_ip_;
     }
     if (bind(sock_fd_, (sockaddr*)&local_addr, sizeof(local_addr)) < 0) {
@@ -226,18 +227,18 @@ void Client::handle_response(const std::string& response_data,  sockaddr_in& fro
 
     // Compute response time if we have a recorded submission time.
     auto it = request_times_.find(response.request_id());
+    std::ostringstream oss;
     if (it != request_times_.end()) {
         auto now = std::chrono::steady_clock::now();
         double duration_ms = std::chrono::duration_cast<std::chrono::duration<double, std::milli>>(now - it->second).count();
-        std::ostringstream oss;
         oss << std::fixed << std::setprecision(3) << duration_ms;
-        LOG(INFO) << "Response time for request id " << response.request_id() << " is " << oss.str() << " ms.";        
+        // LOG(INFO) << "Response time for request id " << response.request_id() << " is " << oss.str() << " ms.";        
         request_times_.erase(it);
     } else {
         LOG(WARNING) << "No recorded request time for request id " << response.request_id();
     }
     
-    LOG(INFO) << "Received ClientResponse: success=" << response.success()
+    LOG(INFO) << "Received ClientResponse: latency= " << oss.str() << ", success=" << response.success()
                 << ", from=" << inet_ntoa(from_addr.sin_addr)
                 << ", response=\"" << response.response() << "\""
                 << ", client_id=" << response.client_id()

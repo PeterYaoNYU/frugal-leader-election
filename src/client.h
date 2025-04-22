@@ -24,7 +24,7 @@ enum SendMode {
 class Client {
 public:
     Client(const std::string& server_ip, int server_port, SendMode mode,
-           double fixed_interval_sec, int maxInFlight, int client_id);
+           double fixed_interval_sec, int maxInFlight, int client_id, std::string bind_ip);
 
     ~Client();
 
@@ -38,6 +38,7 @@ private:
     ev_timer send_timer_;
 
     std::string server_ip_;
+    std::string bind_ip_;
     int server_port_;
     sockaddr_in server_addr_;
 
