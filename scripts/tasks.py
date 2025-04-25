@@ -231,7 +231,7 @@ def start_remote_default(c):
     print("Logs are available in the 'logs/' directory on each respective node.")
 
 
-# invoke start-client --serverIp 127.0.0.4 --serverPort 10053 --value 0.01 --bindIp 127.0.0.18
+# invoke start-client --serverIp 127.0.0.4 --serverPort 10053 --value 5 --bindIp 127.0.0.18
 @task
 def start_client(c, serverIp, serverPort, value, bindIp):
     """

@@ -609,6 +609,7 @@ void Node::workerThreadFunc(uint32_t tid) {
                         LOG(ERROR) << "Failed to parse append entries.";
                         return;
                     }
+                    LOG(INFO) << "(Tid: " << tid << ") Received append entries message from " << rm.sender.sin_addr.s_addr << ":" << ntohs(rm.sender.sin_port);
                     handle_append_entries(append_entries, rm.sender, myLog, tid);
                     // LOG(INFO) << "Received append entries message.";
                     break;
@@ -637,6 +638,7 @@ void Node::workerThreadFunc(uint32_t tid) {
                         LOG(ERROR) << "Failed to parse AppendEntriesResponse message.";
                         return;
                     }
+                    LOG(INFO) << "(Tid: " << tid << ") Received append entries response message from " << rm.sender.sin_addr.s_addr << ":" << ntohs(rm.sender.sin_port);
                     handle_append_entries_response(response, rm.sender, myLog, tid);
                     break;
                 }
@@ -1299,7 +1301,7 @@ void Node::handle_client_request(const raft::client::ClientRequest& request, con
 
     // append new command as a log entry
     int new_log_index = myLog.getLastLogIndex() + 1;
-    LOG(INFO) << "the new log index is " << new_log_index;
+    LOG(INFO) << "the new log index is " << new_log_index << " for the command " << request.command();
     LogEntry new_entry { current_term, request.command(), request.client_id(), request.request_id() };
     myLog.appendEntry(new_entry);
     LOG(INFO) << "Appended new entry to log (" << tid << ") -> Index: " << new_log_index << ", Term: " << new_entry.term << ", Client ID: " << new_entry.client_id << ", Command: " << new_entry.command;
@@ -1340,7 +1342,7 @@ void Node::send_proposals_to_followers(int current_term, int commit_index, RaftL
 
     std::unordered_map<std::string,int> startIndices;
     {
-      auto next_index = next_indexes[tid];
+      auto& next_index = next_indexes[tid];
       for (auto& [ip, peer_port] : peer_addresses) {
         auto id = ip + ":" + std::to_string(peer_port);
         if (id == self_ip + ":" + std::to_string(port))
@@ -1356,6 +1358,11 @@ void Node::send_proposals_to_followers(int current_term, int commit_index, RaftL
         auto pos = follower_id.find(':');
         std::string ip = follower_id.substr(0, pos);
         int peer_port = std::stoi(follower_id.substr(pos+1));
+        
+        if (ip == self_ip) {
+            LOG(INFO) << "(Tid: " << tid << ") Skipping self in send_proposals_to_followers.";  
+            continue; // Skip self
+        }
 
         // Prepare an AppendEntries RPC containing log entries from start_index to the current last log index.
         raft::leader_election::AppendEntries append_entries;
@@ -1387,7 +1394,9 @@ void Node::send_proposals_to_followers(int current_term, int commit_index, RaftL
             }
         }
 
-        LOG(INFO) << "Sending proposals to " << ip << " | start index: " << start_index << " | last index: " << raftLog.getLastLogIndex() << " | num entries: " << i - start_index + 1 <<" | end index: " << i << " | prev term: " << prev_term;
+        LOG(INFO) << "(Tid: " << tid << ") Sending proposals to " << ip << " | start index: " << start_index << 
+                    " | last index: " << raftLog.getLastLogIndex() << " | num entries: " << i - start_index <<
+                    " | end index: " << i << " | prev term: " << prev_term;
         append_entries.set_leader_commit(commit_index);
 
         // Serialize and send this RPC to the follower.
@@ -1406,7 +1415,7 @@ void Node::send_proposals_to_followers(int current_term, int commit_index, RaftL
             send_with_delay_and_loss(serialized_message, peer_addr);
         } else {
             sendToPeer(peerIdFromIp(ip), serialized_message, peer_addr);
-            LOG(INFO) << "Sending proposals to Node " << peerIdFromIp(ip);
+            LOG(INFO) << "(Tid: " << tid << ") Sending proposals to Node " << peerIdFromIp(ip);
         }
     }
 }
@@ -1575,11 +1584,11 @@ void Node::updated_commit_index(uint32_t tid, RaftLog& raftLog) {
 
     if (new_commit_index != raftLog.commitIndex) {
         raftLog.commitIndex = new_commit_index;
-        LOG(INFO) << "Advanced commit index of Log "<< tid << "to: " << new_commit_index;
+        LOG(INFO) << "Advanced commit index of Log "<< tid << "from: " << old_commit_index << "to: " << new_commit_index;
         // Optionally, trigger applying the newly committed entries to the state machine.
         // apply_committed_entries();
 
-        for (int idx = old_commit_index; idx < new_commit_index; idx++) 
+        for (int idx = old_commit_index; idx <= new_commit_index; idx++) 
         {
             LogEntry entry;
             if (raftLog.getEntry(idx, entry)) {
@@ -1593,6 +1602,7 @@ void Node::updated_commit_index(uint32_t tid, RaftLog& raftLog) {
                     response.set_client_id(entry.client_id);
                     response.set_request_id(entry.request_id);
                     send_client_response(response, client_address->second);
+                    LOG(INFO) << "(tid " << tid << ") Sent client response to " << entry.client_id << " for request: " << entry.request_id << " command: " << entry.command;
                 }
             }
         }
