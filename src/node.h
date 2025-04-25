@@ -54,6 +54,7 @@ struct ReceivedMessage {
     std::string raw_message;
     sockaddr_in sender;
     int channel; // the socket id that received the message
+    uint32_t thread_id; // the thread id that should handle the message
 };
 
 // for scaling out the recv sockets. 
@@ -179,14 +180,19 @@ private:
     int safety_margin_lower_bound;
     int safety_margin_step_size;
 
-    RaftLog raftLog;
+    // RaftLog raftLog;
+    std::vector<RaftLog> threadLogs_;
 
-    std::unordered_map<std::string, int> next_index;
-    std::unordered_map<std::string, int> match_index;
+    // std::unordered_map<std::string, int> next_index;
+    // std::unordered_map<std::string, int> match_index;
+
+    // to avoid lock contention, there should be multiple next_index and match_index for each thread.
+    std::vector<std::unordered_map<std::string, int>> next_indexes;
+    std::vector<std::unordered_map<std::string, int>> match_indexes;
 
     std::unordered_map<int, sockaddr_in> client_id_to_addr;
 
-    moodycamel::BlockingConcurrentQueue<ReceivedMessage> workerQueue;
+    std::vector<moodycamel::BlockingConcurrentQueue<ReceivedMessage>> workerQueues_;
     std::vector<std::thread> workerThreads;
     std::vector<std::thread> receiverThreads;
     std::atomic<bool> shutdownWorkers {false};
@@ -242,12 +248,12 @@ private:
 
     void send_request_vote();
     void send_vote_response(const raft::leader_election::VoteResponse& response, const sockaddr_in& addr);
-    void send_append_entries_response(const raft::leader_election::AppendEntriesResponse& response, const sockaddr_in& recipient_addr);
+    void send_append_entries_response(const raft::leader_election::AppendEntriesResponse& response, const sockaddr_in& recipient_addr, uint32_t tid);
 
     void handle_request_vote(const raft::leader_election::RequestVote& request, const sockaddr_in& sender_addr);
     void handle_vote_response(const raft::leader_election::VoteResponse& response, const sockaddr_in& sender_addr);
 
-    void handle_append_entries(const raft::leader_election::AppendEntries& append_entries, const sockaddr_in& sender_addr); 
+    void handle_append_entries(const raft::leader_election::AppendEntries& append_entries, const sockaddr_in& sender_addr, RaftLog& raftLog, uint32_t tid); 
 
     // a set of penalty related functions. 
     void start_penalty_timer();
@@ -279,20 +285,20 @@ private:
     }
 
     // Only for the leader: handle the client requests, update the followers, 
-    void handle_client_request(const raft::client::ClientRequest& request, const sockaddr_in& sender_addr);
-    void handle_append_entries_response(const raft::leader_election::AppendEntriesResponse& response, const sockaddr_in& sender_addr);
+    void handle_client_request(const raft::client::ClientRequest& request, const sockaddr_in& sender_addr, RaftLog& myLog, uint32_t tid);
+    void handle_append_entries_response(const raft::leader_election::AppendEntriesResponse& response, const sockaddr_in& sender_addr, RaftLog& raftLog, uint32_t tid);
 
     void send_client_response(const raft::client::ClientResponse& response, const sockaddr_in& recipient_addr);
-    void send_proposals_to_followers(int current_term, int commit_index);
+    void send_proposals_to_followers(int current_term, int commit_index, RaftLog& raftLog, uint32_t tid);
 
     // check quorum and forward commit idx, for the leader's use.
-    void updated_commit_index();
+    void updated_commit_index(uint32_t tid, RaftLog& raftLog);
 
     void dumpRaftLogToFile(const std::string& file_path);
 
     void startWorkerThreads(int numWorkers);
 
-    void workerThreadFunc();
+    void workerThreadFunc(uint32_t tid);
 
     int createBoundSocket();
 

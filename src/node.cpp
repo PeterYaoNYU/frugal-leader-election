@@ -72,6 +72,12 @@ Node::Node(const ProcessConfig& config, int replicaId)
     self_ip = config.peerIPs[replicaId];
     LOG(INFO) << "Node initialized with IP: " << self_ip << ", port: " << port;
 
+    // every worker thread will have its own raft log.
+    threadLogs_.resize(worker_threads_count);
+    workerQueues_.resize(worker_threads_count);
+    next_indexes.resize(worker_threads_count);
+    match_indexes.resize(worker_threads_count);
+
     runtime_seconds = config.runtimeSeconds;
 
     check_false_positive = config.checkFalsePositive;
@@ -203,6 +209,8 @@ void Node::run() {
 
     // After event loop stops, dump the raft log.
     std::string filename = "raftlog_dump_" + self_ip + "_" + std::to_string(port) + ".log";
+    // dump raft log to file code needs some change. 
+    // todo: fix the dump functino. 
     dumpRaftLogToFile(filename);
     LOG(INFO) << "Node shutting down. Raft log dumped to " << filename;
 }
@@ -482,8 +490,13 @@ void Node::send_request_vote() {
     raft::leader_election::RequestVote request;
     request.set_term(current_term);
     request.set_candidate_id(self_ip + ":" + std::to_string(port));
-    request.set_last_log_index(raftLog.getLastLogIndex());
-    request.set_last_log_term(raftLog.getLastLogTerm());
+    // request.set_last_log_index(raftLog.getLastLogIndex());
+    // request.set_last_log_term(raftLog.getLastLogTerm());
+
+    for (int i = 0; i < worker_threads_count; i++) {
+        request.add_last_log_index(threadLogs_[i].getLastLogIndex());
+        request.add_last_log_term(threadLogs_[i].getLastLogTerm());
+    }
 
     raft::leader_election::MessageWrapper wrapper;
     wrapper.set_type(raft::leader_election::MessageWrapper::REQUEST_VOTE);
@@ -521,7 +534,25 @@ void Node::recv_cb(EV_P_ ev_io* w, int revents) {
     m.raw_message.assign(buf, n);
     m.sender = from;
     m.channel = peerId;          // ←  so workers know the source socket
-    self->workerQueue.enqueue(std::move(m));
+
+    // decide which thread and queue to dispatch the message to:
+
+    // first default to a random thread:
+    uint32_t target_thread_id = rand() % self->worker_threads_count;
+    raft::leader_election::MessageWrapper wrapper;
+    if (!wrapper.ParseFromString(m.raw_message)) {
+        LOG(ERROR) << "Failed to parse message from sender: " << inet_ntoa(m.sender.sin_addr) << ":" << ntohs(m.sender.sin_port);
+        return;
+    }
+
+    if ((wrapper.type() == raft::leader_election::MessageWrapper::APPEND_ENTRIES) || (wrapper.type() == raft::leader_election::MessageWrapper::APPEND_ENTRIES_RESPONSE)) {
+        target_thread_id = wrapper.thread_id() % self->worker_threads_count;
+    }
+
+    m.thread_id = target_thread_id;
+
+    // enqueue to the corresponding worker thread's concurrent queue:
+    self->workerQueues_[target_thread_id].enqueue(m);
 }
 
 void Node::sendToPeer(int peerId, const std::string& payload, const sockaddr_in& dst)
@@ -538,11 +569,14 @@ void Node::sendToClient(const std::string& payload, const sockaddr_in& dst)
         reinterpret_cast<const sockaddr*>(&dst), sizeof dst);
 }
 
-void Node::workerThreadFunc() {
+void Node::workerThreadFunc(uint32_t tid) {
     ReceivedMessage rm;
+    RaftLog& myLog = threadLogs_[tid];
+    LOG(INFO) << "Worker thread started with ID: " << tid;
+
     while (!shutdownWorkers.load()) {
         // try to dequeue a message. 
-        if (workerQueue.wait_dequeue_timed(rm, std::chrono::milliseconds{5})) {    // 5 ms wake‑up if queue stays empty
+        if (workerQueues_[tid].wait_dequeue_timed(rm, std::chrono::milliseconds{5})) {    // 5 ms wake‑up if queue stays empty
             // process the message
             raft::leader_election::MessageWrapper wrapper;
             if (!wrapper.ParseFromString(rm.raw_message)) {
@@ -575,7 +609,7 @@ void Node::workerThreadFunc() {
                         LOG(ERROR) << "Failed to parse append entries.";
                         return;
                     }
-                    handle_append_entries(append_entries, rm.sender);
+                    handle_append_entries(append_entries, rm.sender, myLog, tid);
                     // LOG(INFO) << "Received append entries message.";
                     break;
                 }
@@ -603,7 +637,7 @@ void Node::workerThreadFunc() {
                         LOG(ERROR) << "Failed to parse AppendEntriesResponse message.";
                         return;
                     }
-                    handle_append_entries_response(response, rm.sender);
+                    handle_append_entries_response(response, rm.sender, myLog, tid);
                     break;
                 }
                 case raft::leader_election::MessageWrapper::CLIENT_REQUEST: {
@@ -612,7 +646,7 @@ void Node::workerThreadFunc() {
                         LOG(ERROR) << "Failed to parse ClientRequest message.";
                         return;
                     }
-                    handle_client_request(client_request, rm.sender);
+                    handle_client_request(client_request, rm.sender, myLog, tid);
                     break;
                 }
                 default:
@@ -625,7 +659,7 @@ void Node::workerThreadFunc() {
 
 void Node::startWorkerThreads(int numWorkers) {
     for (int i = 0; i < numWorkers; i++) {
-        workerThreads.emplace_back(&Node::workerThreadFunc, this);
+        workerThreads.emplace_back(&Node::workerThreadFunc, this, i);
     }
 }
 
@@ -660,17 +694,20 @@ void Node::handle_request_vote(const raft::leader_election::RequestVote& request
 
     // section 5.4 of the raft paper enforces a trick that requies the leader to be up-to-date before being aboe to 
     // take the leadership role
-    int last_log_index = raftLog.getLastLogIndex();
-    int last_log_term = raftLog.getLastLogTerm();
-    bool candidate_up_to_date = (request.last_log_term() > last_log_term) || 
-                                 (request.last_log_term() == last_log_term && request.last_log_index() >= last_log_index);
+    bool candidate_up_to_date = true;
+
+    for (int i = 0; i < worker_threads_count; i++) {
+        int last_log_index = threadLogs_[i].getLastLogIndex();
+        int last_log_term = threadLogs_[i].getLastLogTerm();
+
+        if (!( (request.last_log_term(i) > last_log_term) || (request.last_log_term(i) == last_log_term && request.last_log_index(i) >= last_log_index))) {
+            candidate_up_to_date = false;
+            break;
+        }
+    }
 
     if (!candidate_up_to_date) {
-        LOG(INFO) << "Candidate " << candidate_id << " is not up-to-date. Current term: " << current_term 
-                  << ", Candidate last log term: " << request.last_log_term() 
-                  << ", Candidate last log index: " << request.last_log_index() 
-                  << ", My last log term: " << last_log_term 
-                  << ", My last log index: " << last_log_index;
+        LOG(INFO) << "Candidate " << candidate_id << " is not up-to-date.";
     }
 
     // this is important, ensure that a node only votes once per term. 
@@ -791,8 +828,10 @@ void Node::become_leader() {
     for (const auto& [ip, peer_port] : peer_addresses) {
         std::string id = ip + ":" + std::to_string(peer_port);
         if (id != self_ip + ":" + std::to_string(port)) {
-            next_index[id] = raftLog.getLastLogIndex() + 1;
-            match_index[id] = 0;
+            for (int i = 0; i < worker_threads_count; i++) {
+                next_indexes[i][id] = threadLogs_[i].getLastLogIndex() + 1;
+                match_indexes[i][id] = 0;
+            }
         }
     }
 
@@ -818,13 +857,17 @@ void Node::send_heartbeat() {
         return;
     }
 
+    // randomly pick a thread to send the heartbeat
+    uint32_t tid = rand() % worker_threads_count;
+    RaftLog& raftLog = threadLogs_[tid];
+
     raft::leader_election::AppendEntries append_entries;
     append_entries.set_term(current_term);
     append_entries.set_leader_id(self_ip + ":" + std::to_string(port));
     append_entries.set_id(++heartbeat_count);
 
     for (const auto& [ip, peer_port] : peer_addresses) {
-        int start_index = next_index[ip + ":" + std::to_string(peer_port)];
+        int start_index = next_indexes[tid][ip + ":" + std::to_string(peer_port)];
         // The preceding log index/term.
         int prev_index = start_index - 1;
         int prev_term = 0;
@@ -842,6 +885,7 @@ void Node::send_heartbeat() {
         raft::leader_election::MessageWrapper wrapper;
         wrapper.set_type(raft::leader_election::MessageWrapper::APPEND_ENTRIES);
         wrapper.set_payload(append_entries.SerializeAsString());
+        wrapper.set_thread_id(tid);
 
         std::string serialized_message = wrapper.SerializeAsString();   
 
@@ -899,7 +943,7 @@ void Node::failure_cb(EV_P_ ev_timer* w, int revents) {
     // Continue participating in other activities (e.g., receiving messages)
 }
 
-void Node::handle_append_entries(const raft::leader_election::AppendEntries& append_entries, const sockaddr_in& sender_addr) {
+void Node::handle_append_entries(const raft::leader_election::AppendEntries& append_entries, const sockaddr_in& sender_addr, RaftLog& raftLog, uint32_t tid) {
     int received_term = append_entries.term();
     std::string leader_id = append_entries.leader_id();
     int id = append_entries.id();   
@@ -916,7 +960,7 @@ void Node::handle_append_entries(const raft::leader_election::AppendEntries& app
 
         LOG(INFO) << "Received Stale AppendEntries from " << leader_id << " for term " << received_term << " while current term: " << current_term;
 
-        send_append_entries_response(response, sender_addr);
+        send_append_entries_response(response, sender_addr, tid);
         return;
     }
     
@@ -988,7 +1032,7 @@ void Node::handle_append_entries(const raft::leader_election::AppendEntries& app
         response.set_match_index(match_index);
 
         // TODO: we can optionally include conflict information, omitted here for now
-        send_append_entries_response(response, sender_addr);
+        send_append_entries_response(response, sender_addr, tid);
         LOG(INFO) << "Prev entries do not match, sending AppendEntriesResponse with success=false";
         return;
     }
@@ -1044,15 +1088,16 @@ void Node::handle_append_entries(const raft::leader_election::AppendEntries& app
     response.set_success(true);
     response.set_match_index(match_index);
 
-    send_append_entries_response(response, sender_addr);
+    send_append_entries_response(response, sender_addr, tid);
 
     // LOG(INFO) << "Received heartbeat (AppendEntries) from leader " << leader_id << " for term " << received_term;
 }
 
-void Node::send_append_entries_response(const raft::leader_election::AppendEntriesResponse& response, const sockaddr_in& recipient) {
+void Node::send_append_entries_response(const raft::leader_election::AppendEntriesResponse& response, const sockaddr_in& recipient, uint32_t tid) {
     raft::leader_election::MessageWrapper wrapper;
     wrapper.set_type(raft::leader_election::MessageWrapper::APPEND_ENTRIES_RESPONSE);
     wrapper.set_payload(response.SerializeAsString());
+    wrapper.set_thread_id(tid);
 
     std::string serialized_message = wrapper.SerializeAsString();
 
@@ -1228,8 +1273,8 @@ double Node::get_latency_to_peer(const std::string& peer_id) {
     return -1;
 }
 
-void Node::handle_client_request(const raft::client::ClientRequest& request, const sockaddr_in& sender_addr) {
-    LOG(INFO) << "Received client request: " << request.command() << " from " << inet_ntoa(sender_addr.sin_addr) << ":" << ntohs(sender_addr.sin_port);
+void Node::handle_client_request(const raft::client::ClientRequest& request, const sockaddr_in& sender_addr, RaftLog& myLog, uint32_t tid) {
+    LOG(INFO) << "(Tid: " << tid << ") Received client request: " << request.command() << " from " << inet_ntoa(sender_addr.sin_addr) << ":" << ntohs(sender_addr.sin_port);
     if (role != Role::LEADER) {
         auto client_id = request.client_id();
         auto client_request_id = request.request_id();
@@ -1253,11 +1298,11 @@ void Node::handle_client_request(const raft::client::ClientRequest& request, con
     LOG(INFO) << "Am the leader, handling client request.";
 
     // append new command as a log entry
-    int new_log_index = raftLog.getLastLogIndex() + 1;
+    int new_log_index = myLog.getLastLogIndex() + 1;
     LOG(INFO) << "the new log index is " << new_log_index;
     LogEntry new_entry { current_term, request.command(), request.client_id(), request.request_id() };
-    raftLog.appendEntry(new_entry);
-    LOG(INFO) << "Appended new entry to log-> Index: " << new_log_index << ", Term: " << new_entry.term << ", Client ID: " << new_entry.client_id << ", Command: " << new_entry.command;
+    myLog.appendEntry(new_entry);
+    LOG(INFO) << "Appended new entry to log (" << tid << ") -> Index: " << new_log_index << ", Term: " << new_entry.term << ", Client ID: " << new_entry.client_id << ", Command: " << new_entry.command;
 
     // communicate with the other replicas in the system
     // first get the prev log term and prev log index, needede for append entries RPC. 
@@ -1265,7 +1310,7 @@ void Node::handle_client_request(const raft::client::ClientRequest& request, con
     int prev_term = -1;
     if (prev_index > 0) {
         LogEntry prev_entry;
-        raftLog.getEntry(prev_index, prev_entry);
+        myLog.getEntry(prev_index, prev_entry);
         prev_term = prev_entry.term;
     }
 
@@ -1277,7 +1322,7 @@ void Node::handle_client_request(const raft::client::ClientRequest& request, con
     // this function will either dispatch immeidiately, or wait for a batch to form, more flexibility. 
     // TODO: Duplication calculation of prev term and prev index. 
     LOG(INFO) << "Begin sending proposals to followers.";
-    send_proposals_to_followers(current_term, raftLog.commitIndex);
+    send_proposals_to_followers(current_term, myLog.commitIndex, myLog, tid);
     LOG(INFO) << "Done sending proposals to followers.";
 
     // raft::leader_election::AppendEntries append_entries;
@@ -1288,14 +1333,14 @@ void Node::handle_client_request(const raft::client::ClientRequest& request, con
 
     // *append_entries.add_entries() = convertToProto(new_entry);
     // append_entries.set_leader_commit(raftLog.commitIndex);
-    LOG(INFO) << "Received client request: " << request.command() << " from " << inet_ntoa(sender_addr.sin_addr) << ":" << ntohs(sender_addr.sin_port);
+    LOG(INFO) <<"(Tid: " << tid << ") Received client request: " << request.command() << " from " << inet_ntoa(sender_addr.sin_addr) << ":" << ntohs(sender_addr.sin_port);
 }
 
-void Node::send_proposals_to_followers(int current_term, int commit_index) {
+void Node::send_proposals_to_followers(int current_term, int commit_index, RaftLog& raftLog, uint32_t tid) {
 
     std::unordered_map<std::string,int> startIndices;
     {
-      std::lock_guard<std::mutex> lock(indices_mutex);
+      auto next_index = next_indexes[tid];
       for (auto& [ip, peer_port] : peer_addresses) {
         auto id = ip + ":" + std::to_string(peer_port);
         if (id == self_ip + ":" + std::to_string(port))
@@ -1349,6 +1394,7 @@ void Node::send_proposals_to_followers(int current_term, int commit_index) {
         raft::leader_election::MessageWrapper wrapper;
         wrapper.set_type(raft::leader_election::MessageWrapper::APPEND_ENTRIES);
         wrapper.set_payload(append_entries.SerializeAsString());
+        wrapper.set_thread_id(tid);
         std::string serialized_message = wrapper.SerializeAsString();
 
         sockaddr_in peer_addr{};
@@ -1466,9 +1512,7 @@ void Node::handle_petition(const raft::leader_election::Petition& petition_msg, 
     }
 }
 
-void Node::handle_append_entries_response(const raft::leader_election::AppendEntriesResponse& response, const sockaddr_in& sender_addr) {
-    std::lock_guard<std::mutex> lock(indices_mutex);
-    
+void Node::handle_append_entries_response(const raft::leader_election::AppendEntriesResponse& response, const sockaddr_in& sender_addr, RaftLog& raftLog, uint32_t tid) {
     if (role != Role::LEADER) {
         return;
     }
@@ -1490,23 +1534,23 @@ void Node::handle_append_entries_response(const raft::leader_election::AppendEnt
     
     if (response.success()) {
         // according to the implementation specification at: https://github.com/ongardie/raftscope/blob/master/raft.js
-        int prev_next_index = next_index[sender_id];
-        match_index[sender_id] = std::max(match_index[sender_id], response.match_index());
-        next_index[sender_id] = response.match_index() + 1;
-        LOG(INFO) << "Success AE response from " << sender_id << ". Match index: " << response.match_index() << ". Next index: " << next_index[sender_id] << " Prev next index: " << prev_next_index << " progresses by " << next_index[sender_id] - prev_next_index;
-        updated_commit_index();
+        int prev_next_index = next_indexes[tid][sender_id];
+        match_indexes[tid][sender_id] = std::max(match_indexes[tid][sender_id], response.match_index());
+        next_indexes[tid][sender_id] = response.match_index() + 1;
+        LOG(INFO) << "Success AE response (Thread " << tid << ") from " << sender_id << ". Match index: " << response.match_index() << ". Next index: " << next_indexes[tid][sender_id] << " Prev next index: " << prev_next_index << " progresses by " << next_indexes[tid][sender_id] - prev_next_index;
+        updated_commit_index(tid, raftLog);
     } else {
         // // If conflict_index is provided, set next_index accordingly:
         // if (response.set_conflict_index()) {
         //     next_index[sender_id] = response.conflict_index();
         // } else {
             // Fallback: decrement by one (ensuring it stays at least 1)
-            next_index[sender_id] = std::max(1, next_index[sender_id] - 1);
-            LOG(INFO) << "Failure AE response from " << sender_id << ". Decrementing next index to: " << next_index[sender_id];
+            next_indexes[tid][sender_id] = std::max(1, next_indexes[tid][sender_id] - 1);
+            LOG(INFO) << "Failure AE (Thread " << tid << ") from " << sender_id << ". Decrementing next index to: " << next_indexes[tid][sender_id];
     }
 }
 
-void Node::updated_commit_index() {
+void Node::updated_commit_index(uint32_t tid, RaftLog& raftLog) {
     // std::lock_guard<std::mutex> lock(raftLog.log_mutex);
 
     //  we should send response not just to the last committed entry, but to all the entries that are now recently committed.
@@ -1517,7 +1561,7 @@ void Node::updated_commit_index() {
         int count = 1; // Count self
         for (const auto& [ip, peer_port] : peer_addresses) {
             std::string id = ip + ":" + std::to_string(peer_port);
-            if (match_index[id] >= i) {
+            if (match_indexes[tid][id] >= i) {
                 count++;
             }
         }
@@ -1531,7 +1575,7 @@ void Node::updated_commit_index() {
 
     if (new_commit_index != raftLog.commitIndex) {
         raftLog.commitIndex = new_commit_index;
-        LOG(INFO) << "Advanced commit index to: " << new_commit_index;
+        LOG(INFO) << "Advanced commit index of Log "<< tid << "to: " << new_commit_index;
         // Optionally, trigger applying the newly committed entries to the state machine.
         // apply_committed_entries();
 
@@ -1561,6 +1605,8 @@ void Node::dumpRaftLogToFile(const std::string& file_path) {
         LOG(ERROR) << "Failed to open file " << file_path << " for writing raft log.";
         return;
     }
+
+    RaftLog& raftLog = threadLogs_[0];
     
     // Write header information.
     ofs << "Raft Log Dump for Node " << self_ip << ":" << port << "\n";

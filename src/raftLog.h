@@ -8,6 +8,7 @@ struct LogEntry {
     std::string command;
     int client_id;
     int request_id;
+    uint64_t leader_ts_us; // microseconds since epoch
 };
 
 class RaftLog {
@@ -32,7 +33,7 @@ public:
 
     int commitIndex;
     int lastApplied;
-    std::mutex log_mutex;
+    // std::mutex log_mutex;
 
 private:
     std::vector<LogEntry> log;
