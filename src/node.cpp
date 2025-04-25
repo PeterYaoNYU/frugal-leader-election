@@ -609,7 +609,7 @@ void Node::workerThreadFunc(uint32_t tid) {
                         LOG(ERROR) << "Failed to parse append entries.";
                         return;
                     }
-                    LOG(INFO) << "(Tid: " << tid << ") Received append entries message from " << rm.sender.sin_addr.s_addr << ":" << ntohs(rm.sender.sin_port);
+                    LOG(INFO) << "(Tid: " << tid << ") Received append entries message from " << inet_ntoa(rm.sender.sin_addr) << ":" << ntohs(rm.sender.sin_port);
                     handle_append_entries(append_entries, rm.sender, myLog, tid);
                     // LOG(INFO) << "Received append entries message.";
                     break;
@@ -638,7 +638,7 @@ void Node::workerThreadFunc(uint32_t tid) {
                         LOG(ERROR) << "Failed to parse AppendEntriesResponse message.";
                         return;
                     }
-                    LOG(INFO) << "(Tid: " << tid << ") Received append entries response message from " << rm.sender.sin_addr.s_addr << ":" << ntohs(rm.sender.sin_port);
+                    LOG(INFO) << "(Tid: " << tid << ") Received append entries response message from " << inet_ntoa(rm.sender.sin_addr) << ":" << ntohs(rm.sender.sin_port);
                     handle_append_entries_response(response, rm.sender, myLog, tid);
                     break;
                 }
@@ -952,7 +952,7 @@ void Node::handle_append_entries(const raft::leader_election::AppendEntries& app
 
     int match_index = 0;
 
-    LOG(INFO) << "Received AppendEntries from " << leader_id << " for term " << received_term << " with id " << id;
+    LOG(INFO) << "(Tid: " << tid << ") Received AppendEntries from " << leader_id << " for term " << received_term << " with id " << id;
 
     // the RPC has a smaller term number than the current one, reject on the spot. 
     if (received_term < current_term) {
@@ -1072,7 +1072,7 @@ void Node::handle_append_entries(const raft::leader_election::AppendEntries& app
         }
     }
 
-    LOG(INFO) << "Appended entries from " << append_entries.prev_log_index() + 1 << " to " << index << ", Previous log ends at " << prev_last_log_idx
+    LOG(INFO) << "(Tid: " << tid << ") Appended entries from " << append_entries.prev_log_index() + 1 << " to " << index << ", Previous log ends at " << prev_last_log_idx
               << " and this message progressed by " << index - prev_last_log_idx << " entries";
 
     match_index = index;
