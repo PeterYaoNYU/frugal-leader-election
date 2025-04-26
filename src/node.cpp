@@ -60,10 +60,13 @@ Node::Node(const ProcessConfig& config, int replicaId)
     std::vector<std::string> peerIPs = config.peerIPs;
     int port_for_service = config.port;
 
-    // Parse peer addresses from config.peerIPs
     for (const auto& peer : peerIPs) {
         peer_addresses.emplace_back(peer, internal_base_port + replicaId);
     }
+
+    // for (std::size_t id = 0; id < peerIPs.size(); ++id) {
+    //     peer_addresses.emplace_back(peerIPs[id], internal_base_port + id);
+    // }
 
     LOG(INFO) << "Peer addresses size is: " << peer_addresses.size() << "and replica id is: " << replicaId;
 
@@ -853,15 +856,6 @@ void Node::send_heartbeat() {
         if (use_simulated_links) {
             send_with_delay_and_loss(serialized_message, peer_addr);
         } else {
-            ssize_t nsend = sendto(sock_fd, serialized_message.c_str(), serialized_message.size(), 0,
-                                   (sockaddr*)&peer_addr, sizeof(peer_addr));
-            if (nsend == -1) {
-                LOG(ERROR) << "Failed to send heartbeat to " << ip << ":" << peer_port;
-            } 
-            // else {
-            //     LOG(INFO) << "Sent heartbeat to " << ip << ":" << peer_port;
-            // }
-
             sendToPeer(peerIdFromIp(ip), serialized_message, peer_addr);
         }
     }
@@ -1000,6 +994,8 @@ void Node::handle_append_entries(const raft::leader_election::AppendEntries& app
 
     int prev_last_log_idx = raftLog.getLastLogIndex();
 
+    LOG(INFO) << "Got proposal: " <<  append_entries.entries_size() << " entries, starting from index " << append_entries.prev_log_index() + 1 << " and the last log index is: " << prev_last_log_idx;
+
     // If an existing entry conflicts with a new one (same index but different terms), delete the existing entry and all that follow it
     {
         // std::lock_guard<std::mutex> lock(raftLog.log_mutex);
@@ -1034,7 +1030,7 @@ void Node::handle_append_entries(const raft::leader_election::AppendEntries& app
     // if leaderCommit > commitIndex, set commitIndex = min(leaderCommit, index of last new entry)
     if (append_entries.leader_commit() > raftLog.getCommitIndex()) {
         // std::lock_guard<std::mutex> lock(raftLog.log_mutex);
-        raftLog.commitIndex = std::min(append_entries.leader_commit(), raftLog.getLastLogIndex());
+        raftLog.advanceCommitIndex(std::min(append_entries.leader_commit(), raftLog.getLastLogIndex()));
         // TODO: Implement the persistence
         // apply_committed_entries(); // persist the changes to the state machine
     }
@@ -1277,7 +1273,7 @@ void Node::handle_client_request(const raft::client::ClientRequest& request, con
     // this function will either dispatch immeidiately, or wait for a batch to form, more flexibility. 
     // TODO: Duplication calculation of prev term and prev index. 
     LOG(INFO) << "Begin sending proposals to followers.";
-    send_proposals_to_followers(current_term, raftLog.commitIndex);
+    send_proposals_to_followers(current_term, raftLog.getCommitIndex());
     LOG(INFO) << "Done sending proposals to followers.";
 
     // raft::leader_election::AppendEntries append_entries;
@@ -1467,7 +1463,6 @@ void Node::handle_petition(const raft::leader_election::Petition& petition_msg, 
 }
 
 void Node::handle_append_entries_response(const raft::leader_election::AppendEntriesResponse& response, const sockaddr_in& sender_addr) {
-    std::lock_guard<std::mutex> lock(indices_mutex);
     
     if (role != Role::LEADER) {
         return;
@@ -1489,6 +1484,10 @@ void Node::handle_append_entries_response(const raft::leader_election::AppendEnt
     std::string sender_id = sender_ip + ":" + std::to_string(sender_port);
     
     if (response.success()) {
+        LOG(INFO) << "Hnadling AppendEntriesResponse from " << sender_id << " with success=true";
+
+        std::lock_guard<std::mutex> lock(indices_mutex);
+
         // according to the implementation specification at: https://github.com/ongardie/raftscope/blob/master/raft.js
         int prev_next_index = next_index[sender_id];
         match_index[sender_id] = std::max(match_index[sender_id], response.match_index());
@@ -1501,6 +1500,9 @@ void Node::handle_append_entries_response(const raft::leader_election::AppendEnt
         //     next_index[sender_id] = response.conflict_index();
         // } else {
             // Fallback: decrement by one (ensuring it stays at least 1)
+            LOG(INFO) << "Hnadling AppendEntriesResponse from " << sender_id << " with success=false";
+
+            std::lock_guard<std::mutex> lock(indices_mutex);
             next_index[sender_id] = std::max(1, next_index[sender_id] - 1);
             LOG(INFO) << "Failure AE response from " << sender_id << ". Decrementing next index to: " << next_index[sender_id];
     }
@@ -1510,10 +1512,10 @@ void Node::updated_commit_index() {
     // std::lock_guard<std::mutex> lock(raftLog.log_mutex);
 
     //  we should send response not just to the last committed entry, but to all the entries that are now recently committed.
-    int old_commit_index = raftLog.commitIndex;
-    int new_commit_index = raftLog.commitIndex;
+    int old_commit_index = raftLog.getCommitIndex();
+    int new_commit_index = raftLog.getCommitIndex();
     int last_log_index = raftLog.getLastLogIndex();
-    for (int i = raftLog.commitIndex + 1; i <= last_log_index; i++) {
+    for (int i = raftLog.getCommitIndex() + 1; i <= last_log_index; i++) {
         int count = 1; // Count self
         for (const auto& [ip, peer_port] : peer_addresses) {
             std::string id = ip + ":" + std::to_string(peer_port);
@@ -1529,8 +1531,8 @@ void Node::updated_commit_index() {
         }
     }
 
-    if (new_commit_index != raftLog.commitIndex) {
-        raftLog.commitIndex = new_commit_index;
+    if (new_commit_index != raftLog.getCommitIndex()) {
+        raftLog.advanceCommitIndex(new_commit_index);
         LOG(INFO) << "Advanced commit index to: " << new_commit_index;
         // Optionally, trigger applying the newly committed entries to the state machine.
         // apply_committed_entries();

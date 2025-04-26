@@ -36,6 +36,8 @@ nodes = [
     {"host": "pc559.emulab.net", "port": 22},
     {"host": "pc509.emulab.net", "port": 22},
     {"host": "pc545.emulab.net", "port": 22},
+    {"host": "pc503.emulab.net", "port": 22},
+
 ]
 
 # SSH username
@@ -330,7 +332,7 @@ def start_clients(c, serverIp, serverPort, value):
 # invoke start-client-remote --remoteHostId 1 --serverIp 10.0.0.3 --serverPort 10046 --value 5 
 # ./bazel-bin/client 10.0.0.3 6114 maxcap 5 789 > client_nochange.log 2>&1
 @task
-def start_client_remote(c, remoteHostId, serverIp, serverPort, value, logSuffix=""):
+def start_client_remote(c, remoteHostId, serverIp, serverPort, value, bindIp, logSuffix=""):
     """
     Starts the client process on a remote node.
     
@@ -346,7 +348,7 @@ def start_client_remote(c, remoteHostId, serverIp, serverPort, value, logSuffix=
     sendMode = "maxcap"
     binary_path = "bazel-bin/client"  # Path to the built client binary on the remote node.
     # Build the command-line string (client expects: serverIp serverPort mode value)
-    cmd = f"cd frugal-leader-election && nohup {binary_path} {serverIp} {serverPort} {sendMode} {value} 333 > client_experiment5.log 2>&1 &"
+    cmd = f"cd frugal-leader-election && nohup {binary_path} {serverIp} {serverPort} {sendMode} {value} 333 {bindIp} > client_experiment18.log 2>&1 &"
     
     remote_host = nodes[int(remoteHostId)]["host"]    
 
@@ -366,7 +368,7 @@ def start_client_remote(c, remoteHostId, serverIp, serverPort, value, logSuffix=
         print(f"Failed to start remote client on {remote_host}: {e}")
 
 
-# invoke start-client-remote --remoteHostId 1 --serverIp 10.0.0.3 --serverPort 6788 --value 5 --bindIp 10.0.3.1
+# invoke start-client-remote --remoteHostId 1 --serverIp 10.0.0.3 --serverPort 10083 --value 5 --bindIp 10.0.3.1
 @task
 def start_clients_remote(c, remoteHostId, serverIp, serverPort, value, bindIp, logSuffix=""):
     """

@@ -29,7 +29,7 @@ replica:
   heartbeatIntervalMargin: 75
   safetyMarginLowerBound: 25
   safetyMarginStepSize: 5
-  workerThreadsCount: 7
+  workerThreadsCount: 8
   fdMode: raft
   clientPort: 10051
   internalBasePort: 8510

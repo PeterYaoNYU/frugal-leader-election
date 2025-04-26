@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <string>
 #include <glog/logging.h>
+#include <shared_mutex>
 
 struct LogEntry {
     int term;
@@ -26,14 +27,27 @@ public:
     // Delete all entries starting from index
     void deleteEntriesStartingFrom(int index);
 
-    int getCommitIndex();
-    int getLastApplied();
+    // int getCommitIndex();
+    // int getLastApplied();
     // void setCommitIndex(int index);
     // void setLastApplied(int index);
 
-    int commitIndex;
-    int lastApplied;
-    std::mutex log_mutex;
+    std::atomic<int>                        commitIndex{0};
+    std::atomic<int>                        lastApplied{0};
+    // std::mutex log_mutex;
+    mutable std::shared_mutex log_mutex; // Use shared mutex for read/write access
+
+    int  getCommitIndex()   { return commitIndex.load(std::memory_order_acquire); }
+    int  getLastApplied()   { return lastApplied.load(std::memory_order_acquire); }
+
+    /* writers for the atomics */
+    void advanceCommitIndex(int idx) noexcept {
+        commitIndex.store(idx, std::memory_order_release);
+    }
+    void advanceLastApplied(int idx) noexcept {
+        lastApplied.store(idx, std::memory_order_release);
+    }
+
 
 private:
     std::vector<LogEntry> log;
