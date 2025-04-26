@@ -2,6 +2,7 @@
 #include <mutex>
 #include <algorithm>
 #include <string>
+#include <glog/logging.h>
 
 struct LogEntry {
     int term;

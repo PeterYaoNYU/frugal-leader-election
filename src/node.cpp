@@ -1535,7 +1535,7 @@ void Node::updated_commit_index() {
         // Optionally, trigger applying the newly committed entries to the state machine.
         // apply_committed_entries();
 
-        for (int idx = old_commit_index; idx < new_commit_index; idx++) 
+        for (int idx = old_commit_index + 1; idx <= new_commit_index; idx++) 
         {
             LogEntry entry;
             if (raftLog.getEntry(idx, entry)) {
