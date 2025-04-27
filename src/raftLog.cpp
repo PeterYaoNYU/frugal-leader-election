@@ -35,6 +35,20 @@ bool RaftLog::getEntry(int index, LogEntry& entry) {
     return true;
 }
 
+
+bool RaftLog::getEntry(int index, LogEntry& entry, bool set_response_sent) {
+    std::shared_lock lock(log_mutex);
+    if (index <= 0 || index > static_cast<int>(log.size())) {
+        return false;
+    }
+
+    entry = log[index - 1];
+    bool response_sent = entry.response_sent;
+    entry.response_sent = set_response_sent;
+
+    return response_sent;
+}
+
 bool RaftLog::containsEntry(int index, int term) {
     std::shared_lock lock(log_mutex);
     if (index == 0) {

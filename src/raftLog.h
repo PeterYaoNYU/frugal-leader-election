@@ -10,6 +10,7 @@ struct LogEntry {
     std::string command;
     int client_id;
     int request_id;
+    bool response_sent{false};
 };
 
 class RaftLog {
@@ -22,6 +23,9 @@ public:
     int getLastLogIndex();
     int getLastLogTerm();
     bool getEntry(int index, LogEntry& entry);
+
+    bool getEntry(int index, LogEntry& entry, bool set_response_sent);
+
     // Check whether the log contains an entry at index with the specified term.
     bool containsEntry(int index, int term);
     // Delete all entries starting from index
@@ -42,7 +46,10 @@ public:
 
     /* writers for the atomics */
     void advanceCommitIndex(int idx) noexcept {
-        commitIndex.store(idx, std::memory_order_release);
+        int current = commitIndex.load(std::memory_order_acquire);
+        if (idx > current) {
+            commitIndex.store(idx, std::memory_order_release);
+        }
     }
     void advanceLastApplied(int idx) noexcept {
         lastApplied.store(idx, std::memory_order_release);

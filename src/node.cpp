@@ -1611,6 +1611,17 @@ void Node::updated_commit_index() {
     int new_commit_index = raftLog.getCommitIndex();
     int last_log_index = raftLog.getLastLogIndex();
     for (int i = raftLog.getCommitIndex() + 1; i <= last_log_index; i++) {
+        LogEntry entry;
+        if (!raftLog.getEntry(i, entry)) {
+            continue;
+        }
+        if (entry.response_sent) {
+            continue;
+        }
+        if (entry.term != current_term) {
+            continue;
+        }
+
         int count = 1; // Count self
         for (const auto& [ip, peer_port] : peer_addresses) {
             std::string id = ip;
@@ -1620,10 +1631,7 @@ void Node::updated_commit_index() {
             }
         }
         if (count >= majority_count) {
-            LogEntry entry;
-            if (raftLog.getEntry(i, entry) && entry.term == current_term) {
-                new_commit_index = i;
-            }
+            new_commit_index = i;
         }
     }
 
@@ -1636,7 +1644,7 @@ void Node::updated_commit_index() {
         for (int idx = old_commit_index + 1; idx <= new_commit_index; idx++) 
         {
             LogEntry entry;
-            if (raftLog.getEntry(idx, entry)) {
+            if (raftLog.getEntry(idx, entry, true)) {
     
                 auto client_address = client_id_to_addr.find(entry.client_id);
     
