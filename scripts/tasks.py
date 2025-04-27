@@ -282,7 +282,7 @@ def start_client(c, serverIp, serverPort, value, bindIp):
         
 processes = {}  # To store the client processes
 
-# invoke start-clients --serverIp 127.0.0.4 --serverPort 10891 --value 5
+# invoke start-clients --serverIp 127.0.0.4 --serverPort 10046 --value 5
 @task
 def start_clients(c, serverIp, serverPort, value):
     """
@@ -307,7 +307,6 @@ def start_clients(c, serverIp, serverPort, value):
     client_id_three = 789
     client_id_four = 1011
     client_ids = [client_id_one, client_id_two, client_id_three, client_id_four]
-    bind_ips = ["127.0.0.16", "127.0.0.17", "127.0.0.18", "127.0.0.19"]
     # client_ids = [client_id_one, client_id_two]
     
     
@@ -315,7 +314,7 @@ def start_clients(c, serverIp, serverPort, value):
     for i in range(1, 5):
         # Create a unique log file for each client.
         log_file = logs_dir / f"client_{i}.log"
-        cmd = [binary_path, serverIp, str(serverPort), sendMode, value, str(client_ids[i-1]), bind_ips[i-1]]
+        cmd = [binary_path, serverIp, str(serverPort), sendMode, value, str(client_ids[i-1])]
         
         try:
             with open(log_file, "w") as logf:
