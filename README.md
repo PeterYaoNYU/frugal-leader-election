@@ -7,8 +7,6 @@ bazel-7.5.0 build //:client
 
 BUG LOG: 
 
-Moodycamel implementation is problematic, and sometimes will not dequeue packets from a certain node if it has many user requests queued up. Separate into 2 queues, one for client requests, and the other for internal communication. 
-
 Identified bug, before sleep. The cause is that there are synchronization error when sending messgaes, causing the messages to be not parsable. 
 
 Proof:

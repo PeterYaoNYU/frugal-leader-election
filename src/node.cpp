@@ -210,7 +210,6 @@ void Node::run() {
 
     // After event loop stops, dump the raft log.
     std::string filename = "raftlog_dump_" + self_ip + "_" + std::to_string(port) + ".log";
-    // todo: fix later. 
     dumpRaftLogToFile(filename);
     LOG(INFO) << "Node shutting down. Raft log dumped to " << filename;
 }
@@ -1327,6 +1326,7 @@ void Node::handle_client_request(const raft::client::ClientRequest& request, con
     // TODO: Duplication calculation of prev term and prev index. 
     LOG(INFO) << "Begin sending proposals to followers.";
     send_proposals_to_followers(current_term, raftLog.getCommitIndex());
+    LOG(INFO) << "Done sending proposals to followers.";
 
     // raft::leader_election::AppendEntries append_entries;
     // append_entries.set_term(current_term);  
@@ -1581,14 +1581,14 @@ void Node::handle_append_entries_response(const raft::leader_election::AppendEnt
     
     if (response.success()) {
         LOG(INFO) << "Hnadling AppendEntriesResponse from " << sender_id << " with success=true";
-        {
-            std::lock_guard<std::mutex> lock(indices_mutex);
-            // according to the implementation specification at: https://github.com/ongardie/raftscope/blob/master/raft.js
-            int prev_next_index = next_index[sender_id];
-            match_index[sender_id] = std::max(match_index[sender_id], response.match_index());
-            next_index[sender_id] = response.match_index() + 1;
-            LOG(INFO) << "Success AE response from " << sender_id << ". Match index: " << response.match_index() << ". Next index: " << next_index[sender_id] << " Prev next index: " << prev_next_index << " progresses by " << next_index[sender_id] - prev_next_index;
-        }
+
+        std::lock_guard<std::mutex> lock(indices_mutex);
+
+        // according to the implementation specification at: https://github.com/ongardie/raftscope/blob/master/raft.js
+        int prev_next_index = next_index[sender_id];
+        match_index[sender_id] = std::max(match_index[sender_id], response.match_index());
+        next_index[sender_id] = response.match_index() + 1;
+        LOG(INFO) << "Success AE response from " << sender_id << ". Match index: " << response.match_index() << ". Next index: " << next_index[sender_id] << " Prev next index: " << prev_next_index << " progresses by " << next_index[sender_id] - prev_next_index;
         updated_commit_index();
     } else {
         // // If conflict_index is provided, set next_index accordingly:
@@ -1600,6 +1600,7 @@ void Node::handle_append_entries_response(const raft::leader_election::AppendEnt
 
             std::lock_guard<std::mutex> lock(indices_mutex);
             next_index[sender_id] = std::max(1, next_index[sender_id] - 1);
+            LOG(INFO) << "Failure AE response from " << sender_id << ". Decrementing next index to: " << next_index[sender_id];
     }
 }
 
@@ -1614,7 +1615,6 @@ void Node::updated_commit_index() {
         int count = 1; // Count self
         for (const auto& [ip, peer_port] : peer_addresses) {
             std::string id = ip;
-            std::lock_guard<std::mutex> lock(indices_mutex);
             if (match_index[id] >= i) {
                 count++;
             }
@@ -1643,7 +1643,7 @@ void Node::updated_commit_index() {
                 if (client_address != client_id_to_addr.end()) {
                     raft::client::ClientResponse response;
                     response.set_success(true);
-                    response.set_response("1");
+                    response.set_response("Command committed successfully.");
                     response.set_client_id(entry.client_id);
                     response.set_request_id(entry.request_id);
                     send_client_response(response, client_address->second);
