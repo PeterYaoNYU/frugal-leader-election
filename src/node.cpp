@@ -1643,7 +1643,7 @@ void Node::updated_commit_index() {
                 if (client_address != client_id_to_addr.end()) {
                     raft::client::ClientResponse response;
                     response.set_success(true);
-                    response.set_response("Command committed successfully.");
+                    response.set_response("1");
                     response.set_client_id(entry.client_id);
                     response.set_request_id(entry.request_id);
                     send_client_response(response, client_address->second);
