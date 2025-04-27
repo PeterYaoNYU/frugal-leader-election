@@ -70,7 +70,7 @@ static int makeBoundUDPSocket(const std::string& bindIp, int port)
     int s = socket(AF_INET, SOCK_DGRAM|SOCK_NONBLOCK, 0);
     if (s < 0) throw std::runtime_error("socket()");
     int yes = 1;
-    setsockopt(s, SOL_SOCKET, SO_REUSEPORT, &yes, sizeof yes);
+    // setsockopt(s, SOL_SOCKET, SO_REUSEPORT, &yes, sizeof yes);
 
     sockaddr_in a{}; a.sin_family = AF_INET; a.sin_port = htons(port);
     inet_pton(AF_INET, bindIp.c_str(), &a.sin_addr);
@@ -186,6 +186,7 @@ private:
 
     std::unordered_map<int, sockaddr_in> client_id_to_addr;
 
+    moodycamel::BlockingConcurrentQueue<ReceivedMessage> clientQueue;
     moodycamel::BlockingConcurrentQueue<ReceivedMessage> workerQueue;
     std::vector<std::thread> workerThreads;
     std::vector<std::thread> receiverThreads;
@@ -213,6 +214,8 @@ private:
     int client_port;
     int internal_base_port;
 
+    int replica_id;
+
     int                                         clientSock_{-1};
     UDPSocketCtx                                clientCtx_;
     std::unordered_map<int, UDPSocketCtx>       peerCtx_;
@@ -236,6 +239,7 @@ private:
     static void shutdown_cb(EV_P_ ev_timer* w, int revents);
 
     static void recv_cb(EV_P_ ev_io* w, int revents);
+    static void recv_client_cb(EV_P_ ev_io* w, int);
 
     // for the leader, call back after it is time to fail. 
     static void failure_cb(EV_P_ ev_timer* w, int revents);
@@ -303,6 +307,10 @@ private:
     void sendToPeer(int peerId, const std::string& payload, const sockaddr_in& dst);
     
     void sendToClient(const std::string& payload, const sockaddr_in& dst);
+
+    void runRecvLoopClient(UDPSocketCtx* ctx, int peerId);
+
+    void handleReceived(ReceivedMessage&& rm);
 };
 
 

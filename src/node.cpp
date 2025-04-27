@@ -44,7 +44,8 @@ Node::Node(const ProcessConfig& config, int replicaId)
       safety_margin_step_size(config.safetyMarginStepSize), 
       worker_threads_count(config.workerThreadsCount), 
       client_port(config.clientPort),
-      internal_base_port(config.internalBasePort)
+      internal_base_port(config.internalBasePort), 
+      replica_id(replicaId)
 {
     election_timer.data = this;
     heartbeat_timer.data = this;
@@ -94,11 +95,14 @@ Node::Node(const ProcessConfig& config, int replicaId)
     clientCtx_.fd = clientSock_;
     clientCtx_.loop = ev_loop_new(EVFLAG_AUTO);
 
+    LOG(INFO) << "Client socket created with fd: " << clientSock_ << ", port: " << client_port;
+
     // then we could contruc one socket per peer, including ourselves for simpler addressing:
     for (int id = 0; id < peerIPs.size(); id++) {
         int port = internal_base_port + id;
         int fd = makeBoundUDPSocket(self_ip, port);
         peerCtx_[id] = {fd, {}, ev_loop_new(EVFLAG_AUTO)};
+        LOG(INFO) << "Peer socket created with fd: " << fd << ", port: " << port;
     }
 
     if (failure_leader) {
@@ -174,7 +178,7 @@ void Node::run() {
         tcp_stat_manager.startMonitoring();
     }
 
-    receiverThreads.emplace_back([ctx=&clientCtx_, this] { runRecvLoop(ctx, -1); });
+    receiverThreads.emplace_back([ctx=&clientCtx_, this] { runRecvLoopClient(ctx, -1); });
 
     for (auto& [id, ctx] : peerCtx_) {
         // capture `this`, the pointer-to-ctx, and the peer id all by value:
@@ -214,6 +218,13 @@ void Node::run() {
 void Node::runRecvLoop(UDPSocketCtx* ctx, int peerId) {
     ev_io_init(&ctx->watcher, recv_cb, ctx->fd, EV_READ);
     ctx->watcher.data = new std::pair<Node*, int>(this, peerId);
+    ev_io_start(ctx->loop, &ctx->watcher);
+    ev_run(ctx->loop, 0);
+}
+
+void Node::runRecvLoopClient(UDPSocketCtx* ctx, int peerId) {
+    ev_io_init(&ctx->watcher, recv_client_cb, ctx->fd, EV_READ);
+    ctx->watcher.data = this;
     ev_io_start(ctx->loop, &ctx->watcher);
     ev_run(ctx->loop, 0);
 }
@@ -523,8 +534,26 @@ void Node::recv_cb(EV_P_ ev_io* w, int revents) {
     ReceivedMessage m;
     m.raw_message.assign(buf, n);
     m.sender = from;
-    m.channel = peerId;          // ←  so workers know the source socket
+    // m.channel = peerId;          // ←  so workers know the source socket
+    LOG(INFO) << "Received message from " << inet_ntoa(from.sin_addr) << ":" << ntohs(from.sin_port) << " on channel " << peerId;
     self->workerQueue.enqueue(std::move(m));
+}
+
+
+void Node::recv_client_cb(EV_P_ ev_io* w, int)
+{
+    auto* self = static_cast<Node*>(w->data);
+    char buf[4096]; sockaddr_in from{}; socklen_t alen = sizeof from;
+    ssize_t n = recvfrom(w->fd, buf, sizeof buf, 0,
+                         reinterpret_cast<sockaddr*>(&from), &alen);
+    if (n <= 0) return;
+
+    ReceivedMessage m;
+    m.raw_message.assign(buf, n);
+    m.sender  = from;
+    m.channel = -1;                                // special value for client
+    LOG(INFO) << "Received message from client at " << inet_ntoa(from.sin_addr) << ":" << ntohs(from.sin_port);
+    self->clientQueue.enqueue(std::move(m));       // client traffic
 }
 
 void Node::sendToPeer(int peerId, const std::string& payload, const sockaddr_in& dst)
@@ -539,92 +568,115 @@ void Node::sendToClient(const std::string& payload, const sockaddr_in& dst)
 {
     sendto(clientSock_, payload.data(), payload.size(), 0,
         reinterpret_cast<const sockaddr*>(&dst), sizeof dst);
+    LOG(INFO) << "Sent message to client at " << inet_ntoa(dst.sin_addr) << ":" << ntohs(dst.sin_port) << " from FD: " << clientSock_;
 }
 
 void Node::workerThreadFunc() {
     ReceivedMessage rm;
     while (!shutdownWorkers.load()) {
-        // try to dequeue a message. 
-        if (workerQueue.wait_dequeue_timed(rm, std::chrono::milliseconds{5})) {    // 5 ms wake‑up if queue stays empty
-            // process the message
-            raft::leader_election::MessageWrapper wrapper;
-            if (!wrapper.ParseFromString(rm.raw_message)) {
-                LOG(ERROR) << "Failed to parse message from sender: " << inet_ntoa(rm.sender.sin_addr) << ":" << ntohs(rm.sender.sin_port);
-                continue;
-            }   
-    
-            switch (wrapper.type()) {
-                case raft::leader_election::MessageWrapper::REQUEST_VOTE: {
-                    raft::leader_election::RequestVote request;
-                    if (!request.ParseFromString(wrapper.payload())) {
-                        LOG(ERROR) << "Failed to parse request vote.";
-                        return;
-                    }
-                    handle_request_vote(request, rm.sender);
-                    break;
-                }
-                case raft::leader_election::MessageWrapper::VOTE_RESPONSE: {
-                    raft::leader_election::VoteResponse response;
-                    if (!response.ParseFromString(wrapper.payload())) {
-                        LOG(ERROR) << "Failed to parse vote response.";
-                        return;
-                    }
-                    handle_vote_response(response, rm.sender);
-                    break;
-                }
-                case raft::leader_election::MessageWrapper::APPEND_ENTRIES: {
-                    raft::leader_election::AppendEntries append_entries;
-                    if (!append_entries.ParseFromString(wrapper.payload())) {
-                        LOG(ERROR) << "Failed to parse append entries.";
-                        return;
-                    }
-                    handle_append_entries(append_entries, rm.sender);
-                    // LOG(INFO) << "Received append entries message.";
-                    break;
-                }
-                case raft::leader_election::MessageWrapper::PENALTY_SCORE: {
-                    raft::leader_election::PenaltyScore penalty_msg;
-                    if (!penalty_msg.ParseFromString(wrapper.payload())) {
-                        LOG(ERROR) << "Failed to parse PenaltyScore message.";
-                        return;
-                    }
-                    handle_penalty_score(penalty_msg, rm.sender);
-                    break;
-                }
-                case raft::leader_election::MessageWrapper::PETITION: {
-                    raft::leader_election::Petition petition_msg;
-                    if (!petition_msg.ParseFromString(wrapper.payload())) {
-                        LOG(ERROR) << "Failed to parse Petition message.";
-                        return;
-                    }
-                    handle_petition(petition_msg, rm.sender);
-                    break;
-                }
-                case raft::leader_election::MessageWrapper::APPEND_ENTRIES_RESPONSE: {
-                    raft::leader_election::AppendEntriesResponse response;
-                    if (!response.ParseFromString(wrapper.payload())) {
-                        LOG(ERROR) << "Failed to parse AppendEntriesResponse message.";
-                        return;
-                    }
-                    handle_append_entries_response(response, rm.sender);
-                    break;
-                }
-                case raft::leader_election::MessageWrapper::CLIENT_REQUEST: {
-                    raft::client::ClientRequest client_request;
-                    if (!client_request.ParseFromString(wrapper.payload())) {
-                        LOG(ERROR) << "Failed to parse ClientRequest message.";
-                        return;
-                    }
-                    handle_client_request(client_request, rm.sender);
-                    break;
-                }
-                default:
-                    LOG(ERROR) << "Unknown message type.";
-            }
+        //------------------------------------------------------------------
+        // 1.  Try to pull from whichever queue has something *right now*
+        //------------------------------------------------------------------
+        if (workerQueue.try_dequeue(rm) ||
+            clientQueue.try_dequeue(rm))
+        {
+            handleReceived(std::move(rm));         // → factored-out switch
+            continue;
         }
+
+        //------------------------------------------------------------------
+        // 2.  Nothing ready; block for up to 5 ms on *either* queue
+        //------------------------------------------------------------------
+        if (workerQueue.wait_dequeue_timed(rm, std::chrono::milliseconds{5})) {
+            handleReceived(std::move(rm));
+            continue;
+        }
+        if (clientQueue.wait_dequeue_timed(rm, std::chrono::milliseconds{0})) {
+            handleReceived(std::move(rm));
+            continue;
+        }
+        /* timeout – go round again */
     }
 }
 
+
+void Node::handleReceived(ReceivedMessage&& rm)
+{
+    raft::leader_election::MessageWrapper wrapper;
+    if (!wrapper.ParseFromString(rm.raw_message)) {
+        LOG(ERROR) << "Failed to parse message from sender: " << inet_ntoa(rm.sender.sin_addr) << ":" << ntohs(rm.sender.sin_port);
+        return;
+    }   
+
+    switch (wrapper.type()) {
+        case raft::leader_election::MessageWrapper::REQUEST_VOTE: {
+            raft::leader_election::RequestVote request;
+            if (!request.ParseFromString(wrapper.payload())) {
+                LOG(ERROR) << "Failed to parse request vote.";
+                return;
+            }
+            handle_request_vote(request, rm.sender);
+            break;
+        }
+        case raft::leader_election::MessageWrapper::VOTE_RESPONSE: {
+            raft::leader_election::VoteResponse response;
+            if (!response.ParseFromString(wrapper.payload())) {
+                LOG(ERROR) << "Failed to parse vote response.";
+                return;
+            }
+            handle_vote_response(response, rm.sender);
+            break;
+        }
+        case raft::leader_election::MessageWrapper::APPEND_ENTRIES: {
+            raft::leader_election::AppendEntries append_entries;
+            if (!append_entries.ParseFromString(wrapper.payload())) {
+                LOG(ERROR) << "Failed to parse append entries.";
+                return;
+            }
+            handle_append_entries(append_entries, rm.sender);
+            // LOG(INFO) << "Received append entries message.";
+            break;
+        }
+        case raft::leader_election::MessageWrapper::PENALTY_SCORE: {
+            raft::leader_election::PenaltyScore penalty_msg;
+            if (!penalty_msg.ParseFromString(wrapper.payload())) {
+                LOG(ERROR) << "Failed to parse PenaltyScore message.";
+                return;
+            }
+            handle_penalty_score(penalty_msg, rm.sender);
+            break;
+        }
+        case raft::leader_election::MessageWrapper::PETITION: {
+            raft::leader_election::Petition petition_msg;
+            if (!petition_msg.ParseFromString(wrapper.payload())) {
+                LOG(ERROR) << "Failed to parse Petition message.";
+                return;
+            }
+            handle_petition(petition_msg, rm.sender);
+            break;
+        }
+        case raft::leader_election::MessageWrapper::APPEND_ENTRIES_RESPONSE: {
+            raft::leader_election::AppendEntriesResponse response;
+            if (!response.ParseFromString(wrapper.payload())) {
+                LOG(ERROR) << "Failed to parse AppendEntriesResponse message.";
+                return;
+            }
+            handle_append_entries_response(response, rm.sender);
+            break;
+        }
+        case raft::leader_election::MessageWrapper::CLIENT_REQUEST: {
+            raft::client::ClientRequest client_request;
+            if (!client_request.ParseFromString(wrapper.payload())) {
+                LOG(ERROR) << "Failed to parse ClientRequest message.";
+                return;
+            }
+            handle_client_request(client_request, rm.sender);
+            break;
+        }
+        default:
+            LOG(ERROR) << "Unknown message type.";
+    }
+}
 
 void Node::startWorkerThreads(int numWorkers) {
     for (int i = 0; i < numWorkers; i++) {
@@ -792,8 +844,8 @@ void Node::become_leader() {
     LOG(INFO) << "[" << get_current_time() << "] Became leader. Starting to send heartbeats. Elected Term: " << current_term;
 
     for (const auto& [ip, peer_port] : peer_addresses) {
-        std::string id = ip + ":" + std::to_string(peer_port);
-        if (id != self_ip + ":" + std::to_string(port)) {
+        std::string id = ip;
+        if (id != self_ip) {
             next_index[id] = raftLog.getLastLogIndex() + 1;
             match_index[id] = 0;
         }
@@ -827,7 +879,7 @@ void Node::send_heartbeat() {
     append_entries.set_id(++heartbeat_count);
 
     for (const auto& [ip, peer_port] : peer_addresses) {
-        int start_index = next_index[ip + ":" + std::to_string(peer_port)];
+        int start_index = next_index[ip];
         // The preceding log index/term.
         int prev_index = start_index - 1;
         int prev_term = 0;
@@ -1287,77 +1339,121 @@ void Node::handle_client_request(const raft::client::ClientRequest& request, con
     LOG(INFO) << "Received client request: " << request.command() << " from " << inet_ntoa(sender_addr.sin_addr) << ":" << ntohs(sender_addr.sin_port);
 }
 
-void Node::send_proposals_to_followers(int current_term, int commit_index) {
+void Node::send_proposals_to_followers(int term, int commit_index)
+{
+    constexpr size_t kMtuBytes       = 1400;  // « real MTU minus UDP/IP/PROTO/your-own-headers
+    constexpr size_t kHdrSlackBytes  = 64;    // « space for MessageWrapper + AppendEntries headers
 
-    std::unordered_map<std::string,int> startIndices;
+    //--------------------------------------------------------------------
+    // 1.  Snapshot the starting next_index for every follower
+    //--------------------------------------------------------------------
+    std::unordered_map<std::string,int> next;
     {
-      std::lock_guard<std::mutex> lock(indices_mutex);
-      for (auto& [ip, peer_port] : peer_addresses) {
-        auto id = ip + ":" + std::to_string(peer_port);
-        if (id == self_ip + ":" + std::to_string(port))
-          continue;
-        startIndices[id] = next_index[id];
-      }
-    }  // << mutex unlocked here
-
-    int lastLogIdx = raftLog.getLastLogIndex();
-    // Iterate over each follower (skip self).
-    for (auto& [follower_id, start_index] : startIndices) {
-        // parse out ip & port
-        auto pos = follower_id.find(':');
-        std::string ip = follower_id.substr(0, pos);
-        int peer_port = std::stoi(follower_id.substr(pos+1));
-
-        // Prepare an AppendEntries RPC containing log entries from start_index to the current last log index.
-        raft::leader_election::AppendEntries append_entries;
-        append_entries.set_term(current_term);
-        append_entries.set_leader_id(self_ip + ":" + std::to_string(port));
-
-        // The preceding log index/term.
-        int prev_index = start_index - 1;
-        int prev_term = 0;
-        if (prev_index > 0) {
-            LogEntry prevEntry;
-            if (raftLog.getEntry(prev_index, prevEntry))
-                prev_term = prevEntry.term;
+        std::lock_guard lk(indices_mutex);
+        for (auto& [ip, port] : peer_addresses)
+        {
+            auto id = ip;
+            if (id == self_ip) continue;   // skip self
+            next[id] = next_index[id];
         }
-        append_entries.set_prev_log_index(prev_index);
-        append_entries.set_prev_log_term(prev_term);
+    }
 
-        // Add all entries from start_index onwards.
-        int i;
-        for (i = start_index; i <= raftLog.getLastLogIndex(); i++) {
-            LogEntry entry;
-            if (raftLog.getEntry(i, entry)) {
-                *append_entries.add_entries() = convertToProto(entry);
-                // LOG(INFO) << "Added entry to AppendEntries: " << entry.command << " at index " << i << " with term " << entry.term;
+    const int last_log_idx = raftLog.getLastLogIndex();
+
+    //--------------------------------------------------------------------
+    // 2.  For every follower send log-entries in MTU-sized batches
+    //--------------------------------------------------------------------
+    for (auto& [follower_id, start_idx] : next)
+    {
+        // --- parse follower ip / port ----------------------------------
+        const std::string ip        = follower_id;
+        const int         peer_port = internal_base_port + replica_id;
+        if (ip == self_ip) continue;   // skip self
+
+        // --- pre-serialize every *new* entry once ----------------------
+        struct CachedEntry {
+            std::string  bytes;
+            int          index;
+        };
+        std::vector<CachedEntry> cached;
+        cached.reserve(last_log_idx - start_idx + 1);
+
+        for (int idx = start_idx; idx <= last_log_idx; ++idx)
+        {
+            LogEntry le;
+            if (!raftLog.getEntry(idx, le)) break;
+
+            raft::leader_election::LogEntry proto = convertToProto(le);
+            CachedEntry ce;
+            ce.index = idx;
+            ce.bytes = proto.SerializeAsString();   // single serialization
+            cached.push_back(std::move(ce));
+        }
+
+        //----------------------------------------------------------------
+        // 3.  Stream out the cached entries respecting MTU
+        //----------------------------------------------------------------
+        size_t cursor = 0;
+        while (cursor < cached.size())
+        {
+            raft::leader_election::AppendEntries msg;
+            msg.set_term(term);
+            msg.set_leader_id(self_ip + ":" + std::to_string(this->port));
+            msg.set_leader_commit(commit_index);
+
+            // prevLogIndex / prevLogTerm are relative to *first* entry
+            const int first_idx = cached[cursor].index;
+            const int prev_idx  = first_idx - 1;
+            int prev_term = 0;
+            if (prev_idx > 0) {
+                LogEntry prev;
+                if (raftLog.getEntry(prev_idx, prev))
+                    prev_term = prev.term;
             }
-            if (append_entries.SerializeAsString().size() > 1400) {
-                LOG(WARNING) << "Message size exceeds 1400 bytes. Possible fragmentation. Break Loop";
-                break;
+            msg.set_prev_log_index(prev_idx);
+            msg.set_prev_log_term(prev_term);
+
+            // ---- fill message until adding another entry would overflow
+            size_t payload_size = kHdrSlackBytes;   // message + wrapper hdrs
+            LOG(INFO) << "Proposal msg to " << ip << " begins with " << cached[cursor].index;
+            while (cursor < cached.size())
+            {
+                const auto& ce    = cached[cursor];
+                const size_t need = ce.bytes.size();
+
+                if (payload_size + need > kMtuBytes)       // would overflow
+                    break;
+
+                // add the pre-encoded bytes directly
+                auto* e = msg.add_entries();
+                e->ParseFromString(ce.bytes);              // no re-encode cost
+                payload_size += need;
+                ++cursor;
             }
+
+
+            //----------------------------------------------------------------
+            // 4.  Send this chunk
+            //----------------------------------------------------------------
+            raft::leader_election::MessageWrapper wrapper;
+            wrapper.set_type(raft::leader_election::MessageWrapper::APPEND_ENTRIES);
+            wrapper.set_payload(msg.SerializeAsString());
+
+            sockaddr_in dst{};
+            dst.sin_family = AF_INET;
+            dst.sin_port   = htons(peer_port);
+            inet_pton(AF_INET, ip.c_str(), &dst.sin_addr);
+
+            if (use_simulated_links)
+                send_with_delay_and_loss(wrapper.SerializeAsString(), dst);
+            else
+                sendToPeer(peerIdFromIp(ip), wrapper.SerializeAsString(), dst);
         }
 
-        LOG(INFO) << "Sending proposals to " << ip << " | start index: " << start_index << " | last index: " << raftLog.getLastLogIndex() << " | num entries: " << i - start_index + 1 <<" | end index: " << i << " | prev term: " << prev_term;
-        append_entries.set_leader_commit(commit_index);
-
-        // Serialize and send this RPC to the follower.
-        raft::leader_election::MessageWrapper wrapper;
-        wrapper.set_type(raft::leader_election::MessageWrapper::APPEND_ENTRIES);
-        wrapper.set_payload(append_entries.SerializeAsString());
-        std::string serialized_message = wrapper.SerializeAsString();
-
-        sockaddr_in peer_addr{};
-        peer_addr.sin_family = AF_INET;
-        peer_addr.sin_port = htons(peer_port);
-        inet_pton(AF_INET, ip.c_str(), &peer_addr.sin_addr);
-
-        if (use_simulated_links) {
-            send_with_delay_and_loss(serialized_message, peer_addr);
-        } else {
-            sendToPeer(peerIdFromIp(ip), serialized_message, peer_addr);
-            LOG(INFO) << "Sending proposals to Node " << peerIdFromIp(ip);
-        }
+        LOG(INFO) << "Replicated entries "
+                  << start_idx << "-" << last_log_idx
+                  << " to " << follower_id
+                  << " in " << cached.size() << " total entries";
     }
 }
 
@@ -1481,7 +1577,7 @@ void Node::handle_append_entries_response(const raft::leader_election::AppendEnt
 
     std::string sender_ip = inet_ntoa(sender_addr.sin_addr);
     int sender_port = ntohs(sender_addr.sin_port);
-    std::string sender_id = sender_ip + ":" + std::to_string(sender_port);
+    std::string sender_id = sender_ip;
     
     if (response.success()) {
         LOG(INFO) << "Hnadling AppendEntriesResponse from " << sender_id << " with success=true";
@@ -1518,7 +1614,7 @@ void Node::updated_commit_index() {
     for (int i = raftLog.getCommitIndex() + 1; i <= last_log_index; i++) {
         int count = 1; // Count self
         for (const auto& [ip, peer_port] : peer_addresses) {
-            std::string id = ip + ":" + std::to_string(peer_port);
+            std::string id = ip;
             if (match_index[id] >= i) {
                 count++;
             }
