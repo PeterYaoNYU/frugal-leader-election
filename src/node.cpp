@@ -45,7 +45,8 @@ Node::Node(const ProcessConfig& config, int replicaId)
       worker_threads_count(config.workerThreadsCount), 
       client_port(config.clientPort),
       internal_base_port(config.internalBasePort), 
-      replica_id(replicaId)
+      replica_id(replicaId), 
+      eligible_leaders(config.eligibleLeaders)
 {
     election_timer.data = this;
     heartbeat_timer.data = this;
@@ -121,6 +122,11 @@ Node::Node(const ProcessConfig& config, int replicaId)
         election_timeout_bound = CI;
     } else {
         LOG(FATAL) << "Invalid fd mode: " << config.fdMode; 
+    }
+
+    LOG(INFO) << "Eligible Leaders replica IDs: ";
+    for (const auto& id : eligible_leaders) {
+        LOG(INFO) << id;
     }
 
 }
@@ -474,6 +480,16 @@ void Node::election_timeout_cb(EV_P_ ev_timer* w, int revents) {
 
     LOG(INFO) << "Election timeout occurred. Starting leader election and voting for myself. View number: " << self->current_term << " Current term hb count " <<self->heartbeat_current_term; 
     LOG(INFO) << "The dead leader is " << self->current_leader_ip << ":" << self->current_leader_port;
+
+
+    if (self->eligible_leaders.size() > 0) {
+        // Check if the current node is an eligible leader
+        auto it = std::find(self->eligible_leaders.begin(), self->eligible_leaders.end(), self->replica_id);
+        if (it == self->eligible_leaders.end()) {
+            LOG(INFO) << "Current node is not an eligible leader. Skipping leader election.";
+            return;
+        }
+    }
 
     self->current_term++;
     self->role = Role::CANDIDATE;

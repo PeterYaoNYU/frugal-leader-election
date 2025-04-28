@@ -208,6 +208,8 @@ private:
 
     int worker_threads_count = 1;
 
+    std::vector<int> eligible_leaders;
+
     // to help with the synchronization of the worker threads sennding through the same socket. 
     std::mutex send_sock_mutex;
 

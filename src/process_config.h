@@ -59,6 +59,8 @@ struct ProcessConfig {
     int clientPort;
     int internalBasePort;
 
+    std::vector<int> eligibleLeaders;
+
     template <class T> T parseField(const YAML::Node &parent, const std::string &key)
     {
         if (!parent[key]) {
@@ -100,6 +102,23 @@ struct ProcessConfig {
         }
     }
 
+    void parseIntVector(std::vector<int> &list,
+        const YAML::Node &parent,
+        const std::string &key)
+    {
+        if (!parent[key]) {
+            throw ConfigParseException("'" + key + "' not found");
+        }
+
+        try {
+            for (std::size_t i = 0; i < parent[key].size(); ++i) {
+                list.push_back(parent[key][i].as<int>());
+            }
+        } catch (const YAML::BadConversion &e) {
+            throw ConfigParseException("'" + key + "': " + e.msg + ".");
+        }
+    }
+
     void parseReplicaConfig(const YAML::Node &root)
     {
         const YAML::Node &replicaNode = root["replica"];
@@ -131,6 +150,8 @@ struct ProcessConfig {
             fdMode = parseField<std::string>(replicaNode, "fdMode");
             clientPort = parseField<int>(replicaNode, "clientPort");
             internalBasePort = parseField<int>(replicaNode, "internalBasePort");
+
+            eligibleLeaders = parseField<std::vector<int>>(replicaNode, "eligibleLeaders", std::vector<int>());
         } catch (const ConfigParseException &e) {
             throw ConfigParseException("Error parsing replica " + std::string(e.what()));
         }

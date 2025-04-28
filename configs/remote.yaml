@@ -14,7 +14,7 @@ replica:
   runtimeSeconds: 1200
   timeoutLowerBound: 150
   timeoutUpperBound: 300
-  failureLeader: true
+  failureLeader: false
   # if the failureLeader is true, after maxHeartbeats number of heartbeats, the leader will fail
   maxHeartbeats: 1000
   port: 6119

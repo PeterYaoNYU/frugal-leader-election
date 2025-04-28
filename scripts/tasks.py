@@ -219,7 +219,7 @@ def start_remote_default(c):
             
             conn = Connection(host=replica_ip, user=username, port=node["port"])
             
-            cmd = f"cd frugal-leader-election && nohup {binary_path} --config={remote_config_path} --replicaId={replica_id} > scripts/logs/node_{replica_id + 1}.log 2>&1 &"
+            cmd = f"cd frugal-leader-election && nohup {binary_path} --config={remote_config_path} --replicaId={replica_id} --minloglevel=1 > scripts/logs/node_{replica_id + 1}.log 2>&1 &"
             print(cmd)
             conn.run(cmd, pty=False, asynchronous=True)
 
@@ -232,7 +232,7 @@ def start_remote_default(c):
     print("Logs are available in the 'logs/' directory on each respective node.")
 
 
-# invoke start-client --serverIp 127.0.0.4 --serverPort 7899 --value 5 --bindIp 127.0.0.18
+# invoke start-client --serverIp 127.0.0.4 --serverPort 10892 --value 5 --bindIp 127.0.0.18
 @task
 def start_client(c, serverIp, serverPort, value, bindIp):
     """
@@ -329,7 +329,8 @@ def start_clients(c, serverIp, serverPort, value):
         except Exception as e:
             print(f"Failed to start client {i}: {e}")
 
-# invoke start-client-remote --remoteHostId 1 --serverIp 10.0.0.3 --serverPort 10046 --value 5 
+# invoke start-client-remote --remoteHostId 5 --serverIp 10.0.0.3 --serverPort 10083 --value 5 --bindIp 10.0.3.1
+# invoke start-client-remote --remoteHostId 5 --serverIp 10.0.0.3 --serverPort 10083 --value 0.0007 --bindIp 10.0.3.1
 # ./bazel-bin/client 10.0.0.3 6114 maxcap 5 789 > client_nochange.log 2>&1
 @task
 def start_client_remote(c, remoteHostId, serverIp, serverPort, value, bindIp, logSuffix=""):
@@ -346,9 +347,10 @@ def start_client_remote(c, remoteHostId, serverIp, serverPort, value, bindIp, lo
     """
     # For this example we assume fixed mode.
     sendMode = "maxcap"
+    # sendMode = "fixed"
     binary_path = "bazel-bin/client"  # Path to the built client binary on the remote node.
     # Build the command-line string (client expects: serverIp serverPort mode value)
-    cmd = f"cd frugal-leader-election && nohup {binary_path} {serverIp} {serverPort} {sendMode} {value} 333 {bindIp} > client_experiment18.log 2>&1 &"
+    cmd = f"cd frugal-leader-election && nohup {binary_path} {serverIp} {serverPort} {sendMode} {value} 335 {bindIp}> client_experiment24.log 2>&1 &"
     
     remote_host = nodes[int(remoteHostId)]["host"]    
 
@@ -360,7 +362,7 @@ def start_client_remote(c, remoteHostId, serverIp, serverPort, value, bindIp, lo
         # Run the command asynchronously; pty is set to False to avoid allocation of a pseudo-terminal.
         conn.run(cmd, pty=False, asynchronous=True)
         print(f"Remote client started on {remote_host}, logging to client_remote.log")
-        sleep(200)
+        sleep(400)
         conn.run("killall client", warn=True)
         # conn.get("frugal-leader-election/client_remote.log", local=f"client_remote_{logSuffix}.log")
         
@@ -458,8 +460,8 @@ def start(c):
     
     for replica_id in range(n_replicas):
         log_file = logs_dir / f"node_{replica_id}.log"
-        cmd = [binary_path, f"--config={config_path}", f"--replicaId={replica_id}", "--minloglevel=1"]
-        # cmd = [binary_path, f"--config={config_path}", f"--replicaId={replica_id}"]
+        # cmd = [binary_path, f"--config={config_path}", f"--replicaId={replica_id}", "--minloglevel=1"]
+        cmd = [binary_path, f"--config={config_path}", f"--replicaId={replica_id}"]
         
         print(f"Starting replica {replica_id} with command: {' '.join(cmd)}")
     
