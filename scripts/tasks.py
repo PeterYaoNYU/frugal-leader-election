@@ -330,7 +330,7 @@ def start_clients(c, serverIp, serverPort, value):
             print(f"Failed to start client {i}: {e}")
 
 # invoke start-client-remote --remoteHostId 5 --serverIp 10.0.0.3 --serverPort 10083 --value 5 --bindIp 10.0.3.1
-# invoke start-client-remote --remoteHostId 5 --serverIp 10.0.0.3 --serverPort 10083 --value 0.0007 --bindIp 10.0.3.1
+# invoke start-client-remote --remoteHostId 5 --serverIp 10.0.0.3 --serverPort 10083 --value 0.001 --bindIp 10.0.3.1
 # ./bazel-bin/client 10.0.0.3 6114 maxcap 5 789 > client_nochange.log 2>&1
 @task
 def start_client_remote(c, remoteHostId, serverIp, serverPort, value, bindIp, logSuffix=""):
@@ -346,11 +346,11 @@ def start_client_remote(c, remoteHostId, serverIp, serverPort, value, bindIp, lo
     This function is similar to start_client() but executes the client on the specified remote node.
     """
     # For this example we assume fixed mode.
-    sendMode = "maxcap"
-    # sendMode = "fixed"
+    # sendMode = "maxcap"
+    sendMode = "fixed"
     binary_path = "bazel-bin/client"  # Path to the built client binary on the remote node.
     # Build the command-line string (client expects: serverIp serverPort mode value)
-    cmd = f"cd frugal-leader-election && nohup {binary_path} {serverIp} {serverPort} {sendMode} {value} 335 {bindIp}> client_experiment24.log 2>&1 &"
+    cmd = f"cd frugal-leader-election && nohup {binary_path} {serverIp} {serverPort} {sendMode} {value} 325 {bindIp}> client_experiment32.log 2>&1 &"
     
     remote_host = nodes[int(remoteHostId)]["host"]    
 
@@ -362,7 +362,7 @@ def start_client_remote(c, remoteHostId, serverIp, serverPort, value, bindIp, lo
         # Run the command asynchronously; pty is set to False to avoid allocation of a pseudo-terminal.
         conn.run(cmd, pty=False, asynchronous=True)
         print(f"Remote client started on {remote_host}, logging to client_remote.log")
-        sleep(400)
+        sleep(100)
         conn.run("killall client", warn=True)
         # conn.get("frugal-leader-election/client_remote.log", local=f"client_remote_{logSuffix}.log")
         

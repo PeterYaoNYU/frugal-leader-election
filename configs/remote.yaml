@@ -33,3 +33,4 @@ replica:
   fdMode: raft
   clientPort: 10083
   internalBasePort: 8230
+  eligibleLeaders: [4]

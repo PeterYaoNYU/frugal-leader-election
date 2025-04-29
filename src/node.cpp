@@ -39,7 +39,7 @@ Node::Node(const ProcessConfig& config, int replicaId)
       penalty_scores(),  // Initialize the penalty_scores map
       petition_count(),  // Initialize the petition_count map
       latency_threshold(1000.0), // Set your desired latency threshold
-      majority_count((config.peerIPs.size() + 1) / 2 + 1), // Calculate majority count
+      majority_count((config.peerIPs.size() + 1) / 2), // Calculate majority count
       safety_margin_lower_bound(config.safetyMarginLowerBound),
       safety_margin_step_size(config.safetyMarginStepSize), 
       worker_threads_count(config.workerThreadsCount), 
@@ -1629,16 +1629,34 @@ void Node::updated_commit_index() {
     int last_log_index = raftLog.getLastLogIndex();
     for (int i = raftLog.getCommitIndex() + 1; i <= last_log_index; i++) {
         int count = 1; // Count self
+
+        // create a quorum vector to log the ones that agree to the commit:
+        std::vector<std::string> quorum;
+        quorum.push_back(self_ip);
         for (const auto& [ip, peer_port] : peer_addresses) {
             std::string id = ip;
             if (match_index[id] >= i) {
                 count++;
+                quorum.push_back(id);
             }
         }
         if (count >= majority_count) {
             LogEntry entry;
             if (raftLog.getEntry(i, entry) && entry.term == current_term) {
                 new_commit_index = i;
+
+                // get the time of this commit
+                auto now = std::chrono::system_clock::now();
+                auto in_time_t = std::chrono::system_clock::to_time_t(now);
+                auto micros = std::chrono::duration_cast<std::chrono::microseconds>(
+                    now.time_since_epoch()
+                ) % 1000000;
+    
+                std::ostringstream ts;
+                ts << std::put_time(std::localtime(&in_time_t), "%Y-%m-%d %H:%M:%S")
+                   << "." << std::setfill('0') << std::setw(6) << micros.count();
+
+                LOG(WARNING) << "Commit for: " << entry.command << " at " << ts.str() << " with quorum size: " << quorum.size() << " " << quorum[0] << " " << quorum[1] << " " << quorum[2] << " " ;
             }
         }
     }
