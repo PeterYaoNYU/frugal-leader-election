@@ -54,6 +54,7 @@ struct ReceivedMessage {
     std::string raw_message;
     sockaddr_in sender;
     int channel; // the socket id that received the message
+    std::chrono::steady_clock::time_point enqueue_time;
 };
 
 // for scaling out the recv sockets. 

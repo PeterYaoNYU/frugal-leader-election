@@ -346,11 +346,11 @@ def start_client_remote(c, remoteHostId, serverIp, serverPort, value, bindIp, lo
     This function is similar to start_client() but executes the client on the specified remote node.
     """
     # For this example we assume fixed mode.
-    # sendMode = "maxcap"
-    sendMode = "fixed"
+    sendMode = "maxcap"
+    # sendMode = "fixed"
     binary_path = "bazel-bin/client"  # Path to the built client binary on the remote node.
     # Build the command-line string (client expects: serverIp serverPort mode value)
-    cmd = f"cd frugal-leader-election && nohup {binary_path} {serverIp} {serverPort} {sendMode} {value} 325 {bindIp}> client_experiment32.log 2>&1 &"
+    cmd = f"cd frugal-leader-election && nohup {binary_path} {serverIp} {serverPort} {sendMode} {value} 316 {bindIp}> client_leader_2.log 2>&1 &"
     
     remote_host = nodes[int(remoteHostId)]["host"]    
 
