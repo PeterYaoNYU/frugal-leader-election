@@ -219,7 +219,9 @@ def start_remote_default(c):
             
             conn = Connection(host=replica_ip, user=username, port=node["port"])
             
-            cmd = f"cd frugal-leader-election && nohup {binary_path} --config={remote_config_path} --replicaId={replica_id} --minloglevel=1 > scripts/logs/node_{replica_id + 1}.log 2>&1 &"
+            # cmd = f"cd frugal-leader-election && nohup {binary_path} --config={remote_config_path} --replicaId={replica_id} --minloglevel=1 > scripts/logs/node_{replica_id + 1}.log 2>&1 &"
+            cmd = f"cd frugal-leader-election && nohup {binary_path} --config={remote_config_path} --replicaId={replica_id} > scripts/logs/node_{replica_id + 1}.log 2>&1 &"
+            
             print(cmd)
             conn.run(cmd, pty=False, asynchronous=True)
 
@@ -350,6 +352,7 @@ def start_client_remote(c, remoteHostId, serverIp, serverPort, value, bindIp, lo
     # sendMode = "fixed"
     binary_path = "bazel-bin/client"  # Path to the built client binary on the remote node.
     # Build the command-line string (client expects: serverIp serverPort mode value)
+    killall_cmd = "killall client"
     cmd = f"cd frugal-leader-election && nohup {binary_path} {serverIp} {serverPort} {sendMode} {value} 316 {bindIp}> client_leader_2.log 2>&1 &"
     
     remote_host = nodes[int(remoteHostId)]["host"]    
@@ -359,6 +362,7 @@ def start_client_remote(c, remoteHostId, serverIp, serverPort, value, bindIp, lo
     try:
         # Connect to the remote node (using default SSH port 22)
         conn = Connection(host=remote_host, user=username, port=22)
+        conn.sudo(killall_cmd, warn=True)
         # Run the command asynchronously; pty is set to False to avoid allocation of a pseudo-terminal.
         conn.run(cmd, pty=False, asynchronous=True)
         print(f"Remote client started on {remote_host}, logging to client_remote.log")
@@ -460,8 +464,8 @@ def start(c):
     
     for replica_id in range(n_replicas):
         log_file = logs_dir / f"node_{replica_id}.log"
-        # cmd = [binary_path, f"--config={config_path}", f"--replicaId={replica_id}", "--minloglevel=1"]
-        cmd = [binary_path, f"--config={config_path}", f"--replicaId={replica_id}"]
+        cmd = [binary_path, f"--config={config_path}", f"--replicaId={replica_id}", "--minloglevel=1"]
+        # cmd = [binary_path, f"--config={config_path}", f"--replicaId={replica_id}"]
         
         print(f"Starting replica {replica_id} with command: {' '.join(cmd)}")
     

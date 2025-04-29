@@ -188,7 +188,7 @@ private:
     std::unordered_map<int, sockaddr_in> client_id_to_addr;
 
     moodycamel::BlockingConcurrentQueue<ReceivedMessage> clientQueue;
-    moodycamel::BlockingConcurrentQueue<ReceivedMessage> workerQueue;
+    std::vector<moodycamel::BlockingConcurrentQueue<ReceivedMessage>> recvQueues;
     std::vector<std::thread> workerThreads;
     std::vector<std::thread> receiverThreads;
     std::atomic<bool> shutdownWorkers {false};

@@ -193,6 +193,12 @@ void Node::run() {
         });
     }
 
+    int numReceivers = receiverThreads.size();
+    recvQueues.reserve(numReceivers);
+    for (int i = 0; i < numReceivers; ++i) {
+        recvQueues.emplace_back();
+    }
+
     // before starting the election timeout, let us first init the async watcher for worker threads:
     ev_async_init(&election_async_watcher, Node::election_async_cb);
     election_async_watcher.data = this;
@@ -553,7 +559,7 @@ void Node::recv_cb(EV_P_ ev_io* w, int revents) {
     m.enqueue_time = std::chrono::steady_clock::now();
     // m.channel = peerId;          // ←  so workers know the source socket
     LOG(INFO) << "Received message from " << inet_ntoa(from.sin_addr) << ":" << ntohs(from.sin_port) << " on channel " << peerId;
-    self->workerQueue.enqueue(std::move(m));
+    self->recvQueues[peerId + 1].enqueue(std::move(m));
 }
 
 
@@ -570,7 +576,8 @@ void Node::recv_client_cb(EV_P_ ev_io* w, int)
     m.sender  = from;
     m.channel = -1;                                // special value for client
     LOG(INFO) << "Received message from client at " << inet_ntoa(from.sin_addr) << ":" << ntohs(from.sin_port);
-    self->clientQueue.enqueue(std::move(m));       // client traffic
+    // client receiver at queue #0
+    self->recvQueues[0].enqueue(std::move(m));
 }
 
 void Node::sendToPeer(int peerId, const std::string& payload, const sockaddr_in& dst)
@@ -589,30 +596,34 @@ void Node::sendToClient(const std::string& payload, const sockaddr_in& dst)
 }
 
 void Node::workerThreadFunc() {
-    ReceivedMessage rm;
+    size_t numQs = recvQueues.size();
+    size_t nextQ = 0;
+
     while (!shutdownWorkers.load()) {
-        //------------------------------------------------------------------
-        // 1.  Try to pull from whichever queue has something *right now*
-        //------------------------------------------------------------------
-        if (workerQueue.try_dequeue(rm) ||
-            clientQueue.try_dequeue(rm))
-        {
-            handleReceived(std::move(rm));         // → factored-out switch
+        ReceivedMessage rm;
+        bool got = false;
+
+        // try each queue in round‐robin order, once per loop
+        for (size_t i = 0; i < numQs; ++i) {
+            auto& q = recvQueues[nextQ];
+            if (q.try_dequeue(rm)) {
+                got = true;
+                // advance for the next iteration
+                nextQ = (nextQ + 1) % numQs;
+                break;
+            }
+            nextQ = (nextQ + 1) % numQs;
+        }
+
+        if (got) {
+            handleReceived(std::move(rm));
             continue;
         }
 
-        //------------------------------------------------------------------
-        // 2.  Nothing ready; block for up to 5 ms on *either* queue
-        //------------------------------------------------------------------
-        if (workerQueue.wait_dequeue_timed(rm, std::chrono::milliseconds{5})) {
+        // if none had anything, block on one queue (or sleep briefly)
+        if (recvQueues[0].wait_dequeue_timed(rm, std::chrono::milliseconds{1})) {
             handleReceived(std::move(rm));
-            continue;
         }
-        if (clientQueue.wait_dequeue_timed(rm, std::chrono::milliseconds{0})) {
-            handleReceived(std::move(rm));
-            continue;
-        }
-        /* timeout – go round again */
     }
 }
 
@@ -622,7 +633,7 @@ void Node::handleReceived(ReceivedMessage&& rm)
     auto dequeue_time = std::chrono::steady_clock::now();
     auto queue_ms = std::chrono::duration_cast<std::chrono::microseconds>(dequeue_time - rm.enqueue_time).count();
     auto sender = rm.sender;
-    LOG(INFO) << "Received message from " << inet_ntoa(sender.sin_addr) << " Queue time: " << queue_ms << " microseconds";
+    LOG(WARNING) << "Received message from " << inet_ntoa(sender.sin_addr) << " Queue time: " << queue_ms << " microseconds";
     raft::leader_election::MessageWrapper wrapper;
     if (!wrapper.ParseFromString(rm.raw_message)) {
         LOG(ERROR) << "Failed to parse message from sender: " << inet_ntoa(rm.sender.sin_addr) << ":" << ntohs(rm.sender.sin_port);
