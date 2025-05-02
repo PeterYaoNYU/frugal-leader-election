@@ -189,7 +189,6 @@ private:
 
     moodycamel::BlockingConcurrentQueue<ReceivedMessage> clientQueue;
     std::vector<moodycamel::BlockingConcurrentQueue<ReceivedMessage>> recvQueues;
-    std::vector<std::unique_ptr<moodycamel::ConsumerToken<ReceivedMessage>>> tokens;
     
     std::vector<std::thread> workerThreads;
     std::vector<std::thread> receiverThreads;

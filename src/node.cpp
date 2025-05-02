@@ -200,13 +200,6 @@ void Node::run() {
         recvQueues.emplace_back();
     }
 
-    tokens.reserve(recvQueues.size());
-    for (size_t i = 0; i < recvQueues.size(); ++i) {
-        tokens.emplace_back(
-          std::make_unique<moodycamel::ConsumerToken<ReceivedMessage>>(recvQueues[i])
-        );
-    }
-
     // before starting the election timeout, let us first init the async watcher for worker threads:
     ev_async_init(&election_async_watcher, Node::election_async_cb);
     election_async_watcher.data = this;
