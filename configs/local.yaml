@@ -34,3 +34,4 @@ replica:
   clientPort: 10894
   internalBasePort: 8541
   eligibleLeaders: [1]
+  checkOverhead: true
