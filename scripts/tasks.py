@@ -160,7 +160,85 @@ def download_multi_logs(c, log_dir_name=None, start_idx=1, end_idx=5):
 
     print(f"\nAll logs from run {start_idx} to {end_idx} have been downloaded.")
 
+@task
+def start_remote_default_with_client(c, leaderId, serverPort, sendMode, value):
+    """
+    Starts instances of the leader_election binary on remote nodes as specified in the config file.
+    Logs are stored in the logs/ directory of each respective node.
+    """
+    config_path = "../configs/remote.yaml"
+    remote_config_path = "/users/PeterYao/frugal-leader-election/configs/remote.yaml"
+    
+    full_remote_config_path = f"/home/peter/frugal-leader-election/configs/remote.yaml"
+    
+    # put the local remote.yaml file to the remote nodes
+    for replica_id, node in enumerate(nodes):
+        replica_ip = node["host"]
+        replica_port = node["port"]
+        print(f"putting remote config file to remote node {replica_id} on remote node {replica_ip} with port {replica_port}")
 
+        try:
+            # Establish connection to the remote node
+            print("File exists:", os.path.exists(full_remote_config_path))
+            conn = Connection(host=replica_ip, user=username, port=node["port"])
+            conn.put(full_remote_config_path, remote_config_path)
+        except Exception as e:
+            print(f"Failed to put remote config file to replica {replica_id} on {replica_ip}: {e}")
+            continue
+
+    # Ensure the binary path is defined
+    binary_path = "bazel-bin/leader_election"
+
+    with open(config_path, "r") as f:
+        config = yaml.safe_load(f)
+
+    replica_ips = config["replica"]["ips"]
+    n_replicas = len(replica_ips)
+    print("Number of replicas: ", n_replicas)
+    
+    for replica_id, node in enumerate(nodes):
+        replica_ip = node["host"]
+        replica_port = node["port"]
+        print(f"clearing away logs and running processes replica {replica_id} on remote node {replica_ip} with port {replica_port}")
+
+            # Establish connection to the remote node
+        conn = Connection(host=replica_ip, user=username, port=node["port"])
+        
+        conn.sudo("killall leader_election", warn=True)
+        conn.run("mkdir -p frugal-leader-election/scripts/logs", warn=True)
+        conn.run("rm -f frugal-leader-election/scripts/logs/*", warn=True)
+
+    for replica_id, node in enumerate(nodes):
+        replica_ip = node["host"]
+        replica_port = node["port"]
+        print(f"Starting replica {replica_id+1} on remote node {replica_ip} with port {replica_port}")
+
+        try:
+            
+            conn = Connection(host=replica_ip, user=username, port=node["port"])
+            
+            cmd = f"cd frugal-leader-election && nohup {binary_path} --config={remote_config_path} --replicaId={replica_id} --minloglevel=2 > scripts/logs/node_{replica_id + 1}.log 2>&1 &"
+            # cmd = f"cd frugal-leader-election && nohup {binary_path} --config={remote_config_path} --replicaId={replica_id} > scripts/logs/node_{replica_id + 1}.log 2>&1 &"
+            
+            print(cmd)
+            conn.run(cmd, pty=False, asynchronous=True)
+
+            print(f"Replica {replica_id+1} started on {replica_ip}, logging to ./logs/node_{replica_id+1}.log")
+        except Exception as e:
+            print(f"Failed to start replica {replica_id+1} on {replica_ip}: {e}")
+            continue
+        
+        
+    bind_ips = ["10.0.0.2", "10.0.0.3", "10.0.4.2", "10.0.1.2", "10.0.1.3"]
+    conn = Connection(host=nodes[0]["host"], user=username, port=nodes[0]["port"])
+    cmd = f"cd frugal-leader-election && nohup bazel-bin/client {bind_ips[leaderId]} {serverPort} {sendMode} {value} {str(random.randint(1, 9999))} {bind_ips[replica_id]} > client_remote.log 2>&1"
+    conn.run(cmd, pty=False, asynchronous=True)
+    
+    sleep(100)
+    
+    
+    print("All remote nodes have been started.")
+    print("Logs are available in the 'logs/' directory on each respective node.")
 
 @task
 def start_remote_default(c):
@@ -219,7 +297,7 @@ def start_remote_default(c):
             
             conn = Connection(host=replica_ip, user=username, port=node["port"])
             
-            cmd = f"cd frugal-leader-election && nohup {binary_path} --config={remote_config_path} --replicaId={replica_id} --minloglevel=1 > scripts/logs/node_{replica_id + 1}.log 2>&1 &"
+            cmd = f"cd frugal-leader-election && nohup {binary_path} --config={remote_config_path} --replicaId={replica_id} --minloglevel=2 > scripts/logs/node_{replica_id + 1}.log 2>&1 &"
             # cmd = f"cd frugal-leader-election && nohup {binary_path} --config={remote_config_path} --replicaId={replica_id} > scripts/logs/node_{replica_id + 1}.log 2>&1 &"
             
             print(cmd)
@@ -373,10 +451,10 @@ def start_client_remote(c, remoteHostId, serverIp, serverPort, value, bindIp, lo
     except Exception as e:
         print(f"Failed to start remote client on {remote_host}: {e}")
 
-
-# invoke start-client-remote --remoteHostId 1 --serverIp 10.0.0.3 --serverPort 10083 --value 5 --bindIp 10.0.3.1
+import random
+# invoke start-clients-remote --leaderId 1 --serverPort 10083 --value 5
 @task
-def start_clients_remote(c, remoteHostId, serverIp, serverPort, value, bindIp, logSuffix=""):
+def start_clients_remote(c, leaderId ,serverPort, value, logSuffix=""):
     """
     Starts the client process on a remote node.
     
@@ -392,42 +470,83 @@ def start_clients_remote(c, remoteHostId, serverIp, serverPort, value, bindIp, l
     sendMode = "maxcap"
     binary_path = "bazel-bin/client"  # Path to the built client binary on the remote node.
     # Build the command-line string (client expects: serverIp serverPort mode value)
-    cmd = f"cd frugal-leader-election && nohup {binary_path} {serverIp} {serverPort} {sendMode} {value} {str(client_ids[i-1])} {bindIp} > client_remote.log 2>&1 &"
-    
-    remote_host = nodes[int(remoteHostId)]["host"]    
-
-    print(f"Starting remote client on {remote_host} with command: {cmd}")
     
 
     client_id_one = 123
     client_id_two = 456
     client_id_three = 789
     client_id_four = 1011
-    client_ids = [client_id_one, client_id_two, client_id_three, client_id_four]
+    client_id_five = 1213
+    # client_ids = [client_id_one, client_id_two, client_id_three, client_id_four, client_id_five]
+    client_ids = [random.randint(1, 9999) for _ in range(5)]
+    bind_ips = ["10.0.0.2", "10.0.0.3", "10.0.4.2", "10.0.1.2", "10.0.1.3"]
+    serverIp = bind_ips[int(leaderId)]
     # client_ids = [client_id_one, client_id_two]
     
-    conn = Connection(host=remote_host, user=username, port=22)
-    
-    # Loop to start two clients.
-    for i in range(1, 5):
+    for replica_id, node in enumerate(nodes[:5]):
+        replica_ip = node["host"]
+        replica_port = node["port"]
+        print(f"Starting client {replica_id+1} on remote node {replica_ip} with port {replica_port}")
+
         try:
+            conn = Connection(host=replica_ip, user=username, port=node["port"])
+            conn.sudo("killall client", warn=True)  
+            cmd = f"cd frugal-leader-election && nohup {binary_path} {serverIp} {serverPort} {sendMode} {value} {str(client_ids[replica_id])} {bind_ips[replica_id]} > client_remote.log 2>&1 &"
             conn.run(cmd, pty=False, asynchronous=True)
+        except Exception as e:
+            print(f"Failed to start client {replica_id+1} on {replica_ip}: {e}")
+            continue
+        
+    sleep(100)
+    for replica_id, node in enumerate(nodes):
+        replica_ip = node["host"]
+        replica_port = node["port"]
+        print(f"Stopping client {replica_id+1} on remote node {replica_ip} with port {replica_port}")
+
+        try:
+            conn = Connection(host=replica_ip, user=username, port=node["port"])
+            cmd = "killall client"
+            conn.sudo(cmd, pty=False, asynchronous=True)
+        except Exception as e:
+            print(f"Failed to stop client {replica_id+1} on {replica_ip}: {e}")
+            continue
+        
+        
+    for replica_id, node in enumerate(nodes[:5]):
+        replica_ip = node["host"]
+        replica_port = node["port"]
+        print(f"Downloading client log file from {replica_ip} to client_remote_{replica_id}.log")
+
+        try:
+            conn = Connection(host=replica_ip, user=username, port=node["port"])
+            cmd = "cd ~/frugal-leader-election && python3 scripts/analyze_resp_time.py client_remote.log > result.txt 2>&1"
+            conn.run(cmd, pty=False, asynchronous=False)
+            conn.get("/users/PeterYao/frugal-leader-election/result.txt", local=f"client_remote_{replica_id}.log")
+        except Exception as e:
+            print(f"Failed to download client log file from {replica_ip}: {e} to client_remote_{replica_id}.log")
+            continue
+        
+        
+@task
+def get_results(c):
+            
+    for replica_id, node in enumerate(nodes[:5]):
+        replica_ip = node["host"]
+        replica_port = node["port"]
+        print(f"Downloading client log file from {replica_ip} with port {replica_port}")
+
+        try:
+            conn = Connection(host=replica_ip, user=username, port=node["port"])
+            cmd = "cd ~/frugal-leader-election && python3 scripts/analyze_resp_time.py client_remote.log > result.txt 2>&1 "
+            conn.run(cmd, pty=False, asynchronous=False)
+            conn.get("/users/PeterYao/frugal-leader-election/result.txt", local=f"client_remote_{replica_id}.log")
+            print(f"Downloading client log file from {replica_ip} with port {replica_port} to client_remote_{replica_id}.log")
+            
             
         except Exception as e:
-            print(f"Failed to start client {i}: {e}")
-    
-    try:
-        # Connect to the remote node (using default SSH port 22)
-        conn = Connection(host=remote_host, user=username, port=22)
-        # Run the command asynchronously; pty is set to False to avoid allocation of a pseudo-terminal.
-        conn.run(cmd, pty=False, asynchronous=True)
-        print(f"Remote client started on {remote_host}, logging to client_remote.log")
-        sleep(90)
-        conn.run("killall client", warn=True)
-        conn.get("frugal-leader-election/client_remote.log", local=f"client_remote_{logSuffix}.log")
+            print(f"Failed to download client log file from {replica_ip}: {e} to client_remote_{replica_id}.log")
+            continue
         
-    except Exception as e:
-        print(f"Failed to start remote client on {remote_host}: {e}")
         
 @task
 def start(c):

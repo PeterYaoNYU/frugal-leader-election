@@ -33,4 +33,5 @@ replica:
   fdMode: raft
   clientPort: 10083
   internalBasePort: 8230
-  eligibleLeaders: [2]
+  eligibleLeaders: [4]
+  # checkOverhead: false

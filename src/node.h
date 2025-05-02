@@ -211,6 +211,8 @@ private:
 
     std::vector<int> eligible_leaders;
 
+    bool check_overhead = false;
+
     // to help with the synchronization of the worker threads sennding through the same socket. 
     std::mutex send_sock_mutex;
 

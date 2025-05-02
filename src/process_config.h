@@ -61,6 +61,8 @@ struct ProcessConfig {
 
     std::vector<int> eligibleLeaders;
 
+    bool checkOverhead;
+
     template <class T> T parseField(const YAML::Node &parent, const std::string &key)
     {
         if (!parent[key]) {
@@ -152,6 +154,8 @@ struct ProcessConfig {
             internalBasePort = parseField<int>(replicaNode, "internalBasePort");
 
             eligibleLeaders = parseField<std::vector<int>>(replicaNode, "eligibleLeaders", std::vector<int>());
+
+            checkOverhead = parseField<bool>(replicaNode, "checkOverhead");
         } catch (const ConfigParseException &e) {
             throw ConfigParseException("Error parsing replica " + std::string(e.what()));
         }
