@@ -197,8 +197,10 @@ void Node::run() {
     int numReceivers = receiverThreads.size();
     recvQueues.reserve(numReceivers);
     for (int i = 0; i < numReceivers; ++i) {
-        recvQueues.emplace_back();
+        recvQueues.emplace_back(std::make_unique<SPMCQueue>());
     }
+
+    // recvQueues.resize(numReceivers); 
 
     // before starting the election timeout, let us first init the async watcher for worker threads:
     ev_async_init(&election_async_watcher, Node::election_async_cb);
@@ -553,14 +555,14 @@ void Node::recv_cb(EV_P_ ev_io* w, int revents) {
                          reinterpret_cast<sockaddr*>(&from), &alen);
     if (n <= 0) return;
 
-    /* wrap & dispatch exactly like you did before */
-    ReceivedMessage m;
-    m.raw_message.assign(buf, n);
-    m.sender = from;
-    // m.enqueue_time = std::chrono::steady_clock::now();
+    auto* m  = new ReceivedMessage;
+    m->raw_message.assign(buf, n);
+    m->sender = from;
+    m->enqueue_time = std::chrono::steady_clock::now();
     // m.channel = peerId;          // ←  so workers know the source socket
     LOG(INFO) << "Received message from " << inet_ntoa(from.sin_addr) << ":" << ntohs(from.sin_port) << " on channel " << peerId;
-    self->recvQueues[peerId + 1].enqueue(std::move(m));
+    // self->recvQueues[peerId + 1].enqueue(std::move(m));
+    self->recvQueues[peerId+1]->push(m);
 }
 
 
@@ -572,13 +574,12 @@ void Node::recv_client_cb(EV_P_ ev_io* w, int)
                          reinterpret_cast<sockaddr*>(&from), &alen);
     if (n <= 0) return;
 
-    ReceivedMessage m;
-    m.raw_message.assign(buf, n);
-    m.sender  = from;
-    m.channel = -1;                                // special value for client
-    LOG(INFO) << "Received message from client at " << inet_ntoa(from.sin_addr) << ":" << ntohs(from.sin_port);
-    // client receiver at queue #0
-    self->recvQueues[0].enqueue(std::move(m));
+    auto* m  = new ReceivedMessage;
+    m->raw_message.assign(buf, n);
+    m->sender = from;
+    m->enqueue_time = std::chrono::steady_clock::now();
+    // m.channel = peerId;          // ←  so workers know the source socket
+    self->recvQueues[0]->push(m);
 }
 
 void Node::sendToPeer(int peerId, const std::string& payload, const sockaddr_in& dst)
@@ -603,45 +604,43 @@ void Node::sendToClient(const std::string& payload, const sockaddr_in& dst)
     LOG(INFO) << "Sent message to client at " << inet_ntoa(dst.sin_addr) << ":" << ntohs(dst.sin_port) << " from FD: " << clientSock_;
 }
 
-void Node::workerThreadFunc() {
-    size_t numQs = recvQueues.size();
+void Node::workerThreadFunc()
+{
+    const size_t numQs = recvQueues.size();
     size_t nextQ = 0;
 
-    while (!shutdownWorkers.load()) {
-        ReceivedMessage rm;
+    while (!shutdownWorkers.load(std::memory_order_acquire))
+    {
+        MessagePtr mp = nullptr;
         bool got = false;
 
-        // try each queue in round‐robin order, once per loop
-        for (size_t i = 0; i < numQs; ++i) {
-            auto& q = recvQueues[nextQ];
-            if (q.try_dequeue(rm)) {
+        for (size_t i = 0; i < numQs; ++i)
+        {
+            if (recvQueues[nextQ]->pop(mp)) {       // lock‑free pop
                 got = true;
-                // advance for the next iteration
                 nextQ = (nextQ + 1) % numQs;
                 break;
             }
             nextQ = (nextQ + 1) % numQs;
         }
 
-        if (got) {
-            handleReceived(std::move(rm));
+        if (got && mp) {
+            handleReceived(std::move(*mp));
+            delete mp;                            // reclaim
             continue;
         }
-
-        // if none had anything, block on one queue (or sleep briefly)
-        if (recvQueues[0].wait_dequeue_timed(rm, std::chrono::milliseconds{1})) {
-            handleReceived(std::move(rm));
-        }
+        std::this_thread::yield();
     }
 }
 
 
+
 void Node::handleReceived(ReceivedMessage&& rm)
 {
-    // auto dequeue_time = std::chrono::steady_clock::now();
-    // auto queue_ms = std::chrono::duration_cast<std::chrono::microseconds>(dequeue_time - rm.enqueue_time).count();
-    // auto sender = rm.sender;
-    // LOG(WARNING) << "Received message from " << inet_ntoa(sender.sin_addr) << " Queue time: " << queue_ms << " microseconds";
+    auto dequeue_time = std::chrono::steady_clock::now();
+    auto queue_ms = std::chrono::duration_cast<std::chrono::microseconds>(dequeue_time - rm.enqueue_time).count();
+    auto sender = rm.sender;
+    LOG(WARNING) << "Received message from " << inet_ntoa(sender.sin_addr) << " Queue time: " << queue_ms << " microseconds";
     raft::leader_election::MessageWrapper wrapper;
     if (!wrapper.ParseFromString(rm.raw_message)) {
         LOG(ERROR) << "Failed to parse message from sender: " << inet_ntoa(rm.sender.sin_addr) << ":" << ntohs(rm.sender.sin_port);
