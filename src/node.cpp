@@ -2,6 +2,8 @@
 #include <sstream>
 #include <cstring>
 
+thread_local int Node::tls_worker_id = -1;
+
 Node::Node(const ProcessConfig& config, int replicaId)
     : loop(ev_default_loop(0)),                    // 1
       election_timer(),                            // 2
@@ -198,6 +200,11 @@ void Node::run() {
     recvQueues.reserve(numReceivers);
     for (int i = 0; i < numReceivers; ++i) {
         recvQueues.emplace_back();
+    }
+
+    outQueues_.reserve(worker_threads_count);
+    for (int i = 0; i < worker_threads_count; ++i) {
+        outQueues_.emplace_back(std::make_unique<SendQueue>());
     }
 
     for (int i = 0; i < kNumSenders; ++i) {
@@ -593,11 +600,18 @@ void Node::recv_client_cb(EV_P_ ev_io* w, int)
 
 void Node::sendToPeer(int peerId, const std::string& payload, const sockaddr_in& dst)
 {
-    OutgoingMsg m;
-    m.bytes = payload;
-    m.dst = dst;
-    m.fd = ctxForPeer(peerId).fd;
-    outQueue_.enqueue(std::move(m));
+    OutgoingMsg* m = new OutgoingMsg;
+    m->bytes = std::move(payload);
+    m->dst = dst;
+    m->fd = ctxForPeer(peerId).fd;
+    // outQueue_.enqueue(std::move(m));
+
+    std::size_t qIdx = (tls_worker_id >= 0) ? tls_worker_id : 0;
+
+    while (!outQueues_[qIdx]->push(std::move(m))) {
+        std::this_thread::yield(); 
+    }
+
     // int fd = ctxForPeer(peerId).fd;
     // sendto(fd, payload.data(), payload.size(), 0,
     //     reinterpret_cast<const sockaddr*>(&dst), sizeof dst);
@@ -609,11 +623,16 @@ void Node::sendToPeer(int peerId, const std::string& payload, const sockaddr_in&
 
 void Node::sendToClient(const std::string& payload, const sockaddr_in& dst)
 {
-    OutgoingMsg m;
-    m.bytes = payload;
-    m.dst   = dst;
-    m.fd    = clientSock_;
-    outQueue_.enqueue(std::move(m));
+    OutgoingMsg* m = new OutgoingMsg;
+    m->bytes = std::move(payload);
+    m->dst = dst;
+    m->fd = clientSock_;
+
+    std::size_t qIdx = (tls_worker_id >= 0) ? tls_worker_id : 0;
+
+    while (!outQueues_[qIdx]->push(std::move(m))) {
+        std::this_thread::yield(); 
+    }
     // sendto(clientSock_, payload.data(), payload.size(), 0,
     //     reinterpret_cast<const sockaddr*>(&dst), sizeof dst);
 
@@ -626,35 +645,52 @@ void Node::sendToClient(const std::string& payload, const sockaddr_in& dst)
 void Node::senderThreadFunc()
 {
     const int kSpin  = 100;                      // spins before sleeping
-    const auto kNap  = std::chrono::microseconds{50};
+    const auto kNap  = std::chrono::microseconds{30};
 
-    OutgoingMsg m;
+    OutgoingMsg* m = nullptr;
     int idle = 0;
+    const std::size_t numQs = outQueues_.size();
+    std::size_t nextQ = 0;
 
     while (!shutdownWorkers.load(std::memory_order_acquire))
     {
-        if (outQueue_.try_dequeue(m)) {
-            idle = 0;                            // busy again
-            ::sendto(m.fd,
-                     m.bytes.data(), m.bytes.size(),
-                     0,
-                     reinterpret_cast<const sockaddr*>(&m.dst),
-                     sizeof m.dst);
-        } else {
-            if (++idle < kSpin) {
-                std::this_thread::yield();       // short spin
-            } else {
-                std::this_thread::sleep_for(kNap);
-                idle = 0;                        // reset back‑off
+        bool got = false;
+
+        // one full round‑robin pass
+        for (std::size_t i = 0; i < numQs; ++i)
+        {
+            auto& q = *outQueues_[nextQ];
+            if (q.pop(m)) {
+                got    = true;
+                nextQ  = (nextQ + 1) % numQs;
+                break;
             }
+            nextQ = (nextQ + 1) % numQs;
         }
+
+        if (got) {
+            idle = 0;
+            ::sendto(m->fd,
+                     m->bytes.data(), m->bytes.size(),
+                     0,
+                     reinterpret_cast<const sockaddr*>(&m->dst),
+                     sizeof m->dst);
+            delete m;
+            continue;
+        }
+
+        // back‑off
+        if (++idle < kSpin) std::this_thread::yield();
+        else { std::this_thread::sleep_for(kNap); idle = 0; }
     }
 }
 
 
-void Node::workerThreadFunc() {
+void Node::workerThreadFunc(int wid) {
     size_t numQs = recvQueues.size();
     size_t nextQ = 0;
+
+    tls_worker_id = wid;
 
     const int kSpin  = 100;                      // spins before sleeping
     const auto kNap  = std::chrono::microseconds{50};
@@ -780,7 +816,7 @@ void Node::handleReceived(ReceivedMessage&& rm)
 
 void Node::startWorkerThreads(int numWorkers) {
     for (int i = 0; i < numWorkers; i++) {
-        workerThreads.emplace_back(&Node::workerThreadFunc, this);
+        workerThreads.emplace_back(&Node::workerThreadFunc, this, i);
     }
 }
 

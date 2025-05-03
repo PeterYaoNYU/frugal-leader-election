@@ -40,6 +40,8 @@
 #include "concurrentqueue.h"
 #include "blockingconcurrentqueue.h"
 
+#include <boost/lockfree/queue.hpp>
+
 // Helper: Convert our in-memory log entry to the proto LogEntry.
 inline raft::leader_election::LogEntry convertToProto(const LogEntry& entry) {
     raft::leader_election::LogEntry protoEntry;
@@ -228,11 +230,16 @@ private:
 
     int replica_id;
 
+    thread_local static int tls_worker_id;
+
     int                                         clientSock_{-1};
     UDPSocketCtx                                clientCtx_;
     std::unordered_map<int, UDPSocketCtx>       peerCtx_;
 
-    moodycamel::ConcurrentQueue<OutgoingMsg> outQueue_;
+    // moodycamel::ConcurrentQueue<OutgoingMsg> outQueue_;
+    static constexpr std::size_t kQueueCap = 32 * 1024;
+    using SendQueue = boost::lockfree::queue<OutgoingMsg*, boost::lockfree::capacity<kQueueCap>>;
+    std::vector<std::unique_ptr<SendQueue>> outQueues_;
     std::vector<std::thread> senderThreads_;
     static constexpr int kNumSenders = 4;
 
@@ -312,7 +319,7 @@ private:
 
     void startWorkerThreads(int numWorkers);
 
-    void workerThreadFunc();
+    void workerThreadFunc(int);
 
     int createBoundSocket();
 
