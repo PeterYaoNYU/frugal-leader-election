@@ -656,30 +656,41 @@ void Node::workerThreadFunc() {
     size_t numQs = recvQueues.size();
     size_t nextQ = 0;
 
-    while (!shutdownWorkers.load()) {
+    const int kSpin  = 100;                      // spins before sleeping
+    const auto kNap  = std::chrono::microseconds{50};
+
+    int idle = 0;
+    
+    while (!shutdownWorkers.load(std::memory_order_acquire))
+    {
         ReceivedMessage rm;
         bool got = false;
 
-        // try each queue in round‐robin order, once per loop
-        for (size_t i = 0; i < numQs; ++i) {
+        // ---------- ONE FULL ROUND‑ROBIN PASS --------------------------------
+        for (size_t i = 0; i < numQs; ++i)
+        {
             auto& q = recvQueues[nextQ];
             if (q.try_dequeue(rm)) {
-                got = true;
-                // advance for the next iteration
-                nextQ = (nextQ + 1) % numQs;
-                break;
+                got    = true;
+                nextQ  = (nextQ + 1) % numQs;
+                break;                                  // leave the for‑loop
             }
             nextQ = (nextQ + 1) % numQs;
         }
+        // --------------------------------------------------------------------
 
         if (got) {
+            idle = 0;                                   // reset back‑off
             handleReceived(std::move(rm));
             continue;
         }
 
-        // if none had anything, block on one queue (or sleep briefly)
-        if (recvQueues[0].wait_dequeue_timed(rm, std::chrono::milliseconds{1})) {
-            handleReceived(std::move(rm));
+        // ---------- nothing found → back‑off ---------------------------------
+        if (++idle < kSpin) {
+            std::this_thread::yield();                  // short spin
+        } else {
+            std::this_thread::sleep_for(kNap);          // take a nap
+            idle = 0;                                   // restart spin budget
         }
     }
 }
