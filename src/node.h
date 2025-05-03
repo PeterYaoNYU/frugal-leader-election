@@ -40,6 +40,25 @@
 #include "concurrentqueue.h"
 #include "blockingconcurrentqueue.h"
 
+
+inline LogEntry makeLogEntry(int term,
+    const std::string& cmd,
+    int clientId,
+    int requestId)
+{
+    LogEntry e{ term, cmd, clientId, requestId, {} };
+
+    // build the protobuf only once
+    raft::leader_election::LogEntry proto;
+    proto.set_term   (e.term);
+    proto.set_command(e.command);
+    proto.set_client_id(e.client_id);
+    proto.set_request_id(e.request_id);
+
+    e.encoded = proto.SerializeAsString();   // <-- one‑time cost
+    return e;
+}
+
 // Helper: Convert our in-memory log entry to the proto LogEntry.
 inline raft::leader_election::LogEntry convertToProto(const LogEntry& entry) {
     raft::leader_election::LogEntry protoEntry;
@@ -234,7 +253,7 @@ private:
 
     moodycamel::ConcurrentQueue<OutgoingMsg> outQueue_;
     std::vector<std::thread> senderThreads_;
-    static constexpr int kNumSenders = 4;
+    static constexpr int kNumSenders = 5;
 
     inline UDPSocketCtx& ctxForPeer(int peerId) { return peerCtx_.at(peerId); }
     inline int peerIdFromIp(const std::string& ip) const {

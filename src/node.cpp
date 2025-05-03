@@ -625,7 +625,7 @@ void Node::sendToClient(const std::string& payload, const sockaddr_in& dst)
 
 void Node::senderThreadFunc()
 {
-    const int kSpin  = 100;                      // spins before sleeping
+    const int kSpin  = 60;                      // spins before sleeping
     const auto kNap  = std::chrono::microseconds{50};
 
     OutgoingMsg m;
@@ -634,7 +634,8 @@ void Node::senderThreadFunc()
     while (!shutdownWorkers.load(std::memory_order_acquire))
     {
         if (outQueue_.try_dequeue(m)) {
-            idle = 0;                            // busy again
+            idle = 0;
+            LOG(WARNING) << "Dequeue Sending to " << inet_ntoa(m.dst.sin_addr) << ":" << ntohs(m.dst.sin_port);
             ::sendto(m.fd,
                      m.bytes.data(), m.bytes.size(),
                      0,
@@ -656,11 +657,11 @@ void Node::workerThreadFunc() {
     size_t numQs = recvQueues.size();
     size_t nextQ = 0;
 
-    const int kSpin  = 100;                      // spins before sleeping
-    const auto kNap  = std::chrono::microseconds{50};
+    const int kSpin  = 5000;                      // spins before sleeping
+    const auto kNap  = std::chrono::microseconds{20};
 
     int idle = 0;
-    
+
     while (!shutdownWorkers.load(std::memory_order_acquire))
     {
         ReceivedMessage rm;
@@ -686,9 +687,7 @@ void Node::workerThreadFunc() {
         }
 
         // ---------- nothing found → back‑off ---------------------------------
-        if (++idle < kSpin) {
-            std::this_thread::yield();                  // short spin
-        } else {
+        if (++idle > kSpin) {
             std::this_thread::sleep_for(kNap);          // take a nap
             idle = 0;                                   // restart spin budget
         }
@@ -1162,12 +1161,14 @@ void Node::handle_append_entries(const raft::leader_election::AppendEntries& app
                     raftLog.deleteEntriesStartingFrom(insertion_index);
 
                     LOG(INFO) << "deleted entries from " << insertion_index << " to " << prev_last_log_idx << " due to term mismatch";
-                    raftLog.appendEntry(new_entry.term(), new_entry.command(), new_entry.client_id(), new_entry.request_id());
+                    // raftLog.appendEntry(new_entry.term(), new_entry.command(), new_entry.client_id(), new_entry.request_id());
+                    raftLog.appendEntry( makeLogEntry(new_entry.term(), new_entry.command(), new_entry.client_id(), new_entry.request_id()) );
                 }
                 // if matches, do nothing, and continue to the next one
             } else {
                 // if the position is empty, just append the new entry
-                raftLog.appendEntry(new_entry.term(), new_entry.command(), new_entry.client_id(), new_entry.request_id());
+                // raftLog.appendEntry(new_entry.term(), new_entry.command(), new_entry.client_id(), new_entry.request_id());
+                raftLog.appendEntry( makeLogEntry(new_entry.term(), new_entry.command(), new_entry.client_id(), new_entry.request_id()) );
             }
             // LOG(INFO) << "Appended entry at index " << index << " with term " << new_entry.term();
             insertion_index++;
@@ -1405,9 +1406,11 @@ void Node::handle_client_request(const raft::client::ClientRequest& request, con
     // append new command as a log entry
     int new_log_index = raftLog.getLastLogIndex() + 1;
     LOG(INFO) << "the new log index is " << new_log_index;
-    LogEntry new_entry { current_term, request.command(), request.client_id(), request.request_id() };
-    raftLog.appendEntry(new_entry);
-    LOG(INFO) << "Appended new entry to log-> Index: " << new_log_index << ", Term: " << new_entry.term << ", Client ID: " << new_entry.client_id << ", Command: " << new_entry.command;
+    // LogEntry new_entry { current_term, request.command(), request.client_id(), request.request_id() };
+    // raftLog.appendEntry(new_entry);
+    raftLog.appendEntry( makeLogEntry(current_term, request.command(), request.client_id(), request.request_id()) );
+    
+    // LOG(INFO) << "Appended new entry to log-> Index: " << new_log_index << ", Term: " << new_entry.term << ", Client ID: " << new_entry.client_id << ", Command: " << new_entry.command;
 
     // communicate with the other replicas in the system
     // first get the prev log term and prev log index, needede for append entries RPC. 
@@ -1445,6 +1448,10 @@ void Node::send_proposals_to_followers(int term, int commit_index)
 {
     constexpr size_t kMtuBytes       = 1400;  // « real MTU minus UDP/IP/PROTO/your-own-headers
     constexpr size_t kHdrSlackBytes  = 64;    // « space for MessageWrapper + AppendEntries headers
+    constexpr size_t kMaxBurst      =   4;           // <= 4 MTU per call
+    constexpr size_t kMaxCacheBytes = 8 * 1024;     // <= 64 KiB cached
+    // constexpr size_t kMaxCacheEnts  = 4096;          // or <= 4 K entries
+
 
     //--------------------------------------------------------------------
     // 1.  Snapshot the starting next_index for every follower
@@ -1478,25 +1485,28 @@ void Node::send_proposals_to_followers(int term, int commit_index)
             int          index;
         };
         std::vector<CachedEntry> cached;
-        cached.reserve(last_log_idx - start_idx + 1);
+        cached.reserve(32);
 
-        for (int idx = start_idx; idx <= last_log_idx; ++idx)
+        size_t cached_bytes = 0;
+        for (int idx = start_idx; idx <= last_log_idx && cached_bytes < kMaxCacheBytes ; ++idx)
         {
             LogEntry le;
             if (!raftLog.getEntry(idx, le)) break;
 
-            raft::leader_election::LogEntry proto = convertToProto(le);
+            // raft::leader_election::LogEntry proto = convertToProto(le);
             CachedEntry ce;
             ce.index = idx;
-            ce.bytes = proto.SerializeAsString();   // single serialization
+            ce.bytes = le.encoded;
             cached.push_back(std::move(ce));
+            cached_bytes += le.encoded.size();
         }
 
         //----------------------------------------------------------------
         // 3.  Stream out the cached entries respecting MTU
         //----------------------------------------------------------------
         size_t cursor = 0;
-        while (cursor < cached.size())
+        int bursts = 0;
+        while (cursor < cached.size() && bursts < kMaxBurst)
         {
             raft::leader_election::AppendEntries msg;
             msg.set_term(term);
@@ -1550,6 +1560,8 @@ void Node::send_proposals_to_followers(int term, int commit_index)
                 send_with_delay_and_loss(wrapper.SerializeAsString(), dst);
             else
                 sendToPeer(peerIdFromIp(ip), wrapper.SerializeAsString(), dst);
+
+            ++bursts;
         }
 
         LOG(INFO) << "Replicated entries "

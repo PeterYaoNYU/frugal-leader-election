@@ -31,7 +31,7 @@ replica:
   safetyMarginStepSize: 5
   workerThreadsCount: 8
   fdMode: raft
-  clientPort: 10895
+  clientPort: 10896
   internalBasePort: 8541
-  eligibleLeaders: [1]
+  eligibleLeaders: [0]
   checkOverhead: false

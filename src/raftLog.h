@@ -10,6 +10,8 @@ struct LogEntry {
     std::string command;
     int client_id;
     int request_id;
+    // to avoid protobuf overhead, we use a string to store the encoded message.
+    std::string encoded;
 };
 
 class RaftLog {
