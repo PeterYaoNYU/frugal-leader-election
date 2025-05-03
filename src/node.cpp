@@ -67,6 +67,10 @@ Node::Node(const ProcessConfig& config, int replicaId)
 
     for (const auto& peer : peerIPs) {
         peer_addresses.emplace_back(peer, internal_base_port + replicaId);
+
+        if (peer != self_ip) {
+            inflight_[peer].store(false, std::memory_order_relaxed);        
+        }
     }
 
     // for (std::size_t id = 0; id < peerIPs.size(); ++id) {
@@ -1503,6 +1507,10 @@ void Node::send_proposals_to_followers(int term, int commit_index)
     //--------------------------------------------------------------------
     for (auto& [follower_id, start_idx] : next)
     {
+        if (inflight_[follower_id].load(std::memory_order_acquire)) {
+            continue;
+        }
+
         // --- parse follower ip / port ----------------------------------
         const std::string ip        = follower_id;
         const int         peer_port = internal_base_port + replica_id;
@@ -1586,6 +1594,8 @@ void Node::send_proposals_to_followers(int term, int commit_index)
                 send_with_delay_and_loss(wrapper.SerializeAsString(), dst);
             else
                 sendToPeer(peerIdFromIp(ip), wrapper.SerializeAsString(), dst);
+
+            inflight_[follower_id].store(true, std::memory_order_release);
         }
 
         LOG(INFO) << "Replicated entries "
@@ -1716,6 +1726,8 @@ void Node::handle_append_entries_response(const raft::leader_election::AppendEnt
     std::string sender_ip = inet_ntoa(sender_addr.sin_addr);
     int sender_port = ntohs(sender_addr.sin_port);
     std::string sender_id = sender_ip;
+
+    inflight_[sender_id].store(false, std::memory_order_release);   
     
     if (response.success()) {
         LOG(INFO) << "Hnadling AppendEntriesResponse from " << sender_id << " with success=true";

@@ -236,6 +236,9 @@ private:
     UDPSocketCtx                                clientCtx_;
     std::unordered_map<int, UDPSocketCtx>       peerCtx_;
 
+
+    std::unordered_map<std::string, std::atomic_bool> inflight_;
+
     // moodycamel::ConcurrentQueue<OutgoingMsg> outQueue_;
     static constexpr std::size_t kQueueCap = 32 * 1024;
     using SendQueue = boost::lockfree::queue<OutgoingMsg*, boost::lockfree::capacity<kQueueCap>>;
