@@ -1737,8 +1737,8 @@ void Node::handle_append_entries_response(const raft::leader_election::AppendEnt
         // according to the implementation specification at: https://github.com/ongardie/raftscope/blob/master/raft.js
         int prev_next_index = next_index[sender_id];
         match_index[sender_id] = std::max(match_index[sender_id], response.match_index());
-        next_index[sender_id] = response.match_index() + 1;
-        LOG(INFO) << "Success AE response from " << sender_id << ". Match index: " << response.match_index() << ". Next index: " << next_index[sender_id] << " Prev next index: " << prev_next_index << " progresses by " << next_index[sender_id] - prev_next_index;
+        next_index[sender_id] = match_index[sender_id] + 1;
+        LOG(WARNING) << "Success AE response from " << sender_id << ". Match index: " << response.match_index() << ". Next index: " << next_index[sender_id] << " Prev next index: " << prev_next_index << " progresses by " << next_index[sender_id] - prev_next_index;
         updated_commit_index();
     } else {
         // // If conflict_index is provided, set next_index accordingly:
@@ -1790,7 +1790,7 @@ void Node::updated_commit_index() {
                 ts << std::put_time(std::localtime(&in_time_t), "%Y-%m-%d %H:%M:%S")
                    << "." << std::setfill('0') << std::setw(6) << micros.count();
 
-                LOG(WARNING) << "Commit for: " << entry.command << " at " << ts.str() << " with quorum size: " << quorum.size() << " " << quorum[0] << " " << quorum[1] << " " << quorum[2] << " " ;
+                // LOG(WARNING) << "Commit for: " << entry.command << " at " << ts.str() << " with quorum size: " << quorum.size() << " " << quorum[0] << " " << quorum[1] << " " << quorum[2] << " " ;
             }
         }
     }
