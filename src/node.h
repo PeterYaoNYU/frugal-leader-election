@@ -57,6 +57,12 @@ struct ReceivedMessage {
     std::chrono::steady_clock::time_point enqueue_time;
 };
 
+struct OutgoingMsg {
+    std::string bytes;
+    sockaddr_in dst;
+    int fd;
+};
+
 // for scaling out the recv sockets. 
 struct UDPSocketCtx {
     int              fd;
@@ -226,6 +232,10 @@ private:
     UDPSocketCtx                                clientCtx_;
     std::unordered_map<int, UDPSocketCtx>       peerCtx_;
 
+    moodycamel::ConcurrentQueue<OutgoingMsg> outQueue_;
+    std::vector<std::thread> senderThreads_;
+    static constexpr int kNumSenders = 4;
+
     inline UDPSocketCtx& ctxForPeer(int peerId) { return peerCtx_.at(peerId); }
     inline int peerIdFromIp(const std::string& ip) const {
         auto it = ip_to_id.find(ip);
@@ -307,6 +317,8 @@ private:
     int createBoundSocket();
 
     void receiverThreadFunc();
+
+    void senderThreadFunc();
 
     void runRecvLoop(UDPSocketCtx* ctx, int peerId);
 

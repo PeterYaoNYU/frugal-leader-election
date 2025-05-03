@@ -200,6 +200,11 @@ void Node::run() {
         recvQueues.emplace_back();
     }
 
+    for (int i = 0; i < kNumSenders; ++i) {
+        senderThreads_.emplace_back(&Node::senderThreadFunc, this);
+    }
+
+
     // before starting the election timeout, let us first init the async watcher for worker threads:
     ev_async_init(&election_async_watcher, Node::election_async_cb);
     election_async_watcher.data = this;
@@ -330,6 +335,11 @@ void Node::shutdown_cb(EV_P_ ev_timer* w, int revents) {
         if (thread.joinable()) {
             thread.join();
         }
+    }
+
+    for (auto& t : self->senderThreads_)
+    {
+        if (t.joinable()) t.join();
     }
 
     // Stop the event loop
@@ -557,7 +567,7 @@ void Node::recv_cb(EV_P_ ev_io* w, int revents) {
     ReceivedMessage m;
     m.raw_message.assign(buf, n);
     m.sender = from;
-    // m.enqueue_time = std::chrono::steady_clock::now();
+    m.enqueue_time = std::chrono::steady_clock::now();
     // m.channel = peerId;          // ←  so workers know the source socket
     LOG(INFO) << "Received message from " << inet_ntoa(from.sin_addr) << ":" << ntohs(from.sin_port) << " on channel " << peerId;
     self->recvQueues[peerId + 1].enqueue(std::move(m));
@@ -583,24 +593,54 @@ void Node::recv_client_cb(EV_P_ ev_io* w, int)
 
 void Node::sendToPeer(int peerId, const std::string& payload, const sockaddr_in& dst)
 {
-    int fd = ctxForPeer(peerId).fd;
-    sendto(fd, payload.data(), payload.size(), 0,
-        reinterpret_cast<const sockaddr*>(&dst), sizeof dst);
-    if (check_overhead) {
-        LOG(WARNING) << "Msg Size: " << payload.size() << " bytes";
-    }
-    LOG(INFO) << "Sent message to peer " << peerId << " at " << inet_ntoa(dst.sin_addr) << ":" << ntohs(dst.sin_port) << " from FD: " << fd;
+    OutgoingMsg m;
+    m.bytes = payload;
+    m.dst = dst;
+    m.fd = ctxForPeer(peerId).fd;
+    outQueue_.enqueue(std::move(m));
+    // int fd = ctxForPeer(peerId).fd;
+    // sendto(fd, payload.data(), payload.size(), 0,
+    //     reinterpret_cast<const sockaddr*>(&dst), sizeof dst);
+    // if (check_overhead) {
+    //     LOG(WARNING) << "Msg Size: " << payload.size() << " bytes";
+    // }
+    // LOG(INFO) << "Sent message to peer " << peerId << " at " << inet_ntoa(dst.sin_addr) << ":" << ntohs(dst.sin_port) << " from FD: " << fd;
 }
 
 void Node::sendToClient(const std::string& payload, const sockaddr_in& dst)
 {
-    sendto(clientSock_, payload.data(), payload.size(), 0,
-        reinterpret_cast<const sockaddr*>(&dst), sizeof dst);
+    OutgoingMsg m;
+    m.bytes = payload;
+    m.dst   = dst;
+    m.fd    = clientSock_;
+    outQueue_.enqueue(std::move(m));
+    // sendto(clientSock_, payload.data(), payload.size(), 0,
+    //     reinterpret_cast<const sockaddr*>(&dst), sizeof dst);
 
-    if (check_overhead) {
-        LOG(WARNING) << "Msg Size: " << payload.size() << " bytes";
+    // if (check_overhead) {
+    //     LOG(WARNING) << "Msg Size: " << payload.size() << " bytes";
+    // }
+    // LOG(INFO) << "Sent message to client at " << inet_ntoa(dst.sin_addr) << ":" << ntohs(dst.sin_port) << " from FD: " << clientSock_;
+}
+
+void Node::senderThreadFunc()
+{
+    OutgoingMsg m;
+    while (!shutdownWorkers.load(std::memory_order_acquire))
+    {
+        if (outQueue_.try_dequeue(m)) {
+            ssize_t n = ::sendto(m.fd,
+                                 m.bytes.data(),
+                                 m.bytes.size(),
+                                 0,
+                                 reinterpret_cast<const sockaddr*>(&m.dst),
+                                 sizeof m.dst);
+            if (n == -1)
+                PLOG(ERROR) << "sendto failed";
+        } else {
+            std::this_thread::yield();
+        }
     }
-    LOG(INFO) << "Sent message to client at " << inet_ntoa(dst.sin_addr) << ":" << ntohs(dst.sin_port) << " from FD: " << clientSock_;
 }
 
 void Node::workerThreadFunc() {
@@ -638,10 +678,10 @@ void Node::workerThreadFunc() {
 
 void Node::handleReceived(ReceivedMessage&& rm)
 {
-    // auto dequeue_time = std::chrono::steady_clock::now();
-    // auto queue_ms = std::chrono::duration_cast<std::chrono::microseconds>(dequeue_time - rm.enqueue_time).count();
-    // auto sender = rm.sender;
-    // LOG(WARNING) << "Received message from " << inet_ntoa(sender.sin_addr) << " Queue time: " << queue_ms << " microseconds";
+    auto dequeue_time = std::chrono::steady_clock::now();
+    auto queue_ms = std::chrono::duration_cast<std::chrono::microseconds>(dequeue_time - rm.enqueue_time).count();
+    auto sender = rm.sender;
+    LOG(WARNING) << "Received message from " << inet_ntoa(sender.sin_addr) << " Queue time: " << queue_ms << " microseconds";
     raft::leader_election::MessageWrapper wrapper;
     if (!wrapper.ParseFromString(rm.raw_message)) {
         LOG(ERROR) << "Failed to parse message from sender: " << inet_ntoa(rm.sender.sin_addr) << ":" << ntohs(rm.sender.sin_port);
@@ -1179,7 +1219,7 @@ void Node::calculate_and_send_penalty_score() {
 
     std::string serialized_message = wrapper.SerializeAsString();
 
-    LOG(WARNING) << "Rank Data Overhead: " << serialized_message.size() * 5 << " bytes";
+    // LOG(WARNING) << "Rank Data Overhead: " << serialized_message.size() * 5 << " bytes";
 
     // Send the message to all peers
     for (const auto& [ip, peer_port] : peer_addresses) {
