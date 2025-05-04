@@ -50,7 +50,9 @@ Node::Node(const ProcessConfig& config, int replicaId)
       internal_base_port(config.internalBasePort), 
       replica_id(replicaId), 
       eligible_leaders(config.eligibleLeaders), 
-      check_overhead(config.checkOverhead)
+      check_overhead(config.checkOverhead), 
+      spinCheckCount(config.spinCheckCount),
+      spinCheckInterval(config.spinCheckInterval)
 {
     election_timer.data = this;
     heartbeat_timer.data = this;
@@ -671,8 +673,8 @@ void Node::sendToClient(const std::string& payload, const sockaddr_in& dst)
 
 void Node::senderThreadFunc()
 {
-    const int kSpin  = 2;                      // spins before sleeping
-    const auto kNap  = std::chrono::microseconds{20};
+    const int kSpin  = spinCheckCount;                      // spins before sleeping
+    const auto kNap  = std::chrono::microseconds{spinCheckInterval};
 
     OutgoingMsg* m = nullptr;
     int idle = 0;
@@ -727,8 +729,8 @@ void Node::workerThreadFunc(int wid) {
 
     tls_worker_id = wid;
 
-    const int kSpin  = 2;                      // spins before sleeping
-    const auto kNap  = std::chrono::microseconds{20};
+    const int kSpin  = spinCheckCount;                      // spins before sleeping
+    const auto kNap  = std::chrono::microseconds{spinCheckInterval};
 
     int idle = 0;
     
