@@ -23,11 +23,11 @@ processes = {}
 # Define node connection details
 
 nodes = [
-    {"host": "amd238.utah.cloudlab.us", "port": 22},
-    {"host": "amd222.utah.cloudlab.us", "port": 22},
-    {"host": "amd213.utah.cloudlab.us", "port": 22},
-    {"host": "amd237.utah.cloudlab.us", "port": 22},
-    {"host": "amd210.utah.cloudlab.us", "port": 22},
+    {"host": "amd128.utah.cloudlab.us", "port": 22},
+    {"host": "amd141.utah.cloudlab.us", "port": 22},
+    {"host": "amd147.utah.cloudlab.us", "port": 22},
+    {"host": "amd139.utah.cloudlab.us", "port": 22},
+    {"host": "amd158.utah.cloudlab.us", "port": 22},
 ]
 
 # nodes = [
@@ -36,8 +36,7 @@ nodes = [
 #     {"host": "pc559.emulab.net", "port": 22},
 #     {"host": "pc509.emulab.net", "port": 22},
 #     {"host": "pc545.emulab.net", "port": 22},
-#     {"host": "pc503.emulab.net", "port": 22},
-
+#     # {"host": "pc503.emulab.net", "port": 22},
 # ]
 
 # SSH username
@@ -252,19 +251,19 @@ def start_remote_default(c):
     full_remote_config_path = f"/home/peter/frugal-leader-election/configs/remote.yaml"
     
     # put the local remote.yaml file to the remote nodes
-    # for replica_id, node in enumerate(nodes):
-    #     replica_ip = node["host"]
-    #     replica_port = node["port"]
-    #     print(f"putting remote config file to remote node {replica_id} on remote node {replica_ip} with port {replica_port}")
+    for replica_id, node in enumerate(nodes):
+        replica_ip = node["host"]
+        replica_port = node["port"]
+        print(f"putting remote config file to remote node {replica_id} on remote node {replica_ip} with port {replica_port}")
 
-    #     try:
-    #         # Establish connection to the remote node
-    #         print("File exists:", os.path.exists(full_remote_config_path))
-    #         conn = Connection(host=replica_ip, user=username, port=node["port"])
-    #         conn.put(full_remote_config_path, remote_config_path)
-    #     except Exception as e:
-    #         print(f"Failed to put remote config file to replica {replica_id} on {replica_ip}: {e}")
-    #         continue
+        try:
+            # Establish connection to the remote node
+            print("File exists:", os.path.exists(full_remote_config_path))
+            conn = Connection(host=replica_ip, user=username, port=node["port"])
+            conn.put(full_remote_config_path, remote_config_path)
+        except Exception as e:
+            print(f"Failed to put remote config file to replica {replica_id} on {replica_ip}: {e}")
+            continue
 
     # Ensure the binary path is defined
     binary_path = "bazel-bin/leader_election"
