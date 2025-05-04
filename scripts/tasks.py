@@ -252,19 +252,19 @@ def start_remote_default(c):
     full_remote_config_path = f"/home/peter/frugal-leader-election/configs/remote.yaml"
     
     # put the local remote.yaml file to the remote nodes
-    for replica_id, node in enumerate(nodes):
-        replica_ip = node["host"]
-        replica_port = node["port"]
-        print(f"putting remote config file to remote node {replica_id} on remote node {replica_ip} with port {replica_port}")
+    # for replica_id, node in enumerate(nodes):
+    #     replica_ip = node["host"]
+    #     replica_port = node["port"]
+    #     print(f"putting remote config file to remote node {replica_id} on remote node {replica_ip} with port {replica_port}")
 
-        try:
-            # Establish connection to the remote node
-            print("File exists:", os.path.exists(full_remote_config_path))
-            conn = Connection(host=replica_ip, user=username, port=node["port"])
-            conn.put(full_remote_config_path, remote_config_path)
-        except Exception as e:
-            print(f"Failed to put remote config file to replica {replica_id} on {replica_ip}: {e}")
-            continue
+    #     try:
+    #         # Establish connection to the remote node
+    #         print("File exists:", os.path.exists(full_remote_config_path))
+    #         conn = Connection(host=replica_ip, user=username, port=node["port"])
+    #         conn.put(full_remote_config_path, remote_config_path)
+    #     except Exception as e:
+    #         print(f"Failed to put remote config file to replica {replica_id} on {replica_ip}: {e}")
+    #         continue
 
     # Ensure the binary path is defined
     binary_path = "bazel-bin/leader_election"
@@ -297,7 +297,7 @@ def start_remote_default(c):
             
             conn = Connection(host=replica_ip, user=username, port=node["port"])
             
-            cmd = f"cd frugal-leader-election && nohup {binary_path} --config={remote_config_path} --replicaId={replica_id} --minloglevel=0 > scripts/logs/node_{replica_id + 1}.log 2>&1 &"
+            cmd = f"cd frugal-leader-election && nohup {binary_path} --config={remote_config_path} --replicaId={replica_id} --minloglevel=2 > scripts/logs/node_{replica_id + 1}.log 2>&1 &"
             # cmd = f"cd frugal-leader-election && nohup {binary_path} --config={remote_config_path} --replicaId={replica_id} > scripts/logs/node_{replica_id + 1}.log 2>&1 &"
             
             print(cmd)
@@ -583,7 +583,7 @@ def start(c):
     
     for replica_id in range(n_replicas):
         log_file = logs_dir / f"node_{replica_id}.log"
-        cmd = [binary_path, f"--config={config_path}", f"--replicaId={replica_id}", "--minloglevel=0"]
+        cmd = [binary_path, f"--config={config_path}", f"--replicaId={replica_id}", "--minloglevel=2"]
         # cmd = [binary_path, f"--config={config_path}", f"--replicaId={replica_id}"]
         
         print(f"Starting replica {replica_id} with command: {' '.join(cmd)}")

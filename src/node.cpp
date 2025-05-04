@@ -665,7 +665,7 @@ void Node::sendToClient(const std::string& payload, const sockaddr_in& dst)
 
 void Node::senderThreadFunc()
 {
-    const int kSpin  = 100;                      // spins before sleeping
+    const int kSpin  = 5;                      // spins before sleeping
     const auto kNap  = std::chrono::microseconds{30};
 
     OutgoingMsg* m = nullptr;
@@ -721,8 +721,8 @@ void Node::workerThreadFunc(int wid) {
 
     tls_worker_id = wid;
 
-    const int kSpin  = 100;                      // spins before sleeping
-    const auto kNap  = std::chrono::microseconds{50};
+    const int kSpin  = 10;                      // spins before sleeping
+    const auto kNap  = std::chrono::microseconds{30};
 
     int idle = 0;
     
