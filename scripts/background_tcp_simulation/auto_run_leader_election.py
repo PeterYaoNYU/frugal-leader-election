@@ -49,8 +49,8 @@ def build_install_bazel(conn):
         print(f"Failed to install Bazel on {conn.host}:{conn.port} - {e}")
     
     
-# def execute_on_node(node, id, build_bazel=False, build_invoke=False, build_fabric=False):    
-def execute_on_node(node, id, build_bazel=True, build_invoke=True, build_fabric=True):
+def execute_on_node(node, id, build_bazel=False, build_invoke=False, build_fabric=False):    
+# def execute_on_node(node, id, build_bazel=True, build_invoke=True, build_fabric=True):
     try:
         # Establish SSH connection
         conn = Connection(host=node["host"], user=username, port=node["port"])

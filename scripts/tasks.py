@@ -297,7 +297,7 @@ def start_remote_default(c):
             
             conn = Connection(host=replica_ip, user=username, port=node["port"])
             
-            cmd = f"cd frugal-leader-election && nohup {binary_path} --config={remote_config_path} --replicaId={replica_id} --minloglevel=2 > scripts/logs/node_{replica_id + 1}.log 2>&1 &"
+            cmd = f"cd frugal-leader-election && nohup {binary_path} --config={remote_config_path} --replicaId={replica_id} --minloglevel=0 > scripts/logs/node_{replica_id + 1}.log 2>&1 &"
             # cmd = f"cd frugal-leader-election && nohup {binary_path} --config={remote_config_path} --replicaId={replica_id} > scripts/logs/node_{replica_id + 1}.log 2>&1 &"
             
             print(cmd)
@@ -583,7 +583,7 @@ def start(c):
     
     for replica_id in range(n_replicas):
         log_file = logs_dir / f"node_{replica_id}.log"
-        cmd = [binary_path, f"--config={config_path}", f"--replicaId={replica_id}", "--minloglevel=2"]
+        cmd = [binary_path, f"--config={config_path}", f"--replicaId={replica_id}", "--minloglevel=0"]
         # cmd = [binary_path, f"--config={config_path}", f"--replicaId={replica_id}"]
         
         print(f"Starting replica {replica_id} with command: {' '.join(cmd)}")
