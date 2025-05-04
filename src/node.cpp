@@ -556,7 +556,8 @@ void Node::send_request_vote() {
         dst.sin_port   = htons(peer_port);
         inet_pton(AF_INET, ip.c_str(), &dst.sin_addr);
 
-        sendToPeer(id, serialized_message, dst);
+        // sendToPeer(id, std::move(wrapper), dst);
+        sendSerialized(id, serialized_message, dst);
         LOG(INFO) << "Sent RequestVote to " << ip << ":" << peer_port;
     }
 }
@@ -602,10 +603,23 @@ void Node::recv_client_cb(EV_P_ ev_io* w, int)
     self->recvQueues[0].enqueue(std::move(m));
 }
 
-void Node::sendToPeer(int peerId, const std::string& payload, const sockaddr_in& dst)
+void Node::sendSerialized(int peerId, const std::string& bytes, const sockaddr_in& dst)
+{
+    auto* m      = new OutgoingMsg;
+    m->bytes     = bytes;          // copy or std::move, caller’s choice
+    m->use_wrapper = false;
+    m->dst       = dst;
+    m->fd        = ctxForPeer(peerId).fd;
+
+    std::size_t q = (tls_worker_id >= 0) ? tls_worker_id : 0;
+    while (!outQueues_[q]->push(m)) std::this_thread::yield();
+}
+
+void Node::sendToPeer(int peerId, raft::leader_election::MessageWrapper&& wrapper, const sockaddr_in& dst)
 {
     OutgoingMsg* m = new OutgoingMsg;
-    m->bytes = std::move(payload);
+    m->wrapper = std::move(wrapper);
+    m->use_wrapper = true;
     m->dst = dst;
     m->fd = ctxForPeer(peerId).fd;
     // outQueue_.enqueue(std::move(m));
@@ -629,6 +643,7 @@ void Node::sendToClient(const std::string& payload, const sockaddr_in& dst)
 {
     OutgoingMsg* m = new OutgoingMsg;
     m->bytes = std::move(payload);
+    m->use_wrapper = false;
     m->dst = dst;
     m->fd = clientSock_;
 
@@ -674,8 +689,16 @@ void Node::senderThreadFunc()
 
         if (got) {
             idle = 0;
+            std::string bytes;
+            if (m->use_wrapper) {
+                bytes = m->wrapper.SerializeAsString();
+            } else {
+                bytes = std::move(m->bytes);
+            }
+                
+            LOG(INFO) << "Sending msg to peer " << inet_ntoa(m->dst.sin_addr) << ":" << ntohs(m->dst.sin_port) << " from FD: " << m->fd;
             ::sendto(m->fd,
-                     m->bytes.data(), m->bytes.size(),
+                     bytes.data(), bytes.size(),
                      0,
                      reinterpret_cast<const sockaddr*>(&m->dst),
                      sizeof m->dst);
@@ -755,6 +778,7 @@ void Node::handleReceived(ReceivedMessage&& rm)
                 LOG(ERROR) << "Failed to parse request vote.";
                 return;
             }
+            LOG(INFO) << "Received request vote from " << request.candidate_id() << " for term " << request.term();
             handle_request_vote(request, rm.sender);
             break;
         }
@@ -898,12 +922,12 @@ void Node::send_vote_response(const raft::leader_election::VoteResponse& respons
     wrapper.set_type(raft::leader_election::MessageWrapper::VOTE_RESPONSE);
     wrapper.set_payload(response.SerializeAsString());
 
-    std::string serialized_message = wrapper.SerializeAsString();
+    // std::string serialized_message = wrapper.SerializeAsString();
 
     std::string ip   = inet_ntoa(recipient.sin_addr);
     int         id   = peerIdFromIp(ip);
 
-    sendToPeer(id, serialized_message, recipient);    
+    sendToPeer(id, std::move(wrapper), recipient);    
 }
 
 // Utility function to convert sockaddr_in to string
@@ -1038,18 +1062,18 @@ void Node::send_heartbeat() {
         wrapper.set_type(raft::leader_election::MessageWrapper::APPEND_ENTRIES);
         wrapper.set_payload(append_entries.SerializeAsString());
 
-        std::string serialized_message = wrapper.SerializeAsString();   
+        // std::string serialized_message = wrapper.SerializeAsString();   
 
         sockaddr_in peer_addr{};
         peer_addr.sin_family = AF_INET;
         peer_addr.sin_port = htons(peer_port);
         inet_pton(AF_INET, ip.c_str(), &peer_addr.sin_addr);
 
-        if (use_simulated_links) {
-            send_with_delay_and_loss(serialized_message, peer_addr);
-        } else {
-            sendToPeer(peerIdFromIp(ip), serialized_message, peer_addr);
-        }
+        // if (use_simulated_links) {
+        //     send_with_delay_and_loss(serialized_message, peer_addr);
+        // } else {
+        sendToPeer(peerIdFromIp(ip), std::move(wrapper), peer_addr);
+        // }
     }
 
     // heartbeat_count++;
@@ -1244,9 +1268,9 @@ void Node::send_append_entries_response(const raft::leader_election::AppendEntri
     wrapper.set_type(raft::leader_election::MessageWrapper::APPEND_ENTRIES_RESPONSE);
     wrapper.set_payload(response.SerializeAsString());
 
-    std::string serialized_message = wrapper.SerializeAsString();
+    // std::string serialized_message = wrapper.SerializeAsString();
 
-    sendToPeer(peerIdFromIp(inet_ntoa(recipient.sin_addr)), serialized_message, recipient);
+    sendToPeer(peerIdFromIp(inet_ntoa(recipient.sin_addr)), std::move(wrapper) , recipient);
 }
 
 void Node::start_penalty_timer() {
@@ -1290,7 +1314,7 @@ void Node::calculate_and_send_penalty_score() {
         peer_addr.sin_port = htons(peer_port);
         inet_pton(AF_INET, ip.c_str(), &peer_addr.sin_addr);
 
-        sendToPeer(peerIdFromIp(ip), serialized_message, peer_addr);
+        sendSerialized(peerIdFromIp(ip), serialized_message, peer_addr);
     }
 }
 
@@ -1594,10 +1618,10 @@ void Node::send_proposals_to_followers(int term, int commit_index)
             dst.sin_port   = htons(peer_port);
             inet_pton(AF_INET, ip.c_str(), &dst.sin_addr);
 
-            if (use_simulated_links)
-                send_with_delay_and_loss(wrapper.SerializeAsString(), dst);
-            else
-                sendToPeer(peerIdFromIp(ip), wrapper.SerializeAsString(), dst);
+            // if (use_simulated_links)
+            //     send_with_delay_and_loss(wrapper.SerializeAsString(), dst);
+            // else
+            sendToPeer(peerIdFromIp(ip), std::move(wrapper), dst);
 
             inflight_[follower_id].store(true, std::memory_order_release);
         }

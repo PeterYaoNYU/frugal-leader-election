@@ -78,7 +78,9 @@ struct ReceivedMessage {
 };
 
 struct OutgoingMsg {
+    raft::leader_election::MessageWrapper wrapper;
     std::string bytes;
+    bool use_wrapper;
     sockaddr_in dst;
     int fd;
 };
@@ -262,7 +264,7 @@ private:
     using SendQueue = boost::lockfree::queue<OutgoingMsg*, boost::lockfree::capacity<kQueueCap>>;
     std::vector<std::unique_ptr<SendQueue>> outQueues_;
     std::vector<std::thread> senderThreads_;
-    static constexpr int kNumSenders = 4;
+    static constexpr int kNumSenders = 5;
 
     inline UDPSocketCtx& ctxForPeer(int peerId) { return peerCtx_.at(peerId); }
     inline int peerIdFromIp(const std::string& ip) const {
@@ -350,7 +352,9 @@ private:
 
     void runRecvLoop(UDPSocketCtx* ctx, int peerId);
 
-    void sendToPeer(int peerId, const std::string& payload, const sockaddr_in& dst);
+    void sendToPeer(int peerId, raft::leader_election::MessageWrapper&& wrapper , const sockaddr_in& dst);
+
+    void sendSerialized(int perrId, const std::string& bytes, const sockaddr_in& dst);
     
     void sendToClient(const std::string& payload, const sockaddr_in& dst);
 
