@@ -237,6 +237,7 @@ private:
     std::queue<std::function<void()>> election_async_tasks;
 
     int worker_threads_count = 1;
+    int sender_threads_count = 1;
 
     std::vector<int> eligible_leaders;
 

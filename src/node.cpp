@@ -45,6 +45,7 @@ Node::Node(const ProcessConfig& config, int replicaId)
       safety_margin_lower_bound(config.safetyMarginLowerBound),
       safety_margin_step_size(config.safetyMarginStepSize), 
       worker_threads_count(config.workerThreadsCount), 
+      sender_threads_count(config.senderThreadsCount),
       client_port(config.clientPort),
       internal_base_port(config.internalBasePort), 
       replica_id(replicaId), 
@@ -211,7 +212,7 @@ void Node::run() {
         outQueues_.emplace_back(std::make_unique<SendQueue>());
     }
 
-    for (int i = 0; i < kNumSenders; ++i) {
+    for (int i = 0; i < sender_threads_count; ++i) {
         senderThreads_.emplace_back(&Node::senderThreadFunc, this);
     }
 
@@ -579,7 +580,9 @@ void Node::recv_cb(EV_P_ ev_io* w, int revents) {
     ReceivedMessage m;
     m.raw_message.assign(buf, n);
     m.sender = from;
-    m.enqueue_time = std::chrono::steady_clock::now();
+    if (self->check_overhead) {
+        m.enqueue_time = std::chrono::steady_clock::now();
+    }
     // m.channel = peerId;          // ←  so workers know the source socket
     LOG(INFO) << "Received message from " << inet_ntoa(from.sin_addr) << ":" << ntohs(from.sin_port) << " on channel " << peerId;
     self->recvQueues[peerId + 1].enqueue(std::move(m));
@@ -763,10 +766,13 @@ void Node::workerThreadFunc(int wid) {
 
 void Node::handleReceived(ReceivedMessage&& rm)
 {
-    auto dequeue_time = std::chrono::steady_clock::now();
-    auto queue_ms = std::chrono::duration_cast<std::chrono::microseconds>(dequeue_time - rm.enqueue_time).count();
-    auto sender = rm.sender;
-    LOG(WARNING) << "Received message from " << inet_ntoa(sender.sin_addr) << " Queue time: " << queue_ms << " microseconds";
+    if (check_overhead){
+        auto dequeue_time = std::chrono::steady_clock::now();
+        auto queue_ms = std::chrono::duration_cast<std::chrono::microseconds>(dequeue_time - rm.enqueue_time).count();
+        auto sender = rm.sender;
+        LOG(WARNING) << "Received message from " << inet_ntoa(sender.sin_addr) << " Queue time: " << queue_ms << " microseconds";
+    }
+
     raft::leader_election::MessageWrapper wrapper;
     if (!wrapper.ParseFromString(rm.raw_message)) {
         LOG(ERROR) << "Failed to parse message from sender: " << inet_ntoa(rm.sender.sin_addr) << ":" << ntohs(rm.sender.sin_port);

@@ -35,3 +35,4 @@ replica:
   internalBasePort: 8561
   eligibleLeaders: [1]
   checkOverhead: false
+  senderThreadsCount: 8
