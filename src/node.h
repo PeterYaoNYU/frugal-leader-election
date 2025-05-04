@@ -50,6 +50,24 @@ inline raft::leader_election::LogEntry convertToProto(const LogEntry& entry) {
     return protoEntry;
 }
 
+inline LogEntry makeLogEntry(int term,
+    const std::string& cmd,
+    int clientId,
+    int requestId)
+{
+    LogEntry e{ term, cmd, clientId, requestId, {} };
+
+    // build the protobuf only once
+    raft::leader_election::LogEntry proto;
+    proto.set_term   (e.term);
+    proto.set_command(e.command);
+    proto.set_client_id(e.client_id);
+    proto.set_request_id(e.request_id);
+
+    e.encoded = proto.SerializeAsString();   // <-- one‑time cost
+    return e;
+}
+
 // a simple struct to hold raw messages, and sender information. 
 struct ReceivedMessage {
     // the raw messages have not been parsed by protobuf. 

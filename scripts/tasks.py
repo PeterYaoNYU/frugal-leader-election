@@ -22,23 +22,23 @@ processes = {}
 
 # Define node connection details
 
-# nodes = [
-#     {"host": "c220g5-111004.wisc.cloudlab.us", "port": 32410},
-#     {"host": "c220g5-111012.wisc.cloudlab.us", "port": 32410},
-#     {"host": "c220g5-111004.wisc.cloudlab.us", "port": 32411},
-#     {"host": "c220g5-111004.wisc.cloudlab.us", "port": 32412},
-#     {"host": "c220g5-111012.wisc.cloudlab.us", "port": 32411},
-# ]
-
 nodes = [
-    {"host": "pc532.emulab.net", "port": 22},
-    {"host": "pc417.emulab.net", "port": 22},
-    {"host": "pc559.emulab.net", "port": 22},
-    {"host": "pc509.emulab.net", "port": 22},
-    {"host": "pc545.emulab.net", "port": 22},
-    {"host": "pc503.emulab.net", "port": 22},
-
+    {"host": "amd238.utah.cloudlab.us", "port": 22},
+    {"host": "amd222.utah.cloudlab.us", "port": 22},
+    {"host": "amd213.utah.cloudlab.us", "port": 22},
+    {"host": "amd237.utah.cloudlab.us", "port": 22},
+    {"host": "amd210.utah.cloudlab.us", "port": 22},
 ]
+
+# nodes = [
+#     {"host": "pc532.emulab.net", "port": 22},
+#     {"host": "pc417.emulab.net", "port": 22},
+#     {"host": "pc559.emulab.net", "port": 22},
+#     {"host": "pc509.emulab.net", "port": 22},
+#     {"host": "pc545.emulab.net", "port": 22},
+#     {"host": "pc503.emulab.net", "port": 22},
+
+# ]
 
 # SSH username
 username = "PeterYao"
@@ -297,7 +297,7 @@ def start_remote_default(c):
             
             conn = Connection(host=replica_ip, user=username, port=node["port"])
             
-            cmd = f"cd frugal-leader-election && nohup {binary_path} --config={remote_config_path} --replicaId={replica_id} --minloglevel=1 > scripts/logs/node_{replica_id + 1}.log 2>&1 &"
+            cmd = f"cd frugal-leader-election && nohup {binary_path} --config={remote_config_path} --replicaId={replica_id} --minloglevel=2 > scripts/logs/node_{replica_id + 1}.log 2>&1 &"
             # cmd = f"cd frugal-leader-election && nohup {binary_path} --config={remote_config_path} --replicaId={replica_id} > scripts/logs/node_{replica_id + 1}.log 2>&1 &"
             
             print(cmd)

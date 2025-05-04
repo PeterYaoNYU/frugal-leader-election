@@ -10,6 +10,7 @@ struct LogEntry {
     std::string command;
     int client_id;
     int request_id;
+    std::string encoded;
 };
 
 class RaftLog {

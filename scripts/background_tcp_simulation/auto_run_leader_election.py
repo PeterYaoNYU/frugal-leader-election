@@ -3,49 +3,22 @@ import threading
 
 # Define node connection details
 # nodes = [
-#     {"host": "c240g5-110103.wisc.cloudlab.us", "port": 26010},
-#     {"host": "c240g5-110103.wisc.cloudlab.us", "port": 26011},
-#     {"host": "c240g5-110103.wisc.cloudlab.us", "port": 26012},
-#     {"host": "c240g5-110103.wisc.cloudlab.us", "port": 26013},
-#     {"host": "c240g5-110103.wisc.cloudlab.us", "port": 26014},
-#     {"host": "c240g5-110103.wisc.cloudlab.us", "port": 26015},
+#     {"host": "pc532.emulab.net", "port": 22},
+#     {"host": "pc417.emulab.net", "port": 22},
+#     {"host": "pc559.emulab.net", "port": 22},
+#     {"host": "pc509.emulab.net", "port": 22},
+#     {"host": "pc545.emulab.net", "port": 22},
+#     {"host": "pc503.emulab.net", "port": 22},
 # ]
-
-
-# nodes = [
-#     {"host": "c220g2-010828.wisc.cloudlab.us", "port": 26610},
-#     {"host": "c220g2-010823.wisc.cloudlab.us", "port": 26610},
-#     {"host": "c220g2-010823.wisc.cloudlab.us", "port": 26611},
-#     {"host": "c220g2-010828.wisc.cloudlab.us", "port": 26611},
-#     {"host": "c220g2-010823.wisc.cloudlab.us", "port": 26612},
-#     # {"host": "c240g5-110103.wisc.cloudlab.us", "port": 26612},
-# ]
-
-# nodes = [
-#     {"host": "c220g5-111004.wisc.cloudlab.us", "port": 32410},
-#     {"host": "c220g5-111012.wisc.cloudlab.us", "port": 32410},
-#     {"host": "c220g5-111004.wisc.cloudlab.us", "port": 32411},
-#     {"host": "c220g5-111004.wisc.cloudlab.us", "port": 32412},
-#     {"host": "c220g5-111012.wisc.cloudlab.us", "port": 32411},
-# ]
-
 
 nodes = [
-    {"host": "pc532.emulab.net", "port": 22},
-    {"host": "pc417.emulab.net", "port": 22},
-    {"host": "pc559.emulab.net", "port": 22},
-    {"host": "pc509.emulab.net", "port": 22},
-    {"host": "pc545.emulab.net", "port": 22},
-    {"host": "pc503.emulab.net", "port": 22},
+    {"host": "amd238.utah.cloudlab.us", "port": 22},
+    {"host": "amd222.utah.cloudlab.us", "port": 22},
+    {"host": "amd213.utah.cloudlab.us", "port": 22},
+    {"host": "amd237.utah.cloudlab.us", "port": 22},
+    {"host": "amd210.utah.cloudlab.us", "port": 22},
 ]
 
-# nodes = [
-#     {"host": "pc605.emulab.net", "port": 29442},
-#     {"host": "pc604.emulab.net", "port": 29442},
-#     {"host": "pc605.emulab.net", "port": 29443},
-#     {"host": "pc606.emulab.net", "port": 29442},
-#     {"host": "pc603.emulab.net", "port": 29442},
-# ]
 
 # SSH username
 username = "PeterYao"
@@ -68,6 +41,7 @@ def build_install_bazel(conn):
         conn.run("echo 'deb [signed-by=/usr/share/keyrings/bazel-archive-keyring.gpg] https://storage.googleapis.com/bazel-apt stable jdk1.8' | sudo tee /etc/apt/sources.list.d/bazel.list")
         # Update and install Bazel
         conn.run("sudo apt update && sudo apt install -y bazel-7.5.0")
+        conn.run("sudo apt install libboost-all-dev -y")
         # Confirm Bazel installation
         # conn.run("bazel --version")
         print(f"Bazel installed successfully on {conn.host}:{conn.port}")
@@ -75,8 +49,8 @@ def build_install_bazel(conn):
         print(f"Failed to install Bazel on {conn.host}:{conn.port} - {e}")
     
     
-def execute_on_node(node, id, build_bazel=False, build_invoke=False, build_fabric=False):    
-# def execute_on_node(node, id, build_bazel=True, build_invoke=True, build_fabric=True):
+# def execute_on_node(node, id, build_bazel=False, build_invoke=False, build_fabric=False):    
+def execute_on_node(node, id, build_bazel=True, build_invoke=True, build_fabric=True):
     try:
         # Establish SSH connection
         conn = Connection(host=node["host"], user=username, port=node["port"])

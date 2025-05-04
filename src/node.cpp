@@ -1202,12 +1202,14 @@ void Node::handle_append_entries(const raft::leader_election::AppendEntries& app
                     raftLog.deleteEntriesStartingFrom(insertion_index);
 
                     LOG(INFO) << "deleted entries from " << insertion_index << " to " << prev_last_log_idx << " due to term mismatch";
-                    raftLog.appendEntry(new_entry.term(), new_entry.command(), new_entry.client_id(), new_entry.request_id());
+                    // raftLog.appendEntry(new_entry.term(), new_entry.command(), new_entry.client_id(), new_entry.request_id());
+                    raftLog.appendEntry( makeLogEntry(new_entry.term(), new_entry.command(), new_entry.client_id(), new_entry.request_id()) );
                 }
                 // if matches, do nothing, and continue to the next one
             } else {
                 // if the position is empty, just append the new entry
-                raftLog.appendEntry(new_entry.term(), new_entry.command(), new_entry.client_id(), new_entry.request_id());
+                // raftLog.appendEntry(new_entry.term(), new_entry.command(), new_entry.client_id(), new_entry.request_id());
+                raftLog.appendEntry( makeLogEntry(new_entry.term(), new_entry.command(), new_entry.client_id(), new_entry.request_id()) );
             }
             // LOG(INFO) << "Appended entry at index " << index << " with term " << new_entry.term();
             insertion_index++;
@@ -1445,10 +1447,12 @@ void Node::handle_client_request(const raft::client::ClientRequest& request, con
     // append new command as a log entry
     int new_log_index = raftLog.getLastLogIndex() + 1;
     LOG(INFO) << "the new log index is " << new_log_index;
-    LogEntry new_entry { current_term, request.command(), request.client_id(), request.request_id() };
-    raftLog.appendEntry(new_entry);
-    LOG(INFO) << "Appended new entry to log-> Index: " << new_log_index << ", Term: " << new_entry.term << ", Client ID: " << new_entry.client_id << ", Command: " << new_entry.command;
+    // LogEntry new_entry { current_term, request.command(), request.client_id(), request.request_id() };
+    // raftLog.appendEntry(new_entry);
+    // LOG(INFO) << "Appended new entry to log-> Index: " << new_log_index << ", Term: " << new_entry.term << ", Client ID: " << new_entry.client_id << ", Command: " << new_entry.command;
 
+    raftLog.appendEntry( makeLogEntry(current_term, request.command(), request.client_id(), request.request_id()) );
+ 
     // communicate with the other replicas in the system
     // first get the prev log term and prev log index, needede for append entries RPC. 
     int prev_index = new_log_index - 1;
@@ -1522,17 +1526,17 @@ void Node::send_proposals_to_followers(int term, int commit_index)
             int          index;
         };
         std::vector<CachedEntry> cached;
-        cached.reserve(last_log_idx - start_idx + 1);
+        // cached.reserve(last_log_idx - start_idx + 1);
 
         for (int idx = start_idx; idx <= last_log_idx; ++idx)
         {
             LogEntry le;
             if (!raftLog.getEntry(idx, le)) break;
 
-            raft::leader_election::LogEntry proto = convertToProto(le);
+            // raft::leader_election::LogEntry proto = convertToProto(le);
             CachedEntry ce;
             ce.index = idx;
-            ce.bytes = proto.SerializeAsString();   // single serialization
+            ce.bytes = le.encoded;
             cached.push_back(std::move(ce));
         }
 

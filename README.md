@@ -8,6 +8,7 @@ bazel-7.5.0 build //:client
 
 ```bash
 invoke start-client --serverIp 127.0.0.4 --serverPort 10892 --value 5 --bindIp 127.0.0.18
+invoke start-clients-remote --leaderId 1 --serverPort 10083 --value 5
 invoke start-client-remote --remoteHostId 5 --serverIp 10.0.0.3 --serverPort 10083 --value 5 --bindIp 10.0.3.1
 invoke start-client-remote --remoteHostId 5 --serverIp 10.0.0.3 --serverPort 10083 --value 0.001 --bindIp 10.0.3.1
 ```
