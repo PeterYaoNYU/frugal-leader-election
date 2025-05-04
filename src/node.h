@@ -265,7 +265,7 @@ private:
     using SendQueue = moodycamel::ConcurrentQueue<OutgoingMsg*>;
     std::vector<std::unique_ptr<SendQueue>> outQueues_;
     std::vector<std::thread> senderThreads_;
-    static constexpr int kNumSenders = 5;
+    static constexpr int kNumSenders = 8;
 
     inline UDPSocketCtx& ctxForPeer(int peerId) { return peerCtx_.at(peerId); }
     inline int peerIdFromIp(const std::string& ip) const {

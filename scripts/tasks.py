@@ -284,6 +284,8 @@ def start_remote_default(c):
         conn = Connection(host=replica_ip, user=username, port=node["port"])
         
         conn.sudo("killall leader_election", warn=True)
+        conn.sudo("killall client", warn=True)
+        
         conn.run("mkdir -p frugal-leader-election/scripts/logs", warn=True)
         conn.run("rm -f frugal-leader-election/scripts/logs/*", warn=True)
 
