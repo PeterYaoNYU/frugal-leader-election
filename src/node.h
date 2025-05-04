@@ -261,7 +261,8 @@ private:
 
     // moodycamel::ConcurrentQueue<OutgoingMsg> outQueue_;
     static constexpr std::size_t kQueueCap = 32 * 1024;
-    using SendQueue = boost::lockfree::queue<OutgoingMsg*, boost::lockfree::capacity<kQueueCap>>;
+    // using SendQueue = boost::lockfree::queue<OutgoingMsg*, boost::lockfree::capacity<kQueueCap>>;
+    using SendQueue = moodycamel::ConcurrentQueue<OutgoingMsg*>;
     std::vector<std::unique_ptr<SendQueue>> outQueues_;
     std::vector<std::thread> senderThreads_;
     static constexpr int kNumSenders = 5;

@@ -612,7 +612,8 @@ void Node::sendSerialized(int peerId, const std::string& bytes, const sockaddr_i
     m->fd        = ctxForPeer(peerId).fd;
 
     std::size_t q = (tls_worker_id >= 0) ? tls_worker_id : 0;
-    while (!outQueues_[q]->push(m)) std::this_thread::yield();
+    // while (!outQueues_[q]->push(m)) std::this_thread::yield();
+    outQueues_[q]->enqueue(m);
 }
 
 void Node::sendToPeer(int peerId, raft::leader_election::MessageWrapper&& wrapper, const sockaddr_in& dst)
@@ -625,10 +626,10 @@ void Node::sendToPeer(int peerId, raft::leader_election::MessageWrapper&& wrappe
     // outQueue_.enqueue(std::move(m));
 
     std::size_t qIdx = (tls_worker_id >= 0) ? tls_worker_id : 0;
-
-    while (!outQueues_[qIdx]->push(std::move(m))) {
-        std::this_thread::yield(); 
-    }
+    outQueues_[qIdx]->enqueue(m);
+    // while (!outQueues_[qIdx]->push(std::move(m))) {
+    //     std::this_thread::yield(); 
+    // }
 
     // int fd = ctxForPeer(peerId).fd;
     // sendto(fd, payload.data(), payload.size(), 0,
@@ -649,9 +650,10 @@ void Node::sendToClient(const std::string& payload, const sockaddr_in& dst)
 
     std::size_t qIdx = (tls_worker_id >= 0) ? tls_worker_id : 0;
 
-    while (!outQueues_[qIdx]->push(std::move(m))) {
-        std::this_thread::yield(); 
-    }
+    // while (!outQueues_[qIdx]->push(std::move(m))) {
+    //     std::this_thread::yield(); 
+    // }
+    outQueues_[qIdx]->enqueue(m);
     // sendto(clientSock_, payload.data(), payload.size(), 0,
     //     reinterpret_cast<const sockaddr*>(&dst), sizeof dst);
 
@@ -679,7 +681,7 @@ void Node::senderThreadFunc()
         for (std::size_t i = 0; i < numQs; ++i)
         {
             auto& q = *outQueues_[nextQ];
-            if (q.pop(m)) {
+            if (q.try_dequeue(m)) {
                 got    = true;
                 nextQ  = (nextQ + 1) % numQs;
                 break;
