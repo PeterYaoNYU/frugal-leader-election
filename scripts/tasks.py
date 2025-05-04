@@ -298,7 +298,7 @@ def start_remote_default(c):
             
             conn = Connection(host=replica_ip, user=username, port=node["port"])
             
-            cmd = f"cd frugal-leader-election && nohup {binary_path} --config={remote_config_path} --replicaId={replica_id} --minloglevel=2 > scripts/logs/node_{replica_id + 1}.log 2>&1 &"
+            cmd = f"cd frugal-leader-election && nohup {binary_path} --config={remote_config_path} --replicaId={replica_id} --minloglevel=1 > scripts/logs/node_{replica_id + 1}.log 2>&1 &"
             # cmd = f"cd frugal-leader-election && nohup {binary_path} --config={remote_config_path} --replicaId={replica_id} > scripts/logs/node_{replica_id + 1}.log 2>&1 &"
             
             print(cmd)
@@ -498,7 +498,7 @@ def start_clients_remote(c, leaderId ,serverPort, value, logSuffix=""):
             print(f"Failed to start client {replica_id+1} on {replica_ip}: {e}")
             continue
         
-    sleep(100)
+    sleep(200)
     for replica_id, node in enumerate(nodes):
         replica_ip = node["host"]
         replica_port = node["port"]

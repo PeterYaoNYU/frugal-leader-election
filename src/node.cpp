@@ -601,6 +601,9 @@ void Node::recv_client_cb(EV_P_ ev_io* w, int)
     m.raw_message.assign(buf, n);
     m.sender  = from;
     m.channel = -1;                                // special value for client
+    if (self->check_overhead) {
+        m.enqueue_time = std::chrono::steady_clock::now();
+    }
     LOG(INFO) << "Received message from client at " << inet_ntoa(from.sin_addr) << ":" << ntohs(from.sin_port);
     // client receiver at queue #0
     self->recvQueues[0].enqueue(std::move(m));

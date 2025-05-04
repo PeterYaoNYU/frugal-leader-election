@@ -34,4 +34,5 @@ replica:
   clientPort: 10083
   internalBasePort: 8230
   eligibleLeaders: [0]
-  checkOverhead: false
+  checkOverhead: true
+  senderThreadsCount: 8
