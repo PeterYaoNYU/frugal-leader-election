@@ -706,7 +706,7 @@ void Node::senderThreadFunc()
                 bytes = std::move(m->bytes);
             }
                 
-            LOG(INFO) << "Sending msg to peer " << inet_ntoa(m->dst.sin_addr) << ":" << ntohs(m->dst.sin_port) << " from FD: " << m->fd;
+            // LOG(INFO) << "Sending msg to peer " << inet_ntoa(m->dst.sin_addr) << ":" << ntohs(m->dst.sin_port) << " from FD: " << m->fd;
             ::sendto(m->fd,
                      bytes.data(), bytes.size(),
                      0,

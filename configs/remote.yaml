@@ -29,12 +29,12 @@ replica:
   heartbeatIntervalMargin: 75
   safetyMarginLowerBound: 25
   safetyMarginStepSize: 5
-  workerThreadsCount: 10
+  workerThreadsCount: 11
   fdMode: raft
   clientPort: 10083
   internalBasePort: 8230
-  eligibleLeaders: [0]
+  eligibleLeaders: [4]
   checkOverhead: false
-  senderThreadsCount: 6
-  spin_check_count: 2
-  spin_check_interval: 17
+  senderThreadsCount: 8
+  spinCheckCount: 4
+  spinCheckInterval: 18

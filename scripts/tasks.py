@@ -13,6 +13,9 @@ from datetime import datetime
 import time
 from time import sleep
 
+import shutil                          # <<< NEW >>>
+import glob                            # <<< NEW >>>
+
 # Define the ports and peers
 PORTS = [5000, 5001, 5002, 5003]
 IP = "127.0.0.1"
@@ -298,7 +301,7 @@ def start_remote_default(c):
             
             conn = Connection(host=replica_ip, user=username, port=node["port"])
             
-            cmd = f"cd frugal-leader-election && nohup {binary_path} --config={remote_config_path} --replicaId={replica_id} --minloglevel=1 > scripts/logs/node_{replica_id + 1}.log 2>&1 &"
+            cmd = f"cd frugal-leader-election && nohup {binary_path} --config={remote_config_path} --replicaId={replica_id} --minloglevel=2 > scripts/logs/node_{replica_id + 1}.log 2>&1 &"
             # cmd = f"cd frugal-leader-election && nohup {binary_path} --config={remote_config_path} --replicaId={replica_id} > scripts/logs/node_{replica_id + 1}.log 2>&1 &"
             
             print(cmd)
@@ -498,7 +501,7 @@ def start_clients_remote(c, leaderId ,serverPort, value, logSuffix=""):
             print(f"Failed to start client {replica_id+1} on {replica_ip}: {e}")
             continue
         
-    sleep(200)
+    sleep(300)
     for replica_id, node in enumerate(nodes):
         replica_ip = node["host"]
         replica_port = node["port"]
@@ -527,7 +530,52 @@ def start_clients_remote(c, leaderId ,serverPort, value, logSuffix=""):
             print(f"Failed to download client log file from {replica_ip}: {e} to client_remote_{replica_id}.log")
             continue
         
-        
+    # ----------------------------------------------------------------------
+    # >>>> NEW STEP 1: Run sum_all_clients.py locally
+    # ----------------------------------------------------------------------
+    try:
+        # You can also use `c.local` if preferred:
+        # c.local("python3 sum_all_clients.py", replace_env=False)
+        subprocess.run(["python3", "sum_all_clients.py"], check=True)  # <<< NEW >>>
+        print("Executed sum_all_clients.py")                           # <<< NEW >>>
+    except Exception as e:
+        print(f"Failed to run sum_all_clients.py: {e}")                # <<< NEW >>>
+
+    # ----------------------------------------------------------------------
+    # >>>> NEW STEP 2: Create archive folder and move logs
+    # ----------------------------------------------------------------------
+    current_time = datetime.now().strftime("%Y%m%d_%H%M%S")           # <<< NEW >>>
+    folder_name  = f"leader{leaderId}_{current_time}"                 # <<< NEW >>>
+    os.makedirs(folder_name, exist_ok=True)                           # <<< NEW >>>
+
+    for f in glob.glob("client_remote_*.log"):                        # <<< NEW >>>
+        try:
+            shutil.move(f, os.path.join(folder_name, f))              # <<< NEW >>>
+        except Exception as e:
+            print(f"Failed moving {f}: {e}")                          # <<< NEW >>>
+
+    print(f"Archived logs in ./{folder_name}")                        # <<< NEW >>>
+    
+    
+# invoke batch-experiments-motivation --leaderId 1 --serverPort 10083 --value 5
+@task
+def batch_experiments_motivation(c, leaderId, serverPort, value, runs=5):
+    """
+    Run start_clients_remote `runs` times, parse the resulting
+    Overall Throughput and Average latency from sum_all_clients.py,
+    then print mean and standard deviation.
+    """
+    throughputs = []
+    latencies   = []
+
+    for i in range(1, runs + 1):
+        print(f"\n=== Run {i}/{runs} ===")
+        # 1) kick off the remote clients and archive logs
+        start_remote_default(c)
+        start_clients_remote(c, leaderId, serverPort, value)
+
+
+
 @task
 def get_results(c):
             
