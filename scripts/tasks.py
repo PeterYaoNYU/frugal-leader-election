@@ -573,8 +573,25 @@ def batch_experiments_motivation(c, leaderId, serverPort, value, runs=5):
         # 1) kick off the remote clients and archive logs
         start_remote_default(c)
         start_clients_remote(c, leaderId, serverPort, value)
-
-
+        
+# invoke overhead-exp --serverIp 127.0.0.2 --serverPort 10998 --value 5 --bindIp 127.0.0.18   
+@task
+def overhead_exp(c, serverIp, serverPort, value, bindIp):
+    start(c)
+    sleep(10)
+    start_client(c, serverIp, serverPort, value, bindIp)
+    sleep(180)
+    stop(c)
+    try:
+        subprocess.run(["python3", "analyze_resp_time.py", "logs/client.log"], check=True)  # <<< NEW >>>
+        print("Executed analyze_resp_time.py")                           # <<< NEW >>>
+    except Exception as e:
+        print(f"Failed to run analyze_resp_time.py: {e}")                # <<< NEW >>>
+    try:
+        subprocess.run(["python3", "avg_bps.py", "logs/"], check=True)  # <<< NEW >>>
+        print("Executed avg_bps.py")                           # <<< NEW >>>
+    except Exception as e:
+        print(f"Failed to run avg_bps.py: {e}")                # <<< NEW >>>
 
 @task
 def get_results(c):
@@ -632,7 +649,7 @@ def start(c):
     
     for replica_id in range(n_replicas):
         log_file = logs_dir / f"node_{replica_id}.log"
-        cmd = [binary_path, f"--config={config_path}", f"--replicaId={replica_id}", "--minloglevel=2"]
+        cmd = [binary_path, f"--config={config_path}", f"--replicaId={replica_id}", "--minloglevel=1"]
         # cmd = [binary_path, f"--config={config_path}", f"--replicaId={replica_id}"]
         
         print(f"Starting replica {replica_id} with command: {' '.join(cmd)}")

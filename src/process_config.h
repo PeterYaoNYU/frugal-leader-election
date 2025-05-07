@@ -69,6 +69,8 @@ struct ProcessConfig {
 
     int spinCheckInterval;
 
+    int tcpMonitorFrequency;
+
     template <class T> T parseField(const YAML::Node &parent, const std::string &key)
     {
         if (!parent[key]) {
@@ -165,6 +167,7 @@ struct ProcessConfig {
             senderThreadsCount = parseField<int>(replicaNode, "senderThreadsCount");
             spinCheckCount = parseField<int>(replicaNode, "spinCheckCount");
             spinCheckInterval = parseField<int>(replicaNode, "spinCheckInterval");
+            tcpMonitorFrequency = parseField<int>(replicaNode, "tcpMonitorFrequency");
         } catch (const ConfigParseException &e) {
             throw ConfigParseException("Error parsing replica " + std::string(e.what()));
         }

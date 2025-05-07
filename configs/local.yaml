@@ -14,7 +14,7 @@ replica:
   runtimeSeconds: 600
   timeoutLowerBound: 150
   timeoutUpperBound: 300
-  failureLeader: true
+  failureLeader: false
   # if the failureLeader is true, after maxHeartbeats number of heartbeats, the leader will fail
   maxHeartbeats: 350
   port: 7019
@@ -23,7 +23,7 @@ replica:
   useSimulatedLinks: false
   linkLossRate: 0.01
   checkFalsePositiveRate: true
-  tcp_monitor: false
+  tcp_monitor: true
   confidenceLevel: 0.999
   testPetition: false
   heartbeatIntervalMargin: 75
@@ -31,10 +31,12 @@ replica:
   safetyMarginStepSize: 5
   workerThreadsCount: 11
   fdMode: raft
-  clientPort: 10998
-  internalBasePort: 8561
-  eligibleLeaders: [0, 1]
+  clientPort: 10991
+  internalBasePort: 8591
+  eligibleLeaders: [0]
   checkOverhead: false
   senderThreadsCount: 8
   spinCheckCount: 4
   spinCheckInterval: 18
+  # how many times per second polls and send netlink sockets data
+  tcpMonitorFrequency: 100

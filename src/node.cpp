@@ -52,7 +52,8 @@ Node::Node(const ProcessConfig& config, int replicaId)
       eligible_leaders(config.eligibleLeaders), 
       check_overhead(config.checkOverhead), 
       spinCheckCount(config.spinCheckCount),
-      spinCheckInterval(config.spinCheckInterval)
+      spinCheckInterval(config.spinCheckInterval), 
+      tcp_monitor_freq(config.tcpMonitorFrequency)
 {
     election_timer.data = this;
     heartbeat_timer.data = this;
@@ -232,7 +233,10 @@ void Node::run() {
     shutdown_timer.data = this;
     ev_timer_start(loop, &shutdown_timer);
 
-    start_penalty_timer();
+
+    if (tcp_monitor) {
+        start_penalty_timer();
+    }
 
     // start running the worker threads. 
     startWorkerThreads(worker_threads_count);
@@ -582,9 +586,9 @@ void Node::recv_cb(EV_P_ ev_io* w, int revents) {
     ReceivedMessage m;
     m.raw_message.assign(buf, n);
     m.sender = from;
-    if (self->check_overhead) {
-        m.enqueue_time = std::chrono::steady_clock::now();
-    }
+    // if (self->check_overhead) {
+    //     m.enqueue_time = std::chrono::steady_clock::now();
+    // }
     // m.channel = peerId;          // ←  so workers know the source socket
     LOG(INFO) << "Received message from " << inet_ntoa(from.sin_addr) << ":" << ntohs(from.sin_port) << " on channel " << peerId;
     self->recvQueues[peerId + 1].enqueue(std::move(m));
@@ -603,9 +607,9 @@ void Node::recv_client_cb(EV_P_ ev_io* w, int)
     m.raw_message.assign(buf, n);
     m.sender  = from;
     m.channel = -1;                                // special value for client
-    if (self->check_overhead) {
-        m.enqueue_time = std::chrono::steady_clock::now();
-    }
+    // if (self->check_overhead) {
+    //     m.enqueue_time = std::chrono::steady_clock::now();
+    // }
     LOG(INFO) << "Received message from client at " << inet_ntoa(from.sin_addr) << ":" << ntohs(from.sin_port);
     // client receiver at queue #0
     self->recvQueues[0].enqueue(std::move(m));
@@ -713,6 +717,7 @@ void Node::senderThreadFunc()
                      reinterpret_cast<const sockaddr*>(&m->dst),
                      sizeof m->dst);
             delete m;
+            // LOG(WARNING) << bytes.size() << " bytes";
             continue;
         }
 
@@ -988,7 +993,7 @@ void Node::handle_vote_response(const raft::leader_election::VoteResponse& respo
 
         // if bigger than f+1 in a 2f+1 setting
         if (votes_received >= peer_addresses.size() / 2 + 1) {
-            LOG(INFO) << "Received enough votes to become leader. Term: " << current_term << ". Votes received: " << votes_received << " out of " << peer_addresses.size();
+            LOG(WARNING) << "Received enough votes to become leader. Term: " << current_term << ". Votes received: " << votes_received << " out of " << peer_addresses.size();
             // role = Role::LEADER;
             // become_leader();
 
@@ -1287,7 +1292,9 @@ void Node::send_append_entries_response(const raft::leader_election::AppendEntri
 }
 
 void Node::start_penalty_timer() {
-    double interval = 1.0; // Interval in seconds
+    LOG(WARNING) << "Starting penalty timer... tcp_monitor_freq: " << tcp_monitor_freq;
+    double interval = 1.0 / tcp_monitor_freq;
+    LOG(WARNING) << "Penalty timer started with interval: " << interval << " seconds";
     ev_timer_init(&penalty_timer, penalty_timer_cb, 0.0, interval);
     penalty_timer.data = this;
     ev_timer_start(loop, &penalty_timer);
@@ -1779,7 +1786,7 @@ void Node::handle_append_entries_response(const raft::leader_election::AppendEnt
         int prev_next_index = next_index[sender_id];
         match_index[sender_id] = std::max(match_index[sender_id], response.match_index());
         next_index[sender_id] = match_index[sender_id] + 1;
-        LOG(WARNING) << "Success AE response from " << sender_id << ". Match index: " << response.match_index() << ". Next index: " << next_index[sender_id] << " Prev next index: " << prev_next_index << " progresses by " << next_index[sender_id] - prev_next_index;
+        // LOG(WARNING) << "Success AE response from " << sender_id << ". Match index: " << response.match_index() << ". Next index: " << next_index[sender_id] << " Prev next index: " << prev_next_index << " progresses by " << next_index[sender_id] - prev_next_index;
         updated_commit_index();
     } else {
         // // If conflict_index is provided, set next_index accordingly:

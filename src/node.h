@@ -182,6 +182,8 @@ private:
     int self_id;
     std::unordered_map<std::string, int> ip_to_id;
 
+    int tcp_monitor_freq = 10;
+
     enum bound_type {CI, Jacobson, raft} election_timeout_bound = raft;
 
     // New timer for penalty score exchange
