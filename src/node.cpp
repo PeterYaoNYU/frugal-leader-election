@@ -428,7 +428,7 @@ void Node::start_election_timeout(bool double_time, bool force_raft) {
         // find my rank:
         for (int i = 0; i < penalty_scores_sorted.size(); i++) {
             if (penalty_scores_sorted[i].first == self_ip+":"+std::to_string(port)) {
-                LOG(INFO) << "My rank is: " << i;
+                LOG(WARNING) << "My rank is: " << i;
                 // break;
                 my_rank = i;
             }

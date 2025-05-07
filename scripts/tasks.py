@@ -314,6 +314,17 @@ def start_remote_default(c):
 
     print("All remote nodes have been started.")
     print("Logs are available in the 'logs/' directory on each respective node.")
+    
+    
+@task
+def count_leader(c):
+    for i in range(1, 6):
+        print("=========== Node ", i-1, " ===========")
+        conn = Connection(host=nodes[i-1]["host"], user=username, port=nodes[i-1]["port"])
+        cmd = f"cd frugal-leader-election/scripts && python3 count_leader.py logs/node_{i}.log"
+        # print(f"Running command on remote node: {cmd}")
+        conn.run(cmd)
+     
 
 
 # invoke start-client --serverIp 127.0.0.4 --serverPort 10892 --value 5 --bindIp 127.0.0.18

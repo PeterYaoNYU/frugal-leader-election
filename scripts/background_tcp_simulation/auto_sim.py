@@ -34,6 +34,7 @@ def execute_on_node(node, id):
         # print(f"Repository cloned on {node['host']}:{node['port']}")
         
         # Run the target Python script without waiting for it to finish
+        conn.run("sudo killall python3", warn=True)
         conn.run(f"nohup python3 {target_script} {id} 7899 &", hide=False, warn=True, asynchronous=True)
         
         print(f"Script executed on {node['host']}:{node['port']}")
