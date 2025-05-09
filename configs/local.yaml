@@ -14,9 +14,9 @@ replica:
   runtimeSeconds: 600
   timeoutLowerBound: 150
   timeoutUpperBound: 300
-  failureLeader: false
+  failureLeader: true
   # if the failureLeader is true, after maxHeartbeats number of heartbeats, the leader will fail
-  maxHeartbeats: 350
+  maxHeartbeats: 500
   port: 7019
   delayLowerBound: 1
   delayUpperBound: 25
@@ -31,9 +31,9 @@ replica:
   safetyMarginStepSize: 5
   workerThreadsCount: 11
   fdMode: raft
-  clientPort: 10991
-  internalBasePort: 8591
-  eligibleLeaders: [0]
+  clientPort: 10999
+  internalBasePort: 8599
+  eligibleLeaders: [0, 1, 2, 3, 4]
   checkOverhead: false
   senderThreadsCount: 8
   spinCheckCount: 4

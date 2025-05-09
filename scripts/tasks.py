@@ -329,7 +329,7 @@ def count_leader(c):
 
 # invoke start-client --serverIp 127.0.0.4 --serverPort 10892 --value 5 --bindIp 127.0.0.18
 @task
-def start_client(c, serverIp, serverPort, value, bindIp):
+def start_client(c, serverIp, serverPort, value, bindIp, log_suffix="client"):
     """
     Starts the client process locally.
     
@@ -354,12 +354,13 @@ def start_client(c, serverIp, serverPort, value, bindIp):
 
     binary_path = "../bazel-bin/client"  # Path to the built client binary.
     # Build the command-line arguments. (Client expects: server_ip server_port mode value)
-    cmd = [binary_path, serverIp, str(serverPort), sendMode, value, "779", bindIp]
+    client_id = random.randint(1, 9999)
+    cmd = [binary_path, serverIp, str(serverPort), sendMode, value, str(client_id), bindIp]
     
     # Create logs directory if it doesn't exist
     logs_dir = Path("logs")
     logs_dir.mkdir(exist_ok=True)
-    log_file = logs_dir / "client.log"
+    log_file = logs_dir / f"{log_suffix}.log"
     
     try:
         with open(log_file, "w") as logf:
@@ -585,16 +586,18 @@ def batch_experiments_motivation(c, leaderId, serverPort, value, runs=5):
         start_remote_default(c)
         start_clients_remote(c, leaderId, serverPort, value)
         
-# invoke overhead-exp --serverIp 127.0.0.2 --serverPort 10998 --value 5 --bindIp 127.0.0.18   
+# invoke overhead-exp --serverIp 127.0.0.2 --serverPort 10999 --value 5 --bindIp 127.0.0.18  --bindIpTwo 127.0.0.19
 @task
-def overhead_exp(c, serverIp, serverPort, value, bindIp):
+def overhead_exp(c, serverIp, serverPort, value, bindIp, bindIpTwo):
     start(c)
     sleep(10)
     start_client(c, serverIp, serverPort, value, bindIp)
+    # start_client(c, serverIp, serverPort, value, bindIpTwo, log_suffix="client_2")
     sleep(180)
     stop(c)
     try:
         subprocess.run(["python3", "analyze_resp_time.py", "logs/client.log"], check=True)  # <<< NEW >>>
+        # subprocess.run(["python3", "analyze_resp_time.py", "logs/client_2.log"], check=True)  # <<< NEW >>>
         print("Executed analyze_resp_time.py")                           # <<< NEW >>>
     except Exception as e:
         print(f"Failed to run analyze_resp_time.py: {e}")                # <<< NEW >>>
@@ -660,7 +663,7 @@ def start(c):
     
     for replica_id in range(n_replicas):
         log_file = logs_dir / f"node_{replica_id}.log"
-        cmd = [binary_path, f"--config={config_path}", f"--replicaId={replica_id}", "--minloglevel=1"]
+        cmd = [binary_path, f"--config={config_path}", f"--replicaId={replica_id}", "--minloglevel=3"]
         # cmd = [binary_path, f"--config={config_path}", f"--replicaId={replica_id}"]
         
         print(f"Starting replica {replica_id} with command: {' '.join(cmd)}")

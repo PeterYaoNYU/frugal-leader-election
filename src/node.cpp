@@ -432,7 +432,7 @@ void Node::start_election_timeout(bool double_time, bool force_raft) {
                 // break;
                 my_rank = i;
             }
-            LOG(INFO) << "The rank of " << penalty_scores_sorted[i].first << " is: " << i << " with penalty score: " << penalty_scores_sorted[i].second;
+            LOG(WARNING) << "The rank of " << penalty_scores_sorted[i].first << " is: " << i << " with penalty score: " << penalty_scores_sorted[i].second;
         }
 
         // find the number of all peers including myself in the membership group:
@@ -1124,6 +1124,8 @@ void Node::failure_cb(EV_P_ ev_timer* w, int revents) {
 
     // we also need to change the internal status to follower
     self->role = Role::FOLLOWER;
+    self->current_leader_ip = "";
+    self->current_leader_port = -1;
     // Continue participating in other activities (e.g., receiving messages)
 }
 

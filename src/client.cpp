@@ -199,6 +199,17 @@ void Client::handle_response(const std::string& response_data,  sockaddr_in& fro
         size_t colon_pos = leader_id.find(':');
         if (colon_pos != std::string::npos) {
             std::string leader_ip = leader_id.substr(0, colon_pos);
+            if (leader_ip.empty()) {
+                LOG(WARNING) << "Empty leader IP in leader_id: " << leader_id;
+                if (mode_ == MAX_IN_FLIGHT) {
+                    in_flight_ = 0;
+                    LOG(INFO) << "In-flight requests reset to 0.";
+                }
+                std::this_thread::sleep_for(std::chrono::milliseconds(20));
+                send_request();
+                return;
+            }
+
             if (inet_pton(AF_INET, leader_ip.c_str(), &server_addr_.sin_addr) <= 0) {
                 LOG(ERROR) << "Invalid leader IP: " << leader_ip;
             } else {
