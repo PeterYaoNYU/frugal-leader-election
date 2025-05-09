@@ -301,7 +301,7 @@ def start_remote_default(c):
             
             conn = Connection(host=replica_ip, user=username, port=node["port"])
             
-            cmd = f"cd frugal-leader-election && nohup {binary_path} --config={remote_config_path} --replicaId={replica_id} --minloglevel=1 > scripts/logs/node_{replica_id + 1}.log 2>&1 &"
+            cmd = f"cd frugal-leader-election && nohup {binary_path} --config={remote_config_path} --replicaId={replica_id} --minloglevel=2 > scripts/logs/node_{replica_id + 1}.log 2>&1 &"
             # cmd = f"cd frugal-leader-election && nohup {binary_path} --config={remote_config_path} --replicaId={replica_id} > scripts/logs/node_{replica_id + 1}.log 2>&1 &"
             
             print(cmd)
@@ -513,7 +513,7 @@ def start_clients_remote(c, leaderId ,serverPort, value, logSuffix=""):
             print(f"Failed to start client {replica_id+1} on {replica_ip}: {e}")
             continue
         
-    sleep(300)
+    sleep(200)
     for replica_id, node in enumerate(nodes):
         replica_ip = node["host"]
         replica_port = node["port"]
@@ -569,7 +569,7 @@ def start_clients_remote(c, leaderId ,serverPort, value, logSuffix=""):
     print(f"Archived logs in ./{folder_name}")                        # <<< NEW >>>
     
     
-# invoke batch-experiments-motivation --leaderId 1 --serverPort 10083 --value 5
+# invoke batch-experiments-motivation --leaderId 1 --serverPort 10083 --value 5 --runs 1
 @task
 def batch_experiments_motivation(c, leaderId, serverPort, value, runs=5):
     """
@@ -962,3 +962,124 @@ def automate_exp(c, config_files):
         download_logs_default(c)
 
     print("\nAll automated experiments completed.")
+
+
+
+# ----------------------------------------------------------------------
+# Assumes `nodes` and `username` are already defined globally, and that
+# remote_thp_summary.py / merge_thp_summaries.py are in ~/frugal-leader-election/scripts
+# ----------------------------------------------------------------------
+
+REMOTE_BASE = "~/frugal-leader-election"
+BIN_CLIENT  = "bazel-bin/client"
+SCRIPT_DIR  = f"{REMOTE_BASE}/scripts"
+REMOTE_THP  = f"{SCRIPT_DIR}/remote_thp_summary.py"
+LOCAL_MERGE = "merge_thp_summaries.py"           # must be in $PWD or give full path
+
+@task
+def start_clients_remote_collect(c,
+                                 leaderId,
+                                 serverPort,
+                                 value,
+                                 logSuffix="",
+                                 run_seconds=200):
+    """
+    Launch clients on 5 remote nodes, wait, stop them, generate per‑node
+    throughput summaries remotely, download them, and merge into a single plot.
+    """
+
+    # -------------------------------------------------
+    # 0.  Convenience data
+    # -------------------------------------------------
+    sendMode = "maxcap"
+    bind_ips   = ["10.0.0.2", "10.0.0.3", "10.0.4.2", "10.0.1.2", "10.0.1.3"]
+    serverIp   = bind_ips[int(leaderId)]
+    client_ids = [random.randint(1, 9999) for _ in range(5)]
+
+    # -------------------------------------------------
+    # 1.  Start clients
+    # -------------------------------------------------
+    for replica_id, node in enumerate(nodes[:5]):
+        replica_ip = node["host"]
+        print(f"[{replica_ip}] launching client")
+        try:
+            conn = Connection(host=replica_ip, user=username, port=node["port"])
+            conn.sudo("killall client", warn=True)
+            cmd = (
+                f"cd {REMOTE_BASE} && "
+                f"nohup {BIN_CLIENT} {serverIp} {serverPort} {sendMode} {value} "
+                f"{client_ids[replica_id]} {bind_ips[replica_id]} "
+                f"> client_remote.log 2>&1 &"
+            )
+            conn.run(cmd, pty=False, asynchronous=True)
+        except Exception as e:
+            print(f"‼️  start failed on {replica_ip}: {e}")
+
+    # -------------------------------------------------
+    # 2.  Wait for experiment, then kill clients
+    # -------------------------------------------------
+    sleep(run_seconds)
+    for node in nodes[:5]:
+        replica_ip = node["host"]
+        try:
+            Connection(host=replica_ip, user=username, port=node["port"]).sudo(
+                "killall client", pty=False, asynchronous=True
+            )
+        except Exception as e:
+            print(f"‼️  kill failed on {replica_ip}: {e}")
+
+    # -------------------------------------------------
+    # 3.  Run remote_thp_summary.py on each node
+    # -------------------------------------------------
+    for node in nodes[:5]:
+        replica_ip = node["host"]
+        try:
+            conn = Connection(host=replica_ip, user=username, port=node["port"])
+            cmd = (
+                f"cd {REMOTE_BASE} && "
+                f"python3 {REMOTE_THP} client_remote.log --out thp_summary.csv"
+            )
+            conn.run(cmd, hide="stdout")
+        except Exception as e:
+            print(f"‼️  summary generation failed on {replica_ip}: {e}")
+
+    # -------------------------------------------------
+    # 4.  Pull logs & CSVs back to workstation
+    # -------------------------------------------------
+    for replica_id, node in enumerate(nodes[:5]):
+        replica_ip = node["host"]
+        try:
+            conn = Connection(host=replica_ip, user=username, port=node["port"])
+            conn.get(f"{REMOTE_BASE}/client_remote.log",
+                     local=f"client_remote_{replica_id}.log")
+            conn.get(f"{REMOTE_BASE}/thp_summary.csv",
+                     local=f"thp_{replica_id}.csv")
+        except Exception as e:
+            print(f"‼️  download failed from {replica_ip}: {e}")
+
+    # -------------------------------------------------
+    # 5.  Merge summaries locally
+    # -------------------------------------------------
+    csv_files = sorted(glob.glob("thp_*.csv"))
+    if csv_files:
+        try:
+            subprocess.run(
+                ["python3", LOCAL_MERGE, *csv_files,
+                 "--plot", "combined_throughput.png",
+                 "--csv",  "combined_throughput.csv"],
+                check=True)
+            print("✅ merged plot generated: combined_throughput.png")
+        except subprocess.CalledProcessError as e:
+            print(f"‼️  merge script failed: {e}")
+
+    # -------------------------------------------------
+    # 6.  Archive everything
+    # -------------------------------------------------
+    ts_folder = datetime.now().strftime(f"leader{leaderId}_%Y%m%d_%H%M%S")
+    os.makedirs(ts_folder, exist_ok=True)
+    for f in glob.glob("client_remote_*.log") + glob.glob("thp_*.csv"):
+        try:
+            shutil.move(f, os.path.join(ts_folder, f))
+        except Exception as e:
+            print(f"‼️  archiving {f} failed: {e}")
+    print(f"📦  archived logs & CSVs -> {ts_folder}")
