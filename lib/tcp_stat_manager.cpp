@@ -65,7 +65,7 @@ double TcpConnectionStats::jacobsonEst() const {
     LOG(INFO) << "SRTT: " << srtt << ", RTTVAR: " << rttvar;
 
     // Calculate Retransmission Timeout (RTO) using SRTT and RTTVAR
-    double rto = srtt + 4 * rttvar;
+    double rto = srtt/2 + 4 * rttvar;
 
     // Ensure RTO is at least a minimum threshold, in our case 300ms
     const double max_RTO = 800;

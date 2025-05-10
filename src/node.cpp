@@ -468,7 +468,7 @@ void Node::start_election_timeout(bool double_time, bool force_raft) {
                     using_raft_timeout = false;
                 } else if (election_timeout_bound == Jacobson) {
                     if (!double_time) {
-                        timeout = (stats.jacobsonEst() / 2 + heartbeat_interval_margin + delay_ms) / 1000;
+                        timeout = (stats.jacobsonEst() + heartbeat_interval_margin + delay_ms) / 1000;
                     } else {
                         timeout = (stats.jacobsonEst() + heartbeat_interval_margin + delay_ms) / 1000;
                     }

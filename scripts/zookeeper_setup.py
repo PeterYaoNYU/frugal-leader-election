@@ -686,7 +686,7 @@ if __name__ == "__main__":
     # start_zk_ensemble_with_designated_leader(group, 0)
     # run_ycsb_workload_from_node(1, 1, "zkProfile13.txt", contact_leader=False)
     clear_all_switch_weights()
-    setup_delay_fat_tree_normal(0.2, 50)
+    setup_delay_fat_tree_normal(0.2, 10)
     # setup_delay_fat_tree(0.1)
     
     # kill_leader_then_reinstatiate()

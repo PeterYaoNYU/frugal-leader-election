@@ -1193,10 +1193,9 @@ from math import sqrt
 
 @task
 def sum_remote_detect(c,
-                      logfile="logs/node.log",
                       skip_first=30,
-                      skip_last=0,
-                      log_suffix="detect"):
+                      skip_last=30,
+                      log_suffix="detect_netelect_50"):
     """
     Run remote_detect_stats.py on all 5 nodes, pull results, and compute
     the weighted mean/std‑dev of detection time (ms).
@@ -1215,9 +1214,10 @@ def sum_remote_detect(c,
         print(f"[{replica_ip}] computing detection‑time stats")
         try:
             conn = Connection(host=replica_ip, user=username, port=node["port"])
+            log_file = f"logs/node_{idx+1}.log"
             cmd = (
-                f"cd {REMOTE_BASE} && "
-                f"python3 {REMOTE_DETECT} {logfile} "
+                f"cd {SCRIPT_DIR} && "
+                f"python3 {REMOTE_DETECT} {log_file} "
                 f'--skip-first {skip_first} --skip-last {skip_last} '
                 f'--out detect_stats.txt'
             )
@@ -1234,7 +1234,7 @@ def sum_remote_detect(c,
         local_name = f"detect_{replica_id}.txt"
         try:
             conn = Connection(host=replica_ip, user=username, port=node["port"])
-            conn.get(f"{REMOTE_BASE}/detect_stats.txt", local=local_name)
+            conn.get(f"{SCRIPT_DIR}/detect_stats.txt", local=local_name)
             with open(local_name) as f:
                 cnt, m, s = map(float, f.read().split())
             per_node.append((int(cnt), m, s))
@@ -1276,3 +1276,11 @@ def sum_remote_detect(c,
         except Exception as e:
             print(f"‼️  archiving {f} failed: {e}")
     print(f"📦  archived detection stats → {ts_folder}")
+    
+@task
+def batch_sum_remote_detect(c):
+    for i in range(1, 2):
+        print(f"\n=== Starting experiment iteration {i} ===")
+        start_remote_default(c)
+        sleep(305)
+        sum_remote_detect(c, skip_first=30, skip_last=30, log_suffix=f"{i}")
