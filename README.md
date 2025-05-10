@@ -5,6 +5,13 @@ bazel-7.5.0 build //:leader_election
 bazel-7.5.0 build //:client
 ```
 
+``bash
+python3 overlay_thp_runs.py leader1_20250510_054902raft/ leader1_20250510_053331raft/ leader1_20250510_055658raft/ leader1_20250510_052535raft/ leader1_20250510_081550raft --trim-first 15 --trim-last 30
+
+
+python3 overlay_thp_runs.py leader1_20250510_062437Jacobson/ leader1_20250510_064031Jacobson/ leader1_20250510_064842Jacobson/ leader1_20250510_065650Jacobson/ leader1_20250510_072122Jacobson/ --trim-first 15 --trim-last 30
+```
+
 
 ```bash
 invoke start-client --serverIp 127.0.0.4 --serverPort 10999 --value 5 --bindIp 127.0.0.18

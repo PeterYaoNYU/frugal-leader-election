@@ -301,7 +301,7 @@ def start_remote_default(c):
             
             conn = Connection(host=replica_ip, user=username, port=node["port"])
             
-            cmd = f"cd frugal-leader-election && nohup {binary_path} --config={remote_config_path} --replicaId={replica_id} --minloglevel=2 > scripts/logs/node_{replica_id + 1}.log 2>&1 &"
+            cmd = f"cd frugal-leader-election && nohup {binary_path} --config={remote_config_path} --replicaId={replica_id} --minloglevel=0 > scripts/logs/node_{replica_id + 1}.log 2>&1 &"
             # cmd = f"cd frugal-leader-election && nohup {binary_path} --config={remote_config_path} --replicaId={replica_id} > scripts/logs/node_{replica_id + 1}.log 2>&1 &"
             
             print(cmd)
@@ -584,7 +584,8 @@ def batch_experiments_motivation(c, leaderId, serverPort, value, runs=5):
         print(f"\n=== Run {i}/{runs} ===")
         # 1) kick off the remote clients and archive logs
         start_remote_default(c)
-        start_clients_remote(c, leaderId, serverPort, value)
+        # start_clients_remote(c, leaderId, serverPort, value)
+        start_clients_remote_collect(c, leaderId, serverPort, value)    
         
 # invoke overhead-exp --serverIp 127.0.0.2 --serverPort 10999 --value 5 --bindIp 127.0.0.18  --bindIpTwo 127.0.0.19
 @task
@@ -981,8 +982,8 @@ def start_clients_remote_collect(c,
                                  leaderId,
                                  serverPort,
                                  value,
-                                 logSuffix="",
-                                 run_seconds=200):
+                                 logSuffix="raft",
+                                 run_seconds=300):
     """
     Launch clients on 5 remote nodes, wait, stop them, generate per‑node
     throughput summaries remotely, download them, and merge into a single plot.
@@ -1050,9 +1051,9 @@ def start_clients_remote_collect(c,
         replica_ip = node["host"]
         try:
             conn = Connection(host=replica_ip, user=username, port=node["port"])
-            conn.get(f"{REMOTE_BASE}/client_remote.log",
-                     local=f"client_remote_{replica_id}.log")
-            conn.get(f"{REMOTE_BASE}/thp_summary.csv",
+            # conn.get(f"{REMOTE_BASE}/client_remote.log",
+            #          local=f"client_remote_{replica_id}.log")
+            conn.get(f"/users/PeterYao/frugal-leader-election/thp_summary.csv",
                      local=f"thp_{replica_id}.csv")
         except Exception as e:
             print(f"‼️  download failed from {replica_ip}: {e}")
@@ -1073,13 +1074,102 @@ def start_clients_remote_collect(c,
             print(f"‼️  merge script failed: {e}")
 
     # -------------------------------------------------
-    # 6.  Archive everything
+    # 6.  Archive everything (logs, thp CSVs, and merged outputs)
     # -------------------------------------------------
-    ts_folder = datetime.now().strftime(f"leader{leaderId}_%Y%m%d_%H%M%S")
+    ts_folder = datetime.now().strftime(f"leader{leaderId}_%Y%m%d_%H%M%S{logSuffix}")
     os.makedirs(ts_folder, exist_ok=True)
+
+    # move client logs and per-node CSVs
     for f in glob.glob("client_remote_*.log") + glob.glob("thp_*.csv"):
         try:
             shutil.move(f, os.path.join(ts_folder, f))
         except Exception as e:
             print(f"‼️  archiving {f} failed: {e}")
-    print(f"📦  archived logs & CSVs -> {ts_folder}")
+
+    # move the combined plot and CSV if they exist
+    for fname in ("combined_throughput.png", "combined_throughput.csv"):
+        if os.path.exists(fname):
+            try:
+                shutil.move(fname, os.path.join(ts_folder, fname))
+            except Exception as e:
+                print(f"‼️  moving {fname} to archive failed: {e}")
+
+    print(f"📦  archived logs, CSVs, and merged outputs → {ts_folder}")
+    
+    
+    
+REMOTE_BASE   = "~/frugal-leader-election"
+SCRIPT_DIR    = f"{REMOTE_BASE}/scripts"
+REMOTE_COUNT  = f"{SCRIPT_DIR}/remote_count_timeouts.py"
+
+@task
+def sum_remote_timeouts(c,
+                        # logfile="node.log",
+                        skip_first=30,
+                        skip_last=30,
+                        log_suffix="timeouts"):
+    """
+    Execute remote_count_timeouts.py on all 5 nodes, fetch the results, and
+    output the grand total.
+
+    Parameters
+    ----------
+    logfile     : filename of the Raft log on each node (default: node.log)
+    skip_first  : seconds to skip from the beginning (default: 30)
+    skip_last   : seconds to skip from the end      (default: 0)
+    """
+    # -------------------------------------------------
+    # 1.  Run remote_count_timeouts.py on every node
+    # -------------------------------------------------
+    for idx, node in enumerate(nodes[:5]):
+        replica_ip = node["host"]
+        print(f"[{replica_ip}] counting election timeouts")
+        try:
+            conn = Connection(host=replica_ip, user=username, port=node["port"])
+            log_file = f"logs/node_{idx}"
+            cmd = (
+                f"cd {REMOTE_BASE} && "
+                f"python3 {REMOTE_COUNT} {log_file} "
+                f"--skip-first {skip_first} --skip-last {skip_last} "
+                f"--out timeout_count.txt"
+            )
+            conn.run(cmd, hide="stdout")
+        except Exception as e:
+            print(f"‼️  counting failed on {replica_ip}: {e}")
+
+    # -------------------------------------------------
+    # 2.  Pull timeout_count.txt files back
+    # -------------------------------------------------
+    totals = []
+    for replica_id, node in enumerate(nodes[:5]):
+        replica_ip = node["host"]
+        local_name = f"timeout_{replica_id}.txt"
+        try:
+            conn = Connection(host=replica_ip, user=username, port=node["port"])
+            conn.get(f"{REMOTE_BASE}/timeout_count.txt", local=local_name)
+            with open(local_name, "r") as f:
+                val = int(f.read().strip())
+            totals.append(val)
+            print(f"{replica_ip}: {val}")
+        except Exception as e:
+            print(f"‼️  download/parse failed from {replica_ip}: {e}")
+
+    grand_total = sum(totals)
+    print(f"\nTOTAL election‑timeouts: {grand_total}")
+
+    # also write a local file
+    with open("total_timeouts.txt", "w") as f:
+        f.write(str(grand_total) + "\n")
+
+    # -------------------------------------------------
+    # 3.  Archive the per‑node counts + total
+    # -------------------------------------------------
+    ts_folder = datetime.now().strftime(f"timeouts_%Y%m%d_%H%M%S{log_suffix}")
+    os.makedirs(ts_folder, exist_ok=True)
+    for f in glob.glob("timeout_*.txt") + ["total_timeouts.txt"]:
+        try:
+            shutil.move(f, os.path.join(ts_folder, f))
+        except Exception as e:
+            print(f"‼️  archiving {f} failed: {e}")
+
+    print(f"📦  archived timeout counts → {ts_folder}")
