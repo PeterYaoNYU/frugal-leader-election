@@ -1100,7 +1100,7 @@ def start_clients_remote_collect(c,
     
 REMOTE_BASE   = "~/frugal-leader-election"
 SCRIPT_DIR    = f"{REMOTE_BASE}/scripts"
-REMOTE_COUNT  = f"{SCRIPT_DIR}/remote_count_timeouts.py"
+REMOTE_COUNT  = f"remote_count_timeouts.py"
 
 @task
 def sum_remote_timeouts(c,
@@ -1126,9 +1126,9 @@ def sum_remote_timeouts(c,
         print(f"[{replica_ip}] counting election timeouts")
         try:
             conn = Connection(host=replica_ip, user=username, port=node["port"])
-            log_file = f"logs/node_{idx}"
+            log_file = f"logs/node_{idx+1}.log"
             cmd = (
-                f"cd {REMOTE_BASE} && "
+                f"cd /users/PeterYao/frugal-leader-election/scripts && "
                 f"python3 {REMOTE_COUNT} {log_file} "
                 f"--skip-first {skip_first} --skip-last {skip_last} "
                 f"--out timeout_count.txt"
