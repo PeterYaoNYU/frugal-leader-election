@@ -1424,14 +1424,7 @@ void Node::send_petition(const std::string& proposed_leader, double latency_to_l
     peer_addr.sin_port = htons(proposed_leader_port);
     inet_pton(AF_INET, proposed_leader_ip.c_str(), &peer_addr.sin_addr);
 
-    ssize_t nsend = sendto(sock_fd, serialized_message.c_str(), serialized_message.size(), 0,
-                           (sockaddr*)&peer_addr, sizeof(peer_addr));
-
-    if (nsend == -1) {
-        LOG(ERROR) << "Failed to send petition to " << proposed_leader;
-    } else {
-        LOG(INFO) << "Sent petition to " << proposed_leader;
-    }
+    sendSerialized(peerIdFromIp(proposed_leader_ip), serialized_message, peer_addr);
 }
 
 

@@ -461,6 +461,32 @@ def setup_delay_fat_tree(lat):
             switch_conn.run(delete_command)
             switch_conn.run(add_command)
             print(f"Delay added to {interface} on Switch {switch_id} with {lat}ms")
+            
+            
+def setup_delay_fat_tree_normal(lat, stddev):
+    # enfore a delay to all siwtches interfaces. 
+    for switch in switch_info:
+        switch_id = switch.get("id")
+        switch_conn = switch.get("connection")
+        if switch_conn is None:
+            print(f"Switch {switch_id} not found in connections.")
+        interface_info = switch.get("interfaces")
+        print("switch id: ", switch_id)
+        for interface in interface_info.keys():
+            print("Interface name: ", interface)
+            delete_command = f"sudo tc qdisc del dev {interface} root || true"
+            if switch_id == 4:
+                temp_lat = lat * 3
+                add_command = (
+                    f"sudo tc qdisc add dev {interface} root netem delay {temp_lat}ms {stddev}ms distribution normal"
+                )
+            else:
+                add_command = (
+                    f"sudo tc qdisc add dev {interface} root netem delay {lat}ms {stddev}ms distribution normal"
+                )
+            switch_conn.run(delete_command)
+            switch_conn.run(add_command)
+            print(f"Delay added to {interface} on Switch {switch_id} with {lat}ms")
 
 def clear_all_switch_weights():
     for switch in switch_info:
@@ -645,7 +671,7 @@ def upload_new_logback_xml(connections):
 # Execute setup on all nodes concurrently
 if __name__ == "__main__":
     group = ThreadingGroup(*nodes)
-    load_connections("fattree_physical.yaml")
+    load_connections("fattree.yaml")
     # upload_new_logback_xml(connections)
     # setup_ycsb([0, 1, 2, 3, 4])
     # install_zookeeper_parallel(connections)
@@ -660,6 +686,7 @@ if __name__ == "__main__":
     # start_zk_ensemble_with_designated_leader(group, 0)
     # run_ycsb_workload_from_node(1, 1, "zkProfile13.txt", contact_leader=False)
     clear_all_switch_weights()
+    setup_delay_fat_tree_normal(0.2, 50)
     # setup_delay_fat_tree(0.1)
     
     # kill_leader_then_reinstatiate()

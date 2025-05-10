@@ -1106,8 +1106,9 @@ REMOTE_COUNT  = f"remote_count_timeouts.py"
 def sum_remote_timeouts(c,
                         # logfile="node.log",
                         skip_first=30,
-                        skip_last=30,
-                        log_suffix="timeouts"):
+                        skip_last=50,
+                        log_suffix="timeouts",
+                        suffix="raft"):
     """
     Execute remote_count_timeouts.py on all 5 nodes, fetch the results, and
     output the grand total.
@@ -1118,6 +1119,9 @@ def sum_remote_timeouts(c,
     skip_first  : seconds to skip from the beginning (default: 30)
     skip_last   : seconds to skip from the end      (default: 0)
     """
+    
+    start_remote_default(c)
+    sleep(305)
     # -------------------------------------------------
     # 1.  Run remote_count_timeouts.py on every node
     # -------------------------------------------------
@@ -1146,7 +1150,7 @@ def sum_remote_timeouts(c,
         local_name = f"timeout_{replica_id}.txt"
         try:
             conn = Connection(host=replica_ip, user=username, port=node["port"])
-            conn.get(f"{REMOTE_BASE}/timeout_count.txt", local=local_name)
+            conn.get(f"/users/PeterYao/frugal-leader-election/scripts/timeout_count.txt", local=local_name)
             with open(local_name, "r") as f:
                 val = int(f.read().strip())
             totals.append(val)
@@ -1164,7 +1168,7 @@ def sum_remote_timeouts(c,
     # -------------------------------------------------
     # 3.  Archive the per‑node counts + total
     # -------------------------------------------------
-    ts_folder = datetime.now().strftime(f"timeouts_%Y%m%d_%H%M%S{log_suffix}")
+    ts_folder = datetime.now().strftime(f"timeouts_%Y%m%d_%H%M%S{suffix}")
     os.makedirs(ts_folder, exist_ok=True)
     for f in glob.glob("timeout_*.txt") + ["total_timeouts.txt"]:
         try:
@@ -1173,3 +1177,102 @@ def sum_remote_timeouts(c,
             print(f"‼️  archiving {f} failed: {e}")
 
     print(f"📦  archived timeout counts → {ts_folder}")
+    
+    
+@task
+def batch_sum_remote_timeouts(c):
+    for i in range(1, 4):
+        print(f"\n=== Starting experiment iteration {i} ===")
+        sum_remote_timeouts(c, skip_first=30, skip_last=50, log_suffix="Jacob", suffix=f"raft_{i}")
+
+
+REMOTE_BASE   = "/users/PeterYao/frugal-leader-election"
+SCRIPT_DIR    = f"{REMOTE_BASE}/scripts"
+REMOTE_DETECT = f"{SCRIPT_DIR}/remote_detect_stats.py"
+from math import sqrt
+
+@task
+def sum_remote_detect(c,
+                      logfile="logs/node.log",
+                      skip_first=30,
+                      skip_last=0,
+                      log_suffix="detect"):
+    """
+    Run remote_detect_stats.py on all 5 nodes, pull results, and compute
+    the weighted mean/std‑dev of detection time (ms).
+
+    Parameters
+    ----------
+    logfile     : path *relative to REMOTE_BASE* for each node
+    skip_first  : seconds to skip at start of each log
+    skip_last   : seconds to skip at end of each log
+    """
+    # -------------------------------------------------
+    # 1.  Execute remote_detect_stats.py on each node
+    # -------------------------------------------------
+    for idx, node in enumerate(nodes[:5]):
+        replica_ip = node["host"]
+        print(f"[{replica_ip}] computing detection‑time stats")
+        try:
+            conn = Connection(host=replica_ip, user=username, port=node["port"])
+            cmd = (
+                f"cd {REMOTE_BASE} && "
+                f"python3 {REMOTE_DETECT} {logfile} "
+                f'--skip-first {skip_first} --skip-last {skip_last} '
+                f'--out detect_stats.txt'
+            )
+            conn.run(cmd, hide="stdout")
+        except Exception as e:
+            print(f"‼️  stats generation failed on {replica_ip}: {e}")
+
+    # -------------------------------------------------
+    # 2.  Pull detect_stats.txt files back
+    # -------------------------------------------------
+    per_node = []   # list of (count, mean, std)
+    for replica_id, node in enumerate(nodes[:5]):
+        replica_ip = node["host"]
+        local_name = f"detect_{replica_id}.txt"
+        try:
+            conn = Connection(host=replica_ip, user=username, port=node["port"])
+            conn.get(f"{REMOTE_BASE}/detect_stats.txt", local=local_name)
+            with open(local_name) as f:
+                cnt, m, s = map(float, f.read().split())
+            per_node.append((int(cnt), m, s))
+            print(f"{replica_ip}: n={cnt}, mean={m:.3f} ms, std={s:.3f} ms")
+        except Exception as e:
+            print(f"‼️  download/parse failed from {replica_ip}: {e}")
+
+    # -------------------------------------------------
+    # 3.  Weighted mean & std across all nodes
+    # -------------------------------------------------
+    total_n = sum(n for n, _, _ in per_node)
+    if total_n == 0:
+        print("⚠️  No samples found on any node.")
+        return
+
+    weighted_mean = sum(n * m for n, m, _ in per_node) / total_n
+
+    # Weighted population variance:
+    var = sum(n * (s**2 + (m - weighted_mean)**2) for n, m, s in per_node) / total_n
+    weighted_std = sqrt(var)
+
+    print(f"\nOverall weighted mean = {weighted_mean:.3f} ms")
+    print(f"Overall weighted std  = {weighted_std:.3f} ms")
+
+    # Save summary
+    with open("detect_summary.txt", "w") as f:
+        f.write(f"total_samples {total_n}\n")
+        f.write(f"weighted_mean_ms {weighted_mean:.6f}\n")
+        f.write(f"weighted_std_ms  {weighted_std:.6f}\n")
+
+    # -------------------------------------------------
+    # 4.  Archive everything
+    # -------------------------------------------------
+    ts_folder = datetime.now().strftime(f"detect_%Y%m%d_%H%M%S{log_suffix}")
+    os.makedirs(ts_folder, exist_ok=True)
+    for f in glob.glob("detect_*.txt") + ["detect_summary.txt"]:
+        try:
+            shutil.move(f, os.path.join(ts_folder, f))
+        except Exception as e:
+            print(f"‼️  archiving {f} failed: {e}")
+    print(f"📦  archived detection stats → {ts_folder}")

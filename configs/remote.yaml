@@ -27,7 +27,7 @@ replica:
   confidenceLevel: 0.999
   testPetition: false
   heartbeatIntervalMargin: 75
-  safetyMarginLowerBound: 25
+  safetyMarginLowerBound: 45
   safetyMarginStepSize: 2
   workerThreadsCount: 11
   fdMode: Jacobson
@@ -38,4 +38,4 @@ replica:
   senderThreadsCount: 8
   spinCheckCount: 4
   spinCheckInterval: 18
-  tcpMonitorFrequency: 100
+  tcpMonitorFrequency: 10
