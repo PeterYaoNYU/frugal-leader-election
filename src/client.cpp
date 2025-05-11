@@ -237,8 +237,11 @@ void Client::handle_response(const std::string& response_data,  sockaddr_in& fro
                 LOG(INFO) << "Updated leader to " << leader_ip << ":" << leader_port;
 
                 if (mode_ == MAX_IN_FLIGHT) {
-                    for (int i = 0; i < max_in_flight_; i++) {
+                    send_request();
+                    sleep(1);
+                    while (in_flight_ < max_in_flight_) {
                         send_request();
+                        sleep(0.5);
                     }
                 }
 
