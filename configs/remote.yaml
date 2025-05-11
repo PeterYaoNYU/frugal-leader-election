@@ -11,7 +11,7 @@ replica:
   - "eth1"
   - "eth1"
   - "eth1"
-  runtimeSeconds: 500
+  runtimeSeconds: 2000
   timeoutLowerBound: 150
   timeoutUpperBound: 300
   failureLeader: false
@@ -39,4 +39,4 @@ replica:
   spinCheckCount: 4
   spinCheckInterval: 18
   tcpMonitorFrequency: 10
-  latencyThreshold: 15
+  latencyThreshold: 8

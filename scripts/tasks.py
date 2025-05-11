@@ -1291,3 +1291,138 @@ def batch_sum_remote_timeouts(c):
             print(f"\n=== Starting experiment iteration {i} ===")
             sum_remote_timeouts(c, skip_first=30, skip_last=30, log_suffix="Jacob", suffix=f"raft_{i}")
             sum_remote_detect(c, skip_first=30, skip_last=30, log_suffix=f"{i}")
+
+# invoke test-petition --leaderId 3 --serverPort 10083 --value 5
+@task
+def test_petition(c, leaderId, serverPort, value):
+    replica_ip = nodes[3]["host"]
+    conn = Connection(host=replica_ip, user=username, port=nodes[3]["port"])
+    cmd = f"sudo tc qdisc del dev enp65s0f0np0 root || true ; sudo tc qdisc add dev enp65s0f0np0 root netem delay 0.5ms"
+    conn.run(cmd, warn=True)
+    
+    start_remote_default(c)
+    
+    # -------------------------------------------------
+    # 0.  Convenience data
+    # -------------------------------------------------
+    sendMode = "maxcap"
+    bind_ips   = ["10.0.0.2", "10.0.0.3", "10.0.4.2", "10.0.1.2", "10.0.1.3"]
+    serverIp   = bind_ips[int(leaderId)]
+    client_ids = [random.randint(1, 9999) for _ in range(5)]
+
+    # -------------------------------------------------
+    # 1.  Start clients
+    # -------------------------------------------------
+    for replica_id, node in enumerate(nodes[:5]):
+        replica_ip = node["host"]
+        print(f"[{replica_ip}] launching client")
+        try:
+            conn = Connection(host=replica_ip, user=username, port=node["port"])
+            conn.sudo("killall client", warn=True)
+            cmd = (
+                f"cd {REMOTE_BASE} && "
+                f"nohup {BIN_CLIENT} {serverIp} {serverPort} {sendMode} {value} "
+                f"{client_ids[replica_id]} {bind_ips[replica_id]} "
+                f"> client_remote.log 2>&1 &"
+            )
+            conn.run(cmd, pty=False, asynchronous=True)
+        except Exception as e:
+            print(f"‼️  start failed on {replica_ip}: {e}")
+    
+    
+    
+    # -------------------------------------------------
+    # Inject Delay
+    # ------------------------------------------------- 
+    sleep(30)
+
+    print("Injecting delay...!!!")
+    cmd = f"sudo tc qdisc del dev enp65s0f0np0 root || true ; sudo tc qdisc add dev enp65s0f0np0 root netem delay 20ms"
+    conn.run(cmd, warn=True)
+    cmd_check = "sudo tc qdis show dev enp65s0f0np0"
+    conn.run(cmd_check, warn=True)
+    
+    sleep(120)
+    
+    # -------------------------------------------------
+    
+    for node in nodes[:5]:
+        replica_ip = node["host"]
+        try:
+            Connection(host=replica_ip, user=username, port=node["port"]).sudo(
+                "killall client leader_election", pty=False, asynchronous=True
+            )
+        except Exception as e:
+            print(f"‼️  kill failed on {replica_ip}: {e}")
+
+    # -------------------------------------------------
+    # 3.  Run remote_thp_summary.py on each node
+    # -------------------------------------------------
+    for node in nodes[:5]:
+        replica_ip = node["host"]
+        try:
+            conn = Connection(host=replica_ip, user=username, port=node["port"])
+            cmd = (
+                f"cd {REMOTE_BASE} && "
+                f"python3 {REMOTE_THP} client_remote.log --out thp_summary.csv"
+            )
+            conn.run(cmd, hide="stdout")
+        except Exception as e:
+            print(f"‼️  summary generation failed on {replica_ip}: {e}")
+
+    # -------------------------------------------------
+    # 4.  Pull logs & CSVs back to workstation
+    # -------------------------------------------------
+    for replica_id, node in enumerate(nodes[:5]):
+        replica_ip = node["host"]
+        try:
+            conn = Connection(host=replica_ip, user=username, port=node["port"])
+            # conn.get(f"{REMOTE_BASE}/client_remote.log",
+            #          local=f"client_remote_{replica_id}.log")
+            conn.get(f"/users/PeterYao/frugal-leader-election/thp_summary.csv",
+                     local=f"thp_{replica_id}.csv")
+        except Exception as e:
+            print(f"‼️  download failed from {replica_ip}: {e}")
+
+    # -------------------------------------------------
+    # 5.  Merge summaries locally
+    # -------------------------------------------------
+    csv_files = sorted(glob.glob("thp_*.csv"))
+    if csv_files:
+        try:
+            subprocess.run(
+                ["python3", LOCAL_MERGE, *csv_files,
+                 "--plot", "combined_throughput.png",
+                 "--csv",  "combined_throughput.csv"],
+                check=True)
+            print("✅ merged plot generated: combined_throughput.png")
+        except subprocess.CalledProcessError as e:
+            print(f"‼️  merge script failed: {e}")
+
+    # -------------------------------------------------
+    # 6.  Archive everything (logs, thp CSVs, and merged outputs)
+    # -------------------------------------------------
+    ts_folder = datetime.now().strftime(f"petition_%Y%m%d_%H%M%S")
+    os.makedirs(ts_folder, exist_ok=True)
+
+    # move client logs and per-node CSVs
+    for f in glob.glob("client_remote_*.log") + glob.glob("thp_*.csv"):
+        try:
+            shutil.move(f, os.path.join(ts_folder, f))
+        except Exception as e:
+            print(f"‼️  archiving {f} failed: {e}")
+
+    # move the combined plot and CSV if they exist
+    for fname in ("combined_throughput.png", "combined_throughput.csv"):
+        if os.path.exists(fname):
+            try:
+                shutil.move(fname, os.path.join(ts_folder, fname))
+            except Exception as e:
+                print(f"‼️  moving {fname} to archive failed: {e}")
+
+    print(f"📦  archived logs, CSVs, and merged outputs → {ts_folder}")
+    
+    
+    
+       
+    

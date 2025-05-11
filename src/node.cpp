@@ -1660,7 +1660,7 @@ void Node::send_client_response(const raft::client::ClientResponse& response, co
 
 void Node::handle_petition(const raft::leader_election::Petition& petition_msg, const sockaddr_in& sender_addr) {
     std::string proposed_leader = petition_msg.proposed_leader();
-    double reported_latency = petition_msg.latency_to_leader();
+    double reported_lat = petition_msg.latency_to_leader();
     std::string sender_id = petition_msg.sender_id();
 
     int received_term = petition_msg.term();
@@ -1680,20 +1680,32 @@ void Node::handle_petition(const raft::leader_election::Petition& petition_msg, 
         return;
     }
 
-    latency_to_leader[sender_id] = reported_latency;
-
-    LOG(INFO) << "Received petition from " << sockaddr_to_string(sender_addr)
-              << " proposing leader " << proposed_leader
-              << " due to high latency to current leader (" << reported_latency << " ms)";
-
-    // Update petition count
+    //------------------------------------------------------------------
+    //  Record petition only once per sender
+    //------------------------------------------------------------------
     {
-        std::lock_guard<std::mutex> lock(petition_mutex);
-        petition_count++;
+        std::lock_guard lg(petition_mutex);
+
+        /*  latency_to_leader is our “who‑has‑petitioned” map.
+            If we have NOT seen this sender before, record it and
+            bump the unique‑petition counter.                        */
+        auto [it, inserted] = latency_to_leader.emplace(sender_id, reported_lat);
+        if (!inserted) {
+            /* already had a petition from this sender – overwrite the
+               stored latency but DO NOT double‑count the petition   */
+            it->second = reported_lat;
+            LOG(INFO) << "Duplicate petition from " << sender_id
+                      << " ignored (latency updated).";
+            return;
+        }
+
+        petition_count = static_cast<int>(latency_to_leader.size());   // unique senders
+        LOG(INFO) << "Unique petitions so far: " << petition_count
+                  << " (majority = "          << majority_count << ")";
     }
 
 
-    if (petition_count >= majority_count) {
+    if (petition_count >= majority_count-1) {
         LOG(INFO) << "Received petitions from majority for proposed leader " << proposed_leader;
         bool petition_succeed = true;
 
@@ -1704,7 +1716,7 @@ void Node::handle_petition(const raft::leader_election::Petition& petition_msg, 
 
             // TODO: Remove the 20 ms margin
             // the 20 is for testing purposes, and should be removed later.
-            if (my_latency > latency + 20) {
+            if (my_latency > latency) {
                 petition_succeed = false;
                 break;
             }

@@ -14,6 +14,22 @@ python3 overlay_thp_runs.py leader1_20250510_062437Jacobson/ leader1_20250510_06
 
 
 ```bash
+enp65s0f0np0
+
+PeterYao@node-3:~$ sudo tc qdis show dev enp65s0f0np0
+qdisc netem 8001: root refcnt 513 limit 1000 delay 499us
+
+sudo tc qdisc del dev enp65s0f0np0 root || true
+sudo tc qdisc add dev enp65s0f0np0 root netem delay 20ms
+
+
+sudo tc qdisc del dev enp65s0f0np0 root || true
+sudo tc qdisc add dev enp65s0f0np0 root netem delay 0.5ms
+
+```
+
+
+```bash
 invoke start-client --serverIp 127.0.0.4 --serverPort 10999 --value 5 --bindIp 127.0.0.18
 invoke start-clients-remote --leaderId 0 --serverPort 10083 --value 5
 invoke start-client-remote --remoteHostId 5 --serverIp 10.0.0.3 --serverPort 10083 --value 5 --bindIp 10.0.3.1
