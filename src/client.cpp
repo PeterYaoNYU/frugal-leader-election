@@ -127,7 +127,7 @@ void Client::send_request() {
         }
 
         // cancel the previous timeout timer, and start a new one.
-        if (mode_ == MAX_IN_FLIGHT) {
+        if (mode_ != MAX_IN_FLIGHT) {
             ev_timer_stop(loop_, &timeout_timer_);
             ev_timer_init(&timeout_timer_, timeout_cb, timeout_interval_, timeout_interval_);
             ev_timer_start(loop_, &timeout_timer_);
@@ -229,6 +229,12 @@ void Client::handle_response(const std::string& response_data,  sockaddr_in& fro
                 server_addr_.sin_family = AF_INET;
                 server_addr_.sin_port = htons(leader_port);
                 LOG(INFO) << "Updated leader to " << leader_ip << ":" << leader_port;
+
+                if (mode_ == MAX_IN_FLIGHT) {
+                    for (int i = 0; i < max_in_flight_; i++) {
+                        send_request();
+                    }
+                }
 
             }
         } else {
