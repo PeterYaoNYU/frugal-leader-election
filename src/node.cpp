@@ -1893,7 +1893,7 @@ void Node::updated_commit_index() {
                 ts << std::put_time(std::localtime(&in_time_t), "%Y-%m-%d %H:%M:%S")
                    << "." << std::setfill('0') << std::setw(6) << micros.count();
 
-                // LOG(WARNING) << "Commit for: " << entry.command << " at " << ts.str() << " with quorum size: " << quorum.size() << " " << quorum[0] << " " << quorum[1] << " " << quorum[2] << " " ;
+                LOG(WARNING) << "Commit for: " << entry.command << " at " << ts.str() << " with quorum size: " << quorum.size() << " " << quorum[0] << " " << quorum[1] << " " << quorum[2] << " " ;
             }
         }
     }
