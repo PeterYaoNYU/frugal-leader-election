@@ -1335,7 +1335,7 @@ def test_petition(c, leaderId, serverPort, value):
     # -------------------------------------------------
     # Inject Delay
     # ------------------------------------------------- 
-    sleep(30)
+    sleep(45)
 
     print("Injecting delay...!!!")
     replica_ip = nodes[3]["host"]
@@ -1346,7 +1346,9 @@ def test_petition(c, leaderId, serverPort, value):
     cmd_check = "sudo tc qdis show dev enp65s0f0np0"
     conn.run(cmd_check, warn=True)
     
-    sleep(140)
+    sleep(160)
+    
+    print("Start calculating throughput")
     
     # -------------------------------------------------
     

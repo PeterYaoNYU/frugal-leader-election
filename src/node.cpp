@@ -1864,6 +1864,7 @@ void Node::updated_commit_index() {
     int old_commit_index = raftLog.getCommitIndex();
     int new_commit_index = raftLog.getCommitIndex();
     int last_log_index = raftLog.getLastLogIndex();
+    LOG(INFO) << "Old commit index: " << old_commit_index << ", New commit index: " << new_commit_index;
     for (int i = raftLog.getCommitIndex() + 1; i <= last_log_index; i++) {
         int count = 1; // Count self
 
