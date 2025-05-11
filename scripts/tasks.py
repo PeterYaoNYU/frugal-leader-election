@@ -1346,7 +1346,7 @@ def test_petition(c, leaderId, serverPort, value):
     cmd_check = "sudo tc qdis show dev enp65s0f0np0"
     conn.run(cmd_check, warn=True)
     
-    sleep(120)
+    sleep(140)
     
     # -------------------------------------------------
     

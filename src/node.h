@@ -302,6 +302,7 @@ private:
     static void failure_cb(EV_P_ ev_timer* w, int revents);
 
     void send_request_vote();
+    void send_request_vote(bool is_peition);
     void send_vote_response(const raft::leader_election::VoteResponse& response, const sockaddr_in& addr);
     void send_append_entries_response(const raft::leader_election::AppendEntriesResponse& response, const sockaddr_in& recipient_addr);
 

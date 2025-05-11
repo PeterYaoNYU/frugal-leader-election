@@ -33,7 +33,7 @@ replica:
   fdMode: raft
   clientPort: 10083
   internalBasePort: 8230
-  eligibleLeaders: [3]
+  eligibleLeaders: [3, 4]
   checkOverhead: false
   senderThreadsCount: 8
   spinCheckCount: 4

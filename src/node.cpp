@@ -544,12 +544,45 @@ void Node::election_timeout_cb(EV_P_ ev_timer* w, int revents) {
     self->send_request_vote();
 }
 
+
 void Node::send_request_vote() {
     raft::leader_election::RequestVote request;
     request.set_term(current_term);
     request.set_candidate_id(self_ip + ":" + std::to_string(port));
     request.set_last_log_index(raftLog.getLastLogIndex());
     request.set_last_log_term(raftLog.getLastLogTerm());
+
+    raft::leader_election::MessageWrapper wrapper;
+    wrapper.set_type(raft::leader_election::MessageWrapper::REQUEST_VOTE);
+    wrapper.set_payload(request.SerializeAsString());
+
+    std::string serialized_message = wrapper.SerializeAsString();
+
+    for (const auto& [ip, peer_port] : peer_addresses) {
+        int id  = peerIdFromIp(ip);                 // ←  peer‑id
+        sockaddr_in dst{};
+        dst.sin_family = AF_INET;
+        dst.sin_port   = htons(peer_port);
+        inet_pton(AF_INET, ip.c_str(), &dst.sin_addr);
+
+        // sendToPeer(id, std::move(wrapper), dst);
+        sendSerialized(id, serialized_message, dst);
+        LOG(INFO) << "Sent RequestVote to " << ip << ":" << peer_port;
+    }
+}
+
+void Node::send_request_vote(bool is_petition) {
+    raft::leader_election::RequestVote request;
+    request.set_term(current_term);
+    request.set_candidate_id(self_ip + ":" + std::to_string(port));
+    request.set_last_log_index(raftLog.getLastLogIndex());
+    request.set_last_log_term(raftLog.getLastLogTerm());
+
+    if (is_petition) {
+        request.set_is_petition(true);
+    } else {
+        request.set_is_petition(false);
+    }
 
     raft::leader_election::MessageWrapper wrapper;
     wrapper.set_type(raft::leader_election::MessageWrapper::REQUEST_VOTE);
@@ -894,6 +927,8 @@ void Node::handle_request_vote(const raft::leader_election::RequestVote& request
         petition_count = 0;
         role = Role::FOLLOWER;
         voted_for = ""; 
+        current_leader_ip = "";
+        current_leader_port = -1;
         LOG(INFO) << "Got newer request vote. Received request vote from " << candidate_id << " for term " << received_term << ". Current term updated to: " << current_term;
     }
 
@@ -910,6 +945,12 @@ void Node::handle_request_vote(const raft::leader_election::RequestVote& request
                   << ", Candidate last log index: " << request.last_log_index() 
                   << ", My last log term: " << last_log_term 
                   << ", My last log index: " << last_log_index;
+    }
+
+    // a green way for petitions. Catch up later. 
+    if (request.is_petition()) {
+        LOG(INFO) << "Received request vote petition from " << candidate_id << " for term " << received_term;
+        candidate_up_to_date = true;
     }
 
     // this is important, ensure that a node only votes once per term. 
@@ -1188,6 +1229,7 @@ void Node::handle_append_entries(const raft::leader_election::AppendEntries& app
         latency_to_leader.clear();
         petition_count = 0;
         if (role == Role::LEADER) {
+            LOG(INFO) << "Received heartbeat from a new leader with bigger term. Stopping heartbeat timer and resetting election timeout...";
             isOldLeader = true;
         }
     }
@@ -1745,7 +1787,7 @@ void Node::handle_petition(const raft::leader_election::Petition& petition_msg, 
 
             // start_election_timeout();
             reset_election_timeout();
-            send_request_vote();
+            send_request_vote(true);
         //     current_term++;
         //     role = Role::CANDIDATE;
         //     voted_for = self_ip + ":" + std::to_string(port);
