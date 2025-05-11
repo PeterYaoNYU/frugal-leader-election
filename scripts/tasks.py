@@ -1190,7 +1190,7 @@ from math import sqrt
 def sum_remote_detect(c,
                       skip_first=30,
                       skip_last=30,
-                      log_suffix="detect_netelect_50"):
+                      log_suffix=""):
     """
     Run remote_detect_stats.py on all 5 nodes, pull results, and compute
     the weighted mean/std‑dev of detection time (ms).

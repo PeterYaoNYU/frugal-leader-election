@@ -71,6 +71,8 @@ struct ProcessConfig {
 
     int tcpMonitorFrequency;
 
+    double latency_threshold;
+
     template <class T> T parseField(const YAML::Node &parent, const std::string &key)
     {
         if (!parent[key]) {
@@ -168,6 +170,7 @@ struct ProcessConfig {
             spinCheckCount = parseField<int>(replicaNode, "spinCheckCount");
             spinCheckInterval = parseField<int>(replicaNode, "spinCheckInterval");
             tcpMonitorFrequency = parseField<int>(replicaNode, "tcpMonitorFrequency");
+            latency_threshold = parseField<double>(replicaNode, "latencyThreshold");
         } catch (const ConfigParseException &e) {
             throw ConfigParseException("Error parsing replica " + std::string(e.what()));
         }

@@ -40,7 +40,7 @@ Node::Node(const ProcessConfig& config, int replicaId)
       self_id(replicaId),
       penalty_scores(),  // Initialize the penalty_scores map
       petition_count(),  // Initialize the petition_count map
-      latency_threshold(1000.0), // Set your desired latency threshold
+    //   latency_threshold(1000.0), // Set your desired latency threshold
       majority_count((config.peerIPs.size() + 1) / 2), // Calculate majority count
       safety_margin_lower_bound(config.safetyMarginLowerBound),
       safety_margin_step_size(config.safetyMarginStepSize), 
@@ -53,7 +53,8 @@ Node::Node(const ProcessConfig& config, int replicaId)
       check_overhead(config.checkOverhead), 
       spinCheckCount(config.spinCheckCount),
       spinCheckInterval(config.spinCheckInterval), 
-      tcp_monitor_freq(config.tcpMonitorFrequency)
+      tcp_monitor_freq(config.tcpMonitorFrequency), 
+      latency_threshold(config.latency_threshold)
 {
     election_timer.data = this;
     heartbeat_timer.data = this;

@@ -200,7 +200,7 @@ private:
     std::mutex petition_mutex; // To protect access to petition_count
 
     // Thresholds and configurations
-    double latency_threshold =  20.0; // Threshold in milliseconds
+    double latency_threshold =  50.0; // Threshold in milliseconds
     int majority_count; // Number of nodes required for majority
 
     std::string network_interface;

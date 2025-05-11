@@ -25,7 +25,7 @@ replica:
   checkFalsePositiveRate: true
   tcp_monitor: true
   confidenceLevel: 0.999
-  testPetition: false
+  testPetition: true
   heartbeatIntervalMargin: 75
   safetyMarginLowerBound: 5
   safetyMarginStepSize: 2
@@ -33,9 +33,10 @@ replica:
   fdMode: raft
   clientPort: 10083
   internalBasePort: 8230
-  eligibleLeaders: [0, 1, 2, 3, 4]
+  eligibleLeaders: [3]
   checkOverhead: false
   senderThreadsCount: 8
   spinCheckCount: 4
   spinCheckInterval: 18
   tcpMonitorFrequency: 10
+  latencyThreshold: 15
