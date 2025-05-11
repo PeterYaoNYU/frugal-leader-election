@@ -127,7 +127,7 @@ void Client::send_request() {
         }
 
         // cancel the previous timeout timer, and start a new one.
-        if (mode_ != MAX_IN_FLIGHT) {
+        if (mode_ == MAX_IN_FLIGHT) {
             ev_timer_stop(loop_, &timeout_timer_);
             ev_timer_init(&timeout_timer_, timeout_cb, timeout_interval_, timeout_interval_);
             ev_timer_start(loop_, &timeout_timer_);
