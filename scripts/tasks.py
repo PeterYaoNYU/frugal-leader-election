@@ -1121,7 +1121,7 @@ def sum_remote_timeouts(c,
     """
     
     start_remote_default(c)
-    sleep(305)
+    sleep(504)
     # -------------------------------------------------
     # 1.  Run remote_count_timeouts.py on every node
     # -------------------------------------------------
@@ -1179,11 +1179,6 @@ def sum_remote_timeouts(c,
     print(f"📦  archived timeout counts → {ts_folder}")
     
     
-@task
-def batch_sum_remote_timeouts(c):
-    for i in range(1, 4):
-        print(f"\n=== Starting experiment iteration {i} ===")
-        sum_remote_timeouts(c, skip_first=30, skip_last=50, log_suffix="Jacob", suffix=f"raft_{i}")
 
 
 REMOTE_BASE   = "/users/PeterYao/frugal-leader-election"
@@ -1284,3 +1279,15 @@ def batch_sum_remote_detect(c):
         start_remote_default(c)
         sleep(305)
         sum_remote_detect(c, skip_first=30, skip_last=30, log_suffix=f"{i}")
+        
+import zookeeper_setup
+@task
+def batch_sum_remote_timeouts(c):
+    # for dev in range(10, 60, 10):
+        # zookeeper_setup.load_connections("fattree.yaml")
+    #     zookeeper_setup.setup_delay_fat_tree_normal(0.2, dev)
+        # zookeeper_setup.clear_all_switch_weights()
+        for i in range(2):
+            print(f"\n=== Starting experiment iteration {i} ===")
+            sum_remote_timeouts(c, skip_first=30, skip_last=30, log_suffix="Jacob", suffix=f"raft_{i}")
+            sum_remote_detect(c, skip_first=30, skip_last=30, log_suffix=f"{i}")

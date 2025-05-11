@@ -480,7 +480,7 @@ void Node::start_election_timeout(bool double_time, bool force_raft) {
     }
 
     if (using_raft_timeout) {
-        LOG(INFO) << "Using Raft timeout for election timeout: " << timeout << " seconds";
+        LOG(INFO) << "Using Raft estimation for election timeout: " << timeout*1000 << " Milliseconds";
     }
 
     ev_timer_init(&election_timer, election_timeout_cb, timeout, 0);

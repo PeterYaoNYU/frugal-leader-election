@@ -14,6 +14,8 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 import re
 import matplotlib.pyplot as plt
+import argparse
+import sys
 
 # List of nodes (replace with actual hostnames or IPs)
 nodes = [
@@ -670,6 +672,13 @@ def upload_new_logback_xml(connections):
 
 # Execute setup on all nodes concurrently
 if __name__ == "__main__":
+    p = argparse.ArgumentParser(
+        description="Call setup_delay_fat_tree_normal(delay, bw)")
+    p.add_argument("delay", type=float,
+                   help="link delay (e.g. 0.2)")
+    p.add_argument("std", type=float,
+                   help="std (e.g. 50)")
+    args = p.parse_args()
     group = ThreadingGroup(*nodes)
     load_connections("fattree.yaml")
     # upload_new_logback_xml(connections)
@@ -686,7 +695,7 @@ if __name__ == "__main__":
     # start_zk_ensemble_with_designated_leader(group, 0)
     # run_ycsb_workload_from_node(1, 1, "zkProfile13.txt", contact_leader=False)
     clear_all_switch_weights()
-    setup_delay_fat_tree_normal(0.2, 10)
+    setup_delay_fat_tree_normal(args.delay, args.std)
     # setup_delay_fat_tree(0.1)
     
     # kill_leader_then_reinstatiate()

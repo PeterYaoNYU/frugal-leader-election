@@ -19,7 +19,7 @@ from datetime import datetime, timedelta
 
 # Regexes
 PAT_LINE = re.compile(
-    r"Using Jacobson estimation for election timeout:\s+([0-9.]+)\s+Milliseconds",
+    r"Using Raft estimation for election timeout:\s+([0-9.]+)\s+Milliseconds",
 )
 TS_RE = re.compile(r"^I(\d{8})\s+(\d{2}:\d{2}:\d{2}\.\d{6})")
 

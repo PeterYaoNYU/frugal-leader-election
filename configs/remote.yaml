@@ -11,7 +11,7 @@ replica:
   - "eth1"
   - "eth1"
   - "eth1"
-  runtimeSeconds: 300
+  runtimeSeconds: 500
   timeoutLowerBound: 150
   timeoutUpperBound: 300
   failureLeader: false
@@ -27,10 +27,10 @@ replica:
   confidenceLevel: 0.999
   testPetition: false
   heartbeatIntervalMargin: 75
-  safetyMarginLowerBound: 45
+  safetyMarginLowerBound: 5
   safetyMarginStepSize: 2
   workerThreadsCount: 11
-  fdMode: Jacobson
+  fdMode: raft
   clientPort: 10083
   internalBasePort: 8230
   eligibleLeaders: [0, 1, 2, 3, 4]
