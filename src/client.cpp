@@ -213,6 +213,12 @@ void Client::handle_response(const std::string& response_data,  sockaddr_in& fro
             if (inet_pton(AF_INET, leader_ip.c_str(), &server_addr_.sin_addr) <= 0) {
                 LOG(ERROR) << "Invalid leader IP: " << leader_ip;
             } else {
+                if (server_ip_ == leader_ip) {
+                    LOG(INFO) << "Already connected to the leader: " << leader_ip;
+                    return;
+                } else {
+                    LOG(INFO) << "Changing leader from " << server_ip_ << " to " << leader_ip;
+                }
                 known_leader_ = false; // Set flag to indicate we don't know the leader
                 // If we are in MAX_IN_FLIGHT mode, we need to reset the in-flight count.
                 if (mode_ == MAX_IN_FLIGHT) {
@@ -269,7 +275,7 @@ void Client::handle_response(const std::string& response_data,  sockaddr_in& fro
             in_flight_--;
         LOG(INFO) << "In-flight requests decremented to " << in_flight_;
         // Immediately send a new request if we are below the limit.
-        if (in_flight_ < max_in_flight_) {
+        while (in_flight_ < max_in_flight_) {
             send_request();
         }
     }
