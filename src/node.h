@@ -266,6 +266,9 @@ private:
     int spinCheckInterval = 20;
 
 
+    bool isOldLeader = false;
+
+
     // moodycamel::ConcurrentQueue<OutgoingMsg> outQueue_;
     static constexpr std::size_t kQueueCap = 32 * 1024;
     // using SendQueue = boost::lockfree::queue<OutgoingMsg*, boost::lockfree::capacity<kQueueCap>>;

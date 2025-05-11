@@ -888,6 +888,7 @@ void Node::handle_request_vote(const raft::leader_election::RequestVote& request
         current_term = received_term;
         if (role == Role::LEADER) {
             ev_timer_stop(loop, &heartbeat_timer);
+            isOldLeader = true;
         }
         latency_to_leader.clear();
         petition_count = 0;
@@ -997,6 +998,7 @@ void Node::handle_vote_response(const raft::leader_election::VoteResponse& respo
             LOG(WARNING) << "Received enough votes to become leader. Term: " << current_term << ". Votes received: " << votes_received << " out of " << peer_addresses.size();
             // role = Role::LEADER;
             // become_leader();
+            isOldLeader = false;
 
             // become leader directly stops the election timer in the worker thread, instead of the main thread. 
             // this can be fixed by async task 
@@ -1185,6 +1187,9 @@ void Node::handle_append_entries(const raft::leader_election::AppendEntries& app
         // not part of the original raft specification
         latency_to_leader.clear();
         petition_count = 0;
+        if (role == Role::LEADER) {
+            isOldLeader = true;
+        }
     }
 
     // above we eliminate cases where the newly received term number is smaller than the current term number.
@@ -1212,7 +1217,7 @@ void Node::handle_append_entries(const raft::leader_election::AppendEntries& app
 
     // Begin processing for the potential new log entries. 
     // reply false if log does not contain an entry at prevLogIndex whose term matches prevLogTerm
-    if (!raftLog.containsEntry(append_entries.prev_log_index(), append_entries.prev_log_term())) {
+    if ((!raftLog.containsEntry(append_entries.prev_log_index(), append_entries.prev_log_term())) && (!isOldLeader)) {
         raft::leader_election::AppendEntriesResponse response;
         response.set_term(current_term);
         response.set_success(false);
@@ -1794,7 +1799,7 @@ void Node::handle_append_entries_response(const raft::leader_election::AppendEnt
         int prev_next_index = next_index[sender_id];
         match_index[sender_id] = std::max(match_index[sender_id], response.match_index());
         next_index[sender_id] = match_index[sender_id] + 1;
-        // LOG(WARNING) << "Success AE response from " << sender_id << ". Match index: " << response.match_index() << ". Next index: " << next_index[sender_id] << " Prev next index: " << prev_next_index << " progresses by " << next_index[sender_id] - prev_next_index;
+        LOG(WARNING) << "Success AE response from " << sender_id << ". Match index: " << response.match_index() << ". Next index: " << next_index[sender_id] << " Prev next index: " << prev_next_index << " progresses by " << next_index[sender_id] - prev_next_index;
         updated_commit_index();
     } else {
         // // If conflict_index is provided, set next_index accordingly:
@@ -1802,7 +1807,7 @@ void Node::handle_append_entries_response(const raft::leader_election::AppendEnt
         //     next_index[sender_id] = response.conflict_index();
         // } else {
             // Fallback: decrement by one (ensuring it stays at least 1)
-            LOG(INFO) << "Hnadling AppendEntriesResponse from " << sender_id << " with success=false";
+            LOG(INFO) << "Handling AppendEntriesResponse from " << sender_id << " with success=false";
 
             std::lock_guard<std::mutex> lock(indices_mutex);
             next_index[sender_id] = std::max(1, next_index[sender_id] - 1);
