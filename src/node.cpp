@@ -647,7 +647,7 @@ void Node::recv_cb(EV_P_ ev_io* w, int revents) {
     //     m.enqueue_time = std::chrono::steady_clock::now();
     // }
     // m.channel = peerId;          // ←  so workers know the source socket
-    LOG(INFO) << "Received message from " << inet_ntoa(from.sin_addr) << ":" << ntohs(from.sin_port) << " on channel " << peerId;
+    // LOG(INFO) << "Received message from " << inet_ntoa(from.sin_addr) << ":" << ntohs(from.sin_port) << " on channel " << peerId;
     self->recvQueues[peerId + 1].enqueue(std::move(m));
 }
 
@@ -667,7 +667,7 @@ void Node::recv_client_cb(EV_P_ ev_io* w, int)
     // if (self->check_overhead) {
     //     m.enqueue_time = std::chrono::steady_clock::now();
     // }
-    LOG(INFO) << "Received message from client at " << inet_ntoa(from.sin_addr) << ":" << ntohs(from.sin_port);
+    // LOG(INFO) << "Received message from client at " << inet_ntoa(from.sin_addr) << ":" << ntohs(from.sin_port);
     // client receiver at queue #0
     self->recvQueues[0].enqueue(std::move(m));
 }
@@ -1680,6 +1680,8 @@ void Node::send_proposals_to_followers(int term, int commit_index)
         //----------------------------------------------------------------
         // 3.  Stream out the cached entries respecting MTU
         //----------------------------------------------------------------
+
+        int message_count = 0;
         size_t cursor = 0;
         while (cursor < cached.size())
         {
@@ -1703,9 +1705,11 @@ void Node::send_proposals_to_followers(int term, int commit_index)
             msg.set_prev_log_index(prev_idx);
             msg.set_prev_log_term(prev_term);
 
+            message_count++;
+
             // ---- fill message until adding another entry would overflow
             size_t payload_size = kHdrSlackBytes;   // message + wrapper hdrs
-            LOG(INFO) << "Proposal msg to " << ip << " begins with " << cached[cursor].index;
+            LOG(INFO) << message_count << " proposals this round, msg to " << ip << " begins with " << cached[cursor].index;
             while (cursor < cached.size())
             {
                 const auto& ce    = cached[cursor];

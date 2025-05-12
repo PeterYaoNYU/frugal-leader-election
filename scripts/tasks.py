@@ -1341,7 +1341,7 @@ def test_petition(c, leaderId, serverPort, value):
     replica_ip = nodes[3]["host"]
     print(f"[{replica_ip}] adding delay")
     conn = Connection(host=replica_ip, user=username, port=nodes[3]["port"])
-    cmd = f"sudo tc qdisc del dev enp65s0f0np0 root || true ; sudo tc qdisc add dev enp65s0f0np0 root netem delay 25ms"
+    cmd = f"sudo tc qdisc del dev enp65s0f0np0 root || true ; sudo tc qdisc add dev enp65s0f0np0 root netem delay 12ms"
     conn.run(cmd, warn=True)
     cmd_check = "sudo tc qdis show dev enp65s0f0np0"
     conn.run(cmd_check, warn=True)

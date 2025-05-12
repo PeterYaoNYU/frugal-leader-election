@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-remote_thp_summary.py
+remote_thp_summary.py   (revised)
 
 Create a per‑second throughput CSV from a single client log.
 
@@ -9,10 +9,13 @@ Create a per‑second throughput CSV from a single client log.
       python remote_thp_summary.py  client.log  --out thp_summary.csv
 
 The CSV columns are:
-    epoch_second, throughput_req_per_sec
+    timestamp, throughput_req_per_sec
 
 • Only success=1 lines are used.
-• The first and last 10 s of traffic are dropped (to ignore warm‑up/cool‑down).
+• The first and last N seconds of traffic (default 10 s) are dropped
+  to ignore warm‑up / cool‑down.
+• “timestamp” is written exactly once per bucket in the same
+  human‑readable format seen in the log (YYYY‑MM‑DD HH:MM:SS).
 """
 
 import argparse
@@ -65,16 +68,16 @@ def main():
 
     per_sec = defaultdict(int)
     for t in ts:
-        per_sec[int(t.timestamp())] += 1  # bucket by epoch second
+        bucket = t.replace(microsecond=0)          # truncate to nearest second
+        per_sec[bucket] += 1
 
-    # Sort chronologically
     per_sec = OrderedDict(sorted(per_sec.items()))
 
     # Write CSV
     with open(args.out, "w", encoding="utf-8") as f:
-        f.write("epoch_second,throughput\n")
-        for sec, count in per_sec.items():
-            f.write(f"{sec},{count}\n")
+        f.write("timestamp,throughput\n")
+        for dt, count in per_sec.items():
+            f.write(f"{dt.strftime('%Y-%m-%d %H:%M:%S')},{count}\n")
 
     print(f"✓ Wrote {args.out} ({len(per_sec)} rows)")
 

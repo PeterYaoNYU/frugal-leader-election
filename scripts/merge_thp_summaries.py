@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-merge_thp_summaries.py
+merge_thp_summaries.py   (revised)
 
 Merge per‑second throughput CSVs from several nodes, add them,
-and plot the combined throughput curve.
+and plot the combined throughput curve on an absolute time axis.
 
   Usage (on your workstation)
   ---------------------------
@@ -12,25 +12,27 @@ and plot the combined throughput curve.
              --csv  combined_throughput.csv
 
 • Any number of summary files may be given as positional arguments.
-• The x‑axis is *relative seconds* since the earliest epoch_second
-  appearing in any file.
+• The x‑axis is the true wall‑clock time (no relative shift).
 """
 
 import argparse
 import csv
 import sys
 from collections import defaultdict, OrderedDict
+from datetime import datetime
 
 import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
 
 
 def read_summary(path):
-    """Return {epoch_second:int → throughput:int} from one CSV."""
+    """Return {datetime → throughput:int} from one CSV."""
     d = {}
     with open(path, newline="") as f:
         rdr = csv.DictReader(f)
         for row in rdr:
-            d[int(row["epoch_second"])] = int(row["throughput"])
+            ts = datetime.fromisoformat(row["timestamp"])
+            d[ts] = int(row["throughput"])
     return d
 
 
@@ -49,24 +51,27 @@ def main():
     merged = defaultdict(int)
     for path in args.csv_files:
         data = read_summary(path)
-        for sec, thp in data.items():
-            merged[sec] += thp
+        for ts, thp in data.items():
+            merged[ts] += thp
 
     if not merged:
         sys.exit("No data to merge.")
 
     merged = OrderedDict(sorted(merged.items()))
-    first_sec = next(iter(merged))
-    rel_times = [sec - first_sec for sec in merged]
-    thp_vals  = list(merged.values())
+    times   = list(merged.keys())
+    thp_vals = list(merged.values())
 
     # Plot
     fig, ax = plt.subplots()
-    ax.plot(rel_times, thp_vals, linewidth=1.5)
+    ax.plot(times, thp_vals, linewidth=1.5)
     ax.set_title("Combined Throughput (all nodes)")
-    ax.set_xlabel("Time since earliest sample (s)")
+    ax.set_xlabel("Time")
     ax.set_ylabel("Requests / second (sum)")
     ax.grid(True, linestyle="--", alpha=0.3)
+
+    # nicer date formatting
+    ax.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M:%S'))
+    fig.autofmt_xdate()
     fig.tight_layout()
     fig.savefig(args.plot)
     print(f"✓ Plot saved to {args.plot}")
@@ -75,8 +80,9 @@ def main():
     if args.csv:
         with open(args.csv, "w", newline="") as f:
             w = csv.writer(f)
-            w.writerow(["relative_second", "throughput"])
-            w.writerows(zip(rel_times, thp_vals))
+            w.writerow(["timestamp", "throughput"])
+            for ts, val in merged.items():
+                w.writerow([ts.strftime('%Y-%m-%d %H:%M:%S'), val])
         print(f"✓ Merged CSV saved to {args.csv}")
 
 
