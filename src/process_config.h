@@ -60,6 +60,7 @@ struct ProcessConfig {
     int internalBasePort;
 
     std::vector<int> eligibleLeaders;
+    std::vector<int> initialEligibleLeaders;
 
     bool checkOverhead;
 
@@ -164,6 +165,7 @@ struct ProcessConfig {
             internalBasePort = parseField<int>(replicaNode, "internalBasePort");
 
             eligibleLeaders = parseField<std::vector<int>>(replicaNode, "eligibleLeaders", std::vector<int>());
+            initialEligibleLeaders = parseField<std::vector<int>>(replicaNode, "initialEligibleLeaders", std::vector<int>());
 
             checkOverhead = parseField<bool>(replicaNode, "checkOverhead");
             senderThreadsCount = parseField<int>(replicaNode, "senderThreadsCount");

@@ -40,3 +40,5 @@ replica:
   spinCheckInterval: 18
   # how many times per second polls and send netlink sockets data
   tcpMonitorFrequency: 100
+  latencyThreshold: 5
+  initialEligibleLeaders: [3]

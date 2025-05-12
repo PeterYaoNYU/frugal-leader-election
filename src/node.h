@@ -242,6 +242,7 @@ private:
     int sender_threads_count = 1;
 
     std::vector<int> eligible_leaders;
+    std::vector<int> initial_eligible_leaders;
 
     bool check_overhead = false;
 

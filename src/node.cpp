@@ -50,6 +50,7 @@ Node::Node(const ProcessConfig& config, int replicaId)
       internal_base_port(config.internalBasePort), 
       replica_id(replicaId), 
       eligible_leaders(config.eligibleLeaders), 
+      initial_eligible_leaders(config.initialEligibleLeaders),
       check_overhead(config.checkOverhead), 
       spinCheckCount(config.spinCheckCount),
       spinCheckInterval(config.spinCheckInterval), 
@@ -518,6 +519,16 @@ void Node::election_timeout_cb(EV_P_ ev_timer* w, int revents) {
     LOG(INFO) << "The dead leader is " << self->current_leader_ip << ":" << self->current_leader_port;
 
 
+    // if initial election
+    if (self->current_term == 0 && self->current_leader_ip.empty()) {
+        LOG(INFO) << "Initial election. Current term: " << self->current_term;
+        auto it = std::find(self->initial_eligible_leaders.begin(), self->initial_eligible_leaders.end(), self->replica_id);
+        if (it == self->initial_eligible_leaders.end()) {
+            LOG(INFO) << "Current node is not an eligible initial leader. Skipping leader election.";
+            return;
+        }
+    }
+
     if (self->eligible_leaders.size() > 0) {
         // Check if the current node is an eligible leader
         auto it = std::find(self->eligible_leaders.begin(), self->eligible_leaders.end(), self->replica_id);
@@ -589,17 +600,29 @@ void Node::send_request_vote(bool is_petition) {
     wrapper.set_payload(request.SerializeAsString());
 
     std::string serialized_message = wrapper.SerializeAsString();
-
-    for (const auto& [ip, peer_port] : peer_addresses) {
-        int id  = peerIdFromIp(ip);                 // ←  peer‑id
+    if (request.is_petition()) {
+        // only send to the leader node:
+        int id  = peerIdFromIp(current_leader_ip);                 // ←  peer‑id
         sockaddr_in dst{};
         dst.sin_family = AF_INET;
-        dst.sin_port   = htons(peer_port);
-        inet_pton(AF_INET, ip.c_str(), &dst.sin_addr);
+        dst.sin_port   = htons(current_leader_port);
+        inet_pton(AF_INET, current_leader_ip.c_str(), &dst.sin_addr);
 
-        // sendToPeer(id, std::move(wrapper), dst);
         sendSerialized(id, serialized_message, dst);
-        LOG(INFO) << "Sent RequestVote to " << ip << ":" << peer_port;
+        LOG(INFO) << "Sent RequestVote to " << current_leader_ip << ":" << current_leader_port;
+        return;
+    } else {
+        for (const auto& [ip, peer_port] : peer_addresses) {
+            int id  = peerIdFromIp(ip);                 // ←  peer‑id
+            sockaddr_in dst{};
+            dst.sin_family = AF_INET;
+            dst.sin_port   = htons(peer_port);
+            inet_pton(AF_INET, ip.c_str(), &dst.sin_addr);
+    
+            // sendToPeer(id, std::move(wrapper), dst);
+            sendSerialized(id, serialized_message, dst);
+            LOG(INFO) << "Sent RequestVote to " << ip << ":" << peer_port;
+        }
     }
 }
 
@@ -917,11 +940,34 @@ void Node::handle_request_vote(const raft::leader_election::RequestVote& request
         return;
     }
 
+    // handle the petition version of request vote:
+    if (request.is_petition()) {
+        if (current_leader_ip == self_ip) {
+            std::lock_guard<std::mutex> lock(state_mutex);
+            LOG(INFO) << "Received petition request vote from " << candidate_id << " for term " << received_term;
+    
+            // Stop the heartbeat timer to simulate failure
+            ev_timer_stop(loop, &heartbeat_timer);
+        
+            // Optionally, log the simulated failure
+            LOG(INFO) << "[" << get_current_time() << "] Received petition success, Leader has stopped for term: "<< current_term ;
+        
+            // we also need to change the internal status to follower
+            role = Role::FOLLOWER;
+            current_leader_ip = "";
+            current_leader_port = -1;
+    
+            return;
+        } else {
+            return;
+        }
+    }
+
     if (received_term > current_term) {
         current_term = received_term;
         if (role == Role::LEADER) {
             ev_timer_stop(loop, &heartbeat_timer);
-            isOldLeader = true;
+            // isOldLeader = true;
         }
         latency_to_leader.clear();
         petition_count = 0;
@@ -948,10 +994,10 @@ void Node::handle_request_vote(const raft::leader_election::RequestVote& request
     }
 
     // a green way for petitions. Catch up later. 
-    if (request.is_petition()) {
-        LOG(INFO) << "Received request vote petition from " << candidate_id << " for term " << received_term;
-        candidate_up_to_date = true;
-    }
+    // if (request.is_petition()) {
+    //     LOG(INFO) << "Received request vote petition from " << candidate_id << " for term " << received_term;
+    //     candidate_up_to_date = true;
+    // }
 
     // this is important, ensure that a node only votes once per term. 
     bool vote_granted = false;
@@ -1039,7 +1085,7 @@ void Node::handle_vote_response(const raft::leader_election::VoteResponse& respo
             LOG(WARNING) << "Received enough votes to become leader. Term: " << current_term << ". Votes received: " << votes_received << " out of " << peer_addresses.size();
             // role = Role::LEADER;
             // become_leader();
-            isOldLeader = false;
+            // isOldLeader = false;
 
             // become leader directly stops the election timer in the worker thread, instead of the main thread. 
             // this can be fixed by async task 
@@ -1160,6 +1206,8 @@ void Node::send_heartbeat() {
 void Node::failure_cb(EV_P_ ev_timer* w, int revents) {
     Node* self = static_cast<Node*>(w->data);
 
+    std::lock_guard<std::mutex> lock(self->state_mutex);    
+
     // Stop the heartbeat timer to simulate failure
     ev_timer_stop(self->loop, &self->heartbeat_timer);
 
@@ -1228,10 +1276,10 @@ void Node::handle_append_entries(const raft::leader_election::AppendEntries& app
         // not part of the original raft specification
         latency_to_leader.clear();
         petition_count = 0;
-        if (role == Role::LEADER) {
-            LOG(INFO) << "Received heartbeat from a new leader with bigger term. Stopping heartbeat timer and resetting election timeout...";
-            isOldLeader = true;
-        }
+        // if (role == Role::LEADER) {
+        //     LOG(INFO) << "Received heartbeat from a new leader with bigger term. Stopping heartbeat timer and resetting election timeout...";
+        //     isOldLeader = true;
+        // }
     }
 
     // above we eliminate cases where the newly received term number is smaller than the current term number.
@@ -1259,7 +1307,7 @@ void Node::handle_append_entries(const raft::leader_election::AppendEntries& app
 
     // Begin processing for the potential new log entries. 
     // reply false if log does not contain an entry at prevLogIndex whose term matches prevLogTerm
-    if ((!raftLog.containsEntry(append_entries.prev_log_index(), append_entries.prev_log_term())) && (!isOldLeader)) {
+    if (!raftLog.containsEntry(append_entries.prev_log_index(), append_entries.prev_log_term())) {
         raft::leader_election::AppendEntriesResponse response;
         response.set_term(current_term);
         response.set_success(false);
@@ -1772,21 +1820,21 @@ void Node::handle_petition(const raft::leader_election::Petition& petition_msg, 
         if (petition_succeed) {
             LOG(INFO) << "Petition succeeded. Changing leader to " << proposed_leader;
 
-            current_term++;
-            role = Role::CANDIDATE;
-            current_leader_ip = "";  
-            current_leader_port = -1;
-            voted_for = self_ip + ":" + std::to_string(port);
-            votes_received = 0; // Vote for self later when it receives its own message
+            // current_term++;
+            // role = Role::CANDIDATE;
+            // current_leader_ip = "";  
+            // current_leader_port = -1;
+            // voted_for = self_ip + ":" + std::to_string(port);
+            // votes_received = 0; // Vote for self later when it receives its own message
 
-            latency_to_leader.clear(); 
+            // latency_to_leader.clear(); 
 
-            petition_count = 0;
+            // petition_count = 0;
 
-            heartbeat_current_term = 0;
+            // heartbeat_current_term = 0;
 
             // start_election_timeout();
-            reset_election_timeout();
+            // reset_election_timeout();
             send_request_vote(true);
         //     current_term++;
         //     role = Role::CANDIDATE;

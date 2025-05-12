@@ -301,7 +301,7 @@ def start_remote_default(c):
             
             conn = Connection(host=replica_ip, user=username, port=node["port"])
             
-            cmd = f"cd frugal-leader-election && nohup {binary_path} --config={remote_config_path} --replicaId={replica_id} --minloglevel=3 > scripts/logs/node_{replica_id + 1}.log 2>&1 &"
+            cmd = f"cd frugal-leader-election && nohup {binary_path} --config={remote_config_path} --replicaId={replica_id} --minloglevel=0 > scripts/logs/node_{replica_id + 1}.log 2>&1 &"
             # cmd = f"cd frugal-leader-election && nohup {binary_path} --config={remote_config_path} --replicaId={replica_id} > scripts/logs/node_{replica_id + 1}.log 2>&1 &"
             
             print(cmd)
@@ -664,7 +664,7 @@ def start(c):
     
     for replica_id in range(n_replicas):
         log_file = logs_dir / f"node_{replica_id}.log"
-        cmd = [binary_path, f"--config={config_path}", f"--replicaId={replica_id}", "--minloglevel=3"]
+        cmd = [binary_path, f"--config={config_path}", f"--replicaId={replica_id}", "--minloglevel=0"]
         # cmd = [binary_path, f"--config={config_path}", f"--replicaId={replica_id}"]
         
         print(f"Starting replica {replica_id} with command: {' '.join(cmd)}")
@@ -1337,14 +1337,14 @@ def test_petition(c, leaderId, serverPort, value):
     # ------------------------------------------------- 
     sleep(70)
 
-    # print("Injecting delay...!!!")
-    # replica_ip = nodes[3]["host"]
-    # print(f"[{replica_ip}] adding delay")
-    # conn = Connection(host=replica_ip, user=username, port=nodes[3]["port"])
-    # cmd = f"sudo tc qdisc del dev enp65s0f0np0 root || true ; sudo tc qdisc add dev enp65s0f0np0 root netem delay 8ms"
-    # conn.run(cmd, warn=True)
-    # cmd_check = "sudo tc qdis show dev enp65s0f0np0"
-    # conn.run(cmd_check, warn=True)
+    print("Injecting delay...!!!")
+    replica_ip = nodes[3]["host"]
+    print(f"[{replica_ip}] adding delay")
+    conn = Connection(host=replica_ip, user=username, port=nodes[3]["port"])
+    cmd = f"sudo tc qdisc del dev enp65s0f0np0 root || true ; sudo tc qdisc add dev enp65s0f0np0 root netem delay 12ms"
+    conn.run(cmd, warn=True)
+    cmd_check = "sudo tc qdis show dev enp65s0f0np0"
+    conn.run(cmd_check, warn=True)
     
     sleep(150)
     
