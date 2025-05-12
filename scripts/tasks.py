@@ -591,22 +591,22 @@ def batch_experiments_motivation(c, leaderId, serverPort, value, runs=5):
 @task
 def overhead_exp(c, serverIp, serverPort, value, bindIp, bindIpTwo):
     start(c)
-    sleep(10)
+    sleep(6)
     start_client(c, serverIp, serverPort, value, bindIp)
     # start_client(c, serverIp, serverPort, value, bindIpTwo, log_suffix="client_2")
     sleep(180)
-    stop(c)
-    try:
-        subprocess.run(["python3", "analyze_resp_time.py", "logs/client.log"], check=True)  # <<< NEW >>>
-        # subprocess.run(["python3", "analyze_resp_time.py", "logs/client_2.log"], check=True)  # <<< NEW >>>
-        print("Executed analyze_resp_time.py")                           # <<< NEW >>>
-    except Exception as e:
-        print(f"Failed to run analyze_resp_time.py: {e}")                # <<< NEW >>>
-    try:
-        subprocess.run(["python3", "avg_bps.py", "logs/"], check=True)  # <<< NEW >>>
-        print("Executed avg_bps.py")                           # <<< NEW >>>
-    except Exception as e:
-        print(f"Failed to run avg_bps.py: {e}")                # <<< NEW >>>
+    # stop(c)
+    # try:
+    #     subprocess.run(["python3", "analyze_resp_time.py", "logs/client.log"], check=True)  # <<< NEW >>>
+    #     # subprocess.run(["python3", "analyze_resp_time.py", "logs/client_2.log"], check=True)  # <<< NEW >>>
+    #     print("Executed analyze_resp_time.py")                           # <<< NEW >>>
+    # except Exception as e:
+    #     print(f"Failed to run analyze_resp_time.py: {e}")                # <<< NEW >>>
+    # try:
+    #     subprocess.run(["python3", "avg_bps.py", "logs/"], check=True)  # <<< NEW >>>
+    #     print("Executed avg_bps.py")                           # <<< NEW >>>
+    # except Exception as e:
+    #     print(f"Failed to run avg_bps.py: {e}")                # <<< NEW >>>
 
 @task
 def get_results(c):

@@ -1648,7 +1648,13 @@ void Node::send_proposals_to_followers(int term, int commit_index)
     //--------------------------------------------------------------------
     for (auto& [follower_id, start_idx] : next)
     {
+        if (followe_id == 3 && replica_id != 3) {
+            LOG(INFO) << "Follower " << follower_id << " is not reachable, skipping.";
+            continue;
+        }
+
         if (inflight_[follower_id].load(std::memory_order_acquire)) {
+            LOG(INFO) << "Follower " << follower_id << " is already inflight, skipping.";
             continue;
         }
 
@@ -1665,7 +1671,7 @@ void Node::send_proposals_to_followers(int term, int commit_index)
         std::vector<CachedEntry> cached;
         // cached.reserve(last_log_idx - start_idx + 1);
 
-        for (int idx = start_idx; idx <= last_log_idx && idx < 100; ++idx)
+        for (int idx = start_idx; idx <= last_log_idx; ++idx)
         {
             LogEntry le;
             if (!raftLog.getEntry(idx, le)) break;
