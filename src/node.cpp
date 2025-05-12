@@ -1648,7 +1648,7 @@ void Node::send_proposals_to_followers(int term, int commit_index)
     //--------------------------------------------------------------------
     for (auto& [follower_id, start_idx] : next)
     {
-        if (followe_id == 3 && replica_id != 3) {
+        if (follower_id == "10.0.1.2" && replica_id != 3) {
             LOG(INFO) << "Follower " << follower_id << " is not reachable, skipping.";
             continue;
         }
