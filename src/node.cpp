@@ -1648,9 +1648,9 @@ void Node::send_proposals_to_followers(int term, int commit_index)
     //--------------------------------------------------------------------
     for (auto& [follower_id, start_idx] : next)
     {
-        // if (inflight_[follower_id].load(std::memory_order_acquire)) {
-        //     continue;
-        // }
+        if (inflight_[follower_id].load(std::memory_order_acquire)) {
+            continue;
+        }
 
         // --- parse follower ip / port ----------------------------------
         const std::string ip        = follower_id;
@@ -1665,7 +1665,7 @@ void Node::send_proposals_to_followers(int term, int commit_index)
         std::vector<CachedEntry> cached;
         // cached.reserve(last_log_idx - start_idx + 1);
 
-        for (int idx = start_idx; idx <= last_log_idx && idx < 120; ++idx)
+        for (int idx = start_idx; idx <= last_log_idx && idx < 100; ++idx)
         {
             LogEntry le;
             if (!raftLog.getEntry(idx, le)) break;
@@ -1688,9 +1688,9 @@ void Node::send_proposals_to_followers(int term, int commit_index)
         size_t cursor = 0;
         while (cursor < cached.size())
         {
-            if (inflight_[follower_id].load(std::memory_order_acquire)) {
-                continue;
-            }
+            // if (inflight_[follower_id].load(std::memory_order_acquire)) {
+            //     continue;
+            // }
             raft::leader_election::AppendEntries msg;
             msg.set_term(term);
             msg.set_leader_id(self_ip + ":" + std::to_string(this->port));
