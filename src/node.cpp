@@ -1753,6 +1753,7 @@ void Node::send_proposals_to_followers(int term, int commit_index)
             sendToPeer(peerIdFromIp(ip), std::move(wrapper), dst);
 
             inflight_[follower_id].store(true, std::memory_order_release);
+            break;
         }
 
         LOG(INFO) << "Replicated entries "
