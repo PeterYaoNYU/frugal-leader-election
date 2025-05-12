@@ -1683,6 +1683,9 @@ void Node::send_proposals_to_followers(int term, int commit_index)
         size_t cursor = 0;
         while (cursor < cached.size())
         {
+            if (inflight_[follower_id].load(std::memory_order_acquire)) {
+                continue;
+            }
             raft::leader_election::AppendEntries msg;
             msg.set_term(term);
             msg.set_leader_id(self_ip + ":" + std::to_string(this->port));
