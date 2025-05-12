@@ -512,10 +512,10 @@ void Node::election_timeout_cb(EV_P_ ev_timer* w, int revents) {
     if (self->check_false_positive) {
         // In "check false positive rate mode", do not initiate leader election
         self->suspected_leader_failures++;
-        LOG(INFO) << "Election timeout occurred. Suspected leader failure count: " << self->suspected_leader_failures;
+        LOG(WARNING) << "Election timeout occurred. Suspected leader failure count: " << self->suspected_leader_failures;
     }
 
-    LOG(INFO) << "Election timeout occurred. Starting leader election and voting for myself. View number: " << self->current_term << " Current term hb count " <<self->heartbeat_current_term; 
+    LOG(WARNING) << "Election timeout occurred. Starting leader election and voting for myself. View number: " << self->current_term << " Current term hb count " <<self->heartbeat_current_term; 
     LOG(INFO) << "The dead leader is " << self->current_leader_ip << ":" << self->current_leader_port;
 
 
@@ -1818,7 +1818,7 @@ void Node::handle_petition(const raft::leader_election::Petition& petition_msg, 
         }
 
         if (petition_succeed) {
-            LOG(INFO) << "Petition succeeded. Changing leader to " << proposed_leader;
+            LOG(WARNING) << "Petition succeeded. Changing leader to " << proposed_leader;
 
             // current_term++;
             // role = Role::CANDIDATE;
