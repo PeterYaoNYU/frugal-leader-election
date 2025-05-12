@@ -943,7 +943,6 @@ void Node::handle_request_vote(const raft::leader_election::RequestVote& request
     // handle the petition version of request vote:
     if (request.is_petition()) {
         if (role == Role::LEADER) {
-            std::lock_guard<std::mutex> lock(state_mutex);
             LOG(INFO) << "Received petition request vote from " << candidate_id << " for term " << received_term;
     
             // Stop the heartbeat timer to simulate failure
