@@ -853,7 +853,7 @@ void Node::handleReceived(ReceivedMessage&& rm)
                 LOG(ERROR) << "Failed to parse request vote.";
                 return;
             }
-            LOG(INFO) << "Received request vote from " << request.candidate_id() << " for term " << request.term();
+            LOG(WARNING) << "Received request vote from " << request.candidate_id() << " for term " << request.term();
             handle_request_vote(request, rm.sender);
             break;
         }
@@ -975,7 +975,7 @@ void Node::handle_request_vote(const raft::leader_election::RequestVote& request
         voted_for = ""; 
         current_leader_ip = "";
         current_leader_port = -1;
-        LOG(INFO) << "Got newer request vote. Received request vote from " << candidate_id << " for term " << received_term << ". Current term updated to: " << current_term;
+        LOG(WARNING) << "Got newer request vote. Received request vote from " << candidate_id << " for term " << received_term << ". Current term updated to: " << current_term;
     }
 
     // section 5.4 of the raft paper enforces a trick that requies the leader to be up-to-date before being aboe to 
@@ -1109,6 +1109,8 @@ void Node::become_leader() {
     // reset the amount of heartbeats sent
     heartbeat_count = 0;
     votes_received = 0;
+
+    latency_to_leader.clear();
 
     // stop the election timeout
     ev_timer_stop(loop, &election_timer);
