@@ -1020,7 +1020,7 @@ void Node::handle_request_vote(const raft::leader_election::RequestVote& request
     raft::leader_election::VoteResponse response;
     response.set_term(current_term);
     response.set_vote_granted(vote_granted);
-    LOG(INFO) << "Received request vote from " << candidate_id <<  " for term: " << received_term  << ". Vote granted: " << vote_granted;
+    LOG(WARNING) << "Received request vote from " << candidate_id <<  " for term: " << received_term  << ". Vote granted: " << vote_granted;
     send_vote_response(response, send_addr);
 }
 
@@ -1648,10 +1648,10 @@ void Node::send_proposals_to_followers(int term, int commit_index)
     //--------------------------------------------------------------------
     for (auto& [follower_id, start_idx] : next)
     {
-        // if (follower_id == "10.0.1.2" && replica_id != 3) {
-        //     LOG(INFO) << "Follower " << follower_id << " is not reachable, skipping.";
-        //     continue;
-        // }
+        if (follower_id == "10.0.1.2" && replica_id != 3) {
+            LOG(INFO) << "Follower " << follower_id << " is not reachable, skipping.";
+            continue;
+        }
 
         if (inflight_[follower_id].load(std::memory_order_acquire)) {
             LOG(INFO) << "Follower " << follower_id << " is already inflight, skipping.";
@@ -1753,7 +1753,7 @@ void Node::send_proposals_to_followers(int term, int commit_index)
             sendToPeer(peerIdFromIp(ip), std::move(wrapper), dst);
 
             inflight_[follower_id].store(true, std::memory_order_release);
-            break;
+            // break;
         }
 
         LOG(INFO) << "Replicated entries "

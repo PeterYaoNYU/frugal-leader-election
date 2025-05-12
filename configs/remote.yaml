@@ -40,4 +40,4 @@ replica:
   spinCheckInterval: 18
   tcpMonitorFrequency: 10
   latencyThreshold: 4
-  initialEligibleLeaders: [0]
+  initialEligibleLeaders: [3]
