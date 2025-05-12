@@ -1648,10 +1648,10 @@ void Node::send_proposals_to_followers(int term, int commit_index)
     //--------------------------------------------------------------------
     for (auto& [follower_id, start_idx] : next)
     {
-        if (follower_id == "10.0.1.2" && replica_id != 3) {
-            LOG(INFO) << "Follower " << follower_id << " is not reachable, skipping.";
-            continue;
-        }
+        // if (follower_id == "10.0.1.2" && replica_id != 3) {
+        //     LOG(INFO) << "Follower " << follower_id << " is not reachable, skipping.";
+        //     continue;
+        // }
 
         if (inflight_[follower_id].load(std::memory_order_acquire)) {
             LOG(INFO) << "Follower " << follower_id << " is already inflight, skipping.";
