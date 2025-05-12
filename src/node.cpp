@@ -609,7 +609,7 @@ void Node::send_request_vote(bool is_petition) {
         inet_pton(AF_INET, current_leader_ip.c_str(), &dst.sin_addr);
 
         sendSerialized(id, serialized_message, dst);
-        LOG(INFO) << "Sent RequestVote to " << current_leader_ip << ":" << current_leader_port;
+        LOG(INFO) << "Sent Peitition RequestVote to " << current_leader_ip << ":" << current_leader_port;
         return;
     } else {
         for (const auto& [ip, peer_port] : peer_addresses) {
@@ -942,7 +942,7 @@ void Node::handle_request_vote(const raft::leader_election::RequestVote& request
 
     // handle the petition version of request vote:
     if (request.is_petition()) {
-        if (current_leader_ip == self_ip) {
+        if (role == Role::LEADER) {
             std::lock_guard<std::mutex> lock(state_mutex);
             LOG(INFO) << "Received petition request vote from " << candidate_id << " for term " << received_term;
     
@@ -959,6 +959,7 @@ void Node::handle_request_vote(const raft::leader_election::RequestVote& request
     
             return;
         } else {
+            LOG(INFO) << "Received petition request vote from " << candidate_id << " for term " << received_term << ". But I am not leader. Current term: " << current_term;
             return;
         }
     }
