@@ -10,7 +10,7 @@ Client::Client(const std::string& server_ip, int server_port, SendMode mode,
         in_flight_(0),
         client_id_(client_id),
         request_id_(1), 
-        timeout_interval_(1.0), 
+        timeout_interval_(3.0), 
         bind_ip_(bind_ip) 
 {
     // Create the default event loop.
